@@ -45,7 +45,8 @@ PyObject* new_error(nb::module_& m, const char* name, PyObject* base, const char
 
 /// `type(message)` with `code` set, not raised yet; invalid if making it raised an error.
 nb::object make_error(PyObject* type, const char* message, std::string_view code) {
-    nb::object error = nb::steal(PyObject_CallOneArg(type, nb::str(message).ptr()));
+    const nb::str text(message);
+    nb::object error = nb::steal(PyObject_CallFunctionObjArgs(type, text.ptr(), nullptr));
     if (error.is_valid()) {
         error.attr("code") = to_str(code);
     }
