@@ -1,0 +1,88 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "FEM_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "core-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "FEM_BUILD_GUI": "OFF"
+      }
+    },
+    {
+      "name": "full-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "FEM_BUILD_GUI": "ON",
+        "VCPKG_MANIFEST_FEATURES": "gui"
+      }
+    },
+    {
+      "name": "core-debug",
+      "displayName": "Core, Debug (no GUI)",
+      "inherits": "core-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "core-release",
+      "displayName": "Core, Release (no GUI)",
+      "inherits": "core-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "full-debug",
+      "displayName": "Full, Debug (Qt shell)",
+      "inherits": "full-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "full-release",
+      "displayName": "Full, Release (Qt shell)",
+      "inherits": "full-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "core-debug", "configurePreset": "core-debug" },
+    { "name": "core-release", "configurePreset": "core-release" },
+    { "name": "full-debug", "configurePreset": "full-debug" },
+    { "name": "full-release", "configurePreset": "full-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
+    { "name": "core-debug", "inherits": "base", "configurePreset": "core-debug" },
+    { "name": "core-release", "inherits": "base", "configurePreset": "core-release" },
+    { "name": "full-debug", "inherits": "base", "configurePreset": "full-debug" },
+    { "name": "full-release", "inherits": "base", "configurePreset": "full-release" }
+  ]
+}

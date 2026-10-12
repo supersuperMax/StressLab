@@ -1,0 +1,6 @@
+# Development tools; versions are pinned so local runs and CI agree.
+black==24.8.0
+clang-format==18.1.8
+ninja==1.11.1.1
+pytest==8.3.3
+ruff==0.6.9

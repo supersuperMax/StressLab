@@ -1,0 +1,20 @@
+# Build trees
+/build/
+/out/
+vcpkg_installed/
+CMakeUserPresets.json
+compile_commands.json
+
+# Python
+__pycache__/
+*.py[cod]
+/.venv/
+.pytest_cache/
+.ruff_cache/
+
+# IDEs
+/.vs/
+/.vscode/
+/.idea/
+*.user
+.DS_Store
