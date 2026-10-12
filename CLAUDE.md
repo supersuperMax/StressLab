@@ -98,6 +98,8 @@ cmake --preset full-debug          # всё, включая Qt/VTK
 pytest python/tests extensions
 ```
 
+Нужен Python 3.12 с файлами для разработки и `pip install -r python/requirements-dev.txt` (nanobind, numpy): Python встроен в `stresslab`, а `ctest` прогоняет pytest и в обычном Python, и в `stresslab --python -m pytest`.
+
 Перед тем как сказать «готово»: сборка проходит, `ctest` и `pytest` зелёные, новый код покрыт тестами, `clang-format` и `ruff` чистые. Если тяжёлые зависимости (Qt, VTK) не собираются в текущем окружении, собери и протестируй `core-debug` и честно напиши в PR, что GUI-часть не собиралась.
 
 ## Как работать над задачей

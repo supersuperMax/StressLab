@@ -26,8 +26,9 @@ class CommandBus;
 //         stresslab.cmd("model.rename", object=3, name="Вал")
 //
 // Values are written by `to_python` (python_literal.h). The file is UTF-8 without BOM with '\n'
-// line breaks. Until the Python API exists (task 1.8), `replay_journal` reads it with a parser
-// that understands exactly these statements.
+// line breaks. Python runs it as a script with the `stresslab` module (task 1.8, python/);
+// `replay_journal` reads it without Python, with a parser that understands exactly these
+// statements.
 
 /// The lines every journal starts with, each ending with '\n', followed by an empty line.
 [[nodiscard]] std::string journal_header();

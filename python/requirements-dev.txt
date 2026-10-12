@@ -1,6 +1,9 @@
-# Development tools; versions are pinned so local runs and CI agree.
+# Development tools and build dependencies of the Python API (nanobind; numpy for the tests);
+# versions are pinned so local runs and CI agree.
 black==24.8.0
 clang-format==18.1.8
+nanobind==2.13.0
 ninja==1.11.1.1
+numpy==2.3.5
 pytest==8.3.3
 ruff==0.6.9

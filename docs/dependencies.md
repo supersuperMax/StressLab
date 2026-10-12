@@ -13,6 +13,10 @@
 | spdlog | 1.17.0 | MIT | vcpkg, линкуется к `femcore` открыто: логгеры — объекты spdlog (на Windows — `spdlog.dll`) | логирование, `core/src/log/` (с задачи 1.7); файл открывает свой приёмник ротации (ADR 0008 п. 15) |
 | nlohmann/json | 3.12.0 | MIT | vcpkg, header-only | Model IR (с задачи 1.2), настройки и каталоги строк (с задачи 1.7) |
 | toml++ | 3.4.0 | MIT | vcpkg (на Windows — `tomlplusplus-3.dll` рядом с исполняемым файлом), только внутри `core/` | манифесты модулей: `core/src/extension/manifest.cpp` (с задачи 1.5) |
+| CPython | 3.12 | PSF-2.0 | системный Python 3.12 сборки (в CI — `setup-python`); `libpython`/`python312.dll` линкуется динамически к исполняемым файлам со встроенным интерпретатором; поставка Python вместе с программой — задача 3.11 | `python/embed/`, `app/` (с задачи 1.8) |
+| nanobind | 2.13.0 | BSD-3-Clause | pip (`python/requirements-dev.txt`), исходники собираются статически в модуль и исполняемые файлы (ADR 0009 п. 2: порт vcpkg тянет свой CPython) | `python/bindings/` (с задачи 1.8) |
+| robin-map | в составе nanobind | MIT | идёт с nanobind, header-only | внутри nanobind |
+| NumPy | 2.3.5 (тесты; во время работы — любая с протоколом буфера) | BSD-3-Clause | pip; модуль `stresslab` импортирует numpy, только когда отдаёт или принимает массивы | массивы сетки `stresslab.Mesh` и наборов (с задачи 1.8) |
 | Qt 6 (qtbase: Core, Gui, Widgets) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`; в дистрибутиве только динамическая линковка | `shell/` |
 | Qt Advanced Docking System | 4.5.0 | LGPL-2.1-only | vcpkg (порт `qt-advanced-docking-system`), фича `gui` | `shell/` |
 
