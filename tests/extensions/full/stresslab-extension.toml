@@ -1,0 +1,139 @@
+# Every contribution point of docs/architecture.md §4.2, plus contextKeys (ADR 0006).
+# Read by tests/unit/core/extension/manifest_test.cpp.
+
+[extension]
+id = "test.full"
+name = "Полный модуль"
+description = "Uses every contribution point"
+version = "1.2.0-rc.1+build.7"
+engine = "^1.0"
+kind = "python"
+entry = "test_full.main:activate"
+requires = ["test.base>=1.0", "test.mesh ^2.1 || ^3", "test.any"]
+activation = ["onStartup", "onCommand:full.*", "onOpenFile:*.RES", "onSolverRequested:full-solver"]
+
+[[contributes.commands]]
+id = "full.run"
+title = "Запустить расчёт"
+category = "Решение"
+icon = "icons/run.svg"
+args = [
+    { name = "job", type = "string" },
+    { name = "threads", type = "integer", default = 0 },
+    { name = "scale", type = "number", default = 2 },
+    { name = "workdir", type = "path", required = false },
+    { name = "target", type = "object" },
+    { name = "options" },
+]
+
+[[contributes.commands]]
+id = "full.stop"
+title = "Stop"
+
+[[contributes.stages]]
+id = "full.optimize"
+title = "Оптимизация"
+icon = "icons/opt.svg"
+slot = "after:results"
+when = "model.hasMesh"
+
+[[contributes.stages]]
+id = "full.check"
+title = "Check"
+slot = "before:solve"
+
+[[contributes.treeNodeTypes]]
+type = "full_job"
+title = "Задание"
+icon = "icons/job.svg"
+
+[[contributes.menus]]
+location = "solve/run"
+command = "full.run"
+when = "model.hasMesh && solver.full-solver.available"
+group = "1_run@1"
+
+[[contributes.contextMenus]]
+location = "tree"
+command = "full.stop"
+when = "tree.selectedNodeType == 'full_job'"
+
+[[contributes.contextToolbar]]
+command = "full.run"
+when = "stage == 'solve'"
+
+[[contributes.propertySchemas]]
+type = "full_job"
+version = 2
+schema = { type = "object", required = ["name"], properties = { name = { type = "string" }, cpus = { type = "integer", minimum = 1 } } }
+
+[[contributes.fileFormats]]
+id = "full-res"
+title = "Full results"
+extensions = [".res", ".res2"]
+role = "results-import"
+
+[[contributes.solvers]]
+id = "full-solver"
+label = "Full Solver"
+analyses = ["static", "frequency"]
+
+[[contributes.meshers]]
+id = "full-mesher"
+label = "Full Mesher"
+parameters = "full_job"
+
+[[contributes.activityBar]]
+id = "full.panel"
+title = "Full"
+icon = "icons/panel.svg"
+
+[[contributes.bottomPanelTabs]]
+id = "full.monitor"
+title = "Монитор"
+when = "job.running"
+
+[[contributes.viewportLayers]]
+id = "full.modes"
+title = "Mode shapes"
+when = "stage == 'results'"
+
+[[contributes.resultFilters]]
+id = "full.safety"
+title = "Safety factor"
+
+[contributes.settings]
+"full.executable" = { type = "path", default = "", description = "Путь к решателю" }
+"full.threads" = { type = "integer", default = 0, minimum = 0, maximum = 256 }
+"full.mode" = { type = "string", default = "fast", enum = ["fast", "exact"] }
+
+[[contributes.keybindings]]
+command = "full.run"
+key = "Mod+Shift+R"
+when = "stage == 'solve'"
+
+[[contributes.icons]]
+id = "full.run-icon"
+path = "icons/run.svg"
+
+[[contributes.localization]]
+language = "ru"
+path = "l10n/ru.json"
+
+[[contributes.localization]]
+language = "pt-BR"
+path = "l10n/pt-BR.json"
+
+[[contributes.contextKeys]]
+name = "full.ready"
+type = "boolean"
+default = false
+
+[[contributes.contextKeys]]
+name = "full.jobs"
+type = "list"
+default = ["a", "б"]
+
+[[contributes.contextKeys]]
+name = "full.progress"
+type = "number"

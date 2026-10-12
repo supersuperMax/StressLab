@@ -30,30 +30,6 @@ bool is_ascii_digit(char c) {
     return c >= '0' && c <= '9';
 }
 
-// "module.command": two or more segments of [A-Za-z][A-Za-z0-9_-]*.
-bool is_valid_command_id(std::string_view id) {
-    std::size_t segments = 0;
-    std::size_t start = 0;
-    while (true) {
-        const std::size_t end = id.find('.', start);
-        const std::string_view segment =
-            id.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
-        if (segment.empty() || !is_ascii_letter(segment[0])) {
-            return false;
-        }
-        for (const char c : segment) {
-            if (!is_ascii_letter(c) && !is_ascii_digit(c) && c != '_' && c != '-') {
-                return false;
-            }
-        }
-        ++segments;
-        if (end == std::string_view::npos) {
-            return segments >= 2;
-        }
-        start = end + 1;
-    }
-}
-
 // Keywords of Python 3.12 that cannot be keyword arguments (soft keywords can).
 constexpr std::array<std::string_view, 32> python_keywords = {
     "and",    "as",   "assert", "async",  "await",  "break",   "class",    "continue",
@@ -61,18 +37,6 @@ constexpr std::array<std::string_view, 32> python_keywords = {
     "global", "if",   "import", "in",     "is",     "lambda",  "nonlocal", "not",
     "or",     "pass", "raise",  "return", "try",    "while",   "with",     "yield",
 };
-
-bool is_valid_argument_name(std::string_view name) {
-    if (name.empty() || is_ascii_digit(name[0])) {
-        return false;
-    }
-    for (const char c : name) {
-        if (!(c >= 'a' && c <= 'z') && !is_ascii_digit(c) && c != '_') {
-            return false;
-        }
-    }
-    return std::find(python_keywords.begin(), python_keywords.end(), name) == python_keywords.end();
-}
 
 /// `value` as an argument of type `type`, or nothing if it does not fit.
 std::optional<Value> normalize(ArgType type, Value value) {
@@ -121,6 +85,73 @@ std::optional<Value> normalize(ArgType type, Value value) {
 }
 
 }  // namespace
+
+// --- Specs ---------------------------------------------------------------------------------------
+
+bool is_valid_command_id(std::string_view id) noexcept {
+    std::size_t segments = 0;
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t end = id.find('.', start);
+        const std::string_view segment =
+            id.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
+        if (segment.empty() || !is_ascii_letter(segment[0])) {
+            return false;
+        }
+        for (const char c : segment) {
+            if (!is_ascii_letter(c) && !is_ascii_digit(c) && c != '_' && c != '-') {
+                return false;
+            }
+        }
+        ++segments;
+        if (end == std::string_view::npos) {
+            return segments >= 2;
+        }
+        start = end + 1;
+    }
+}
+
+bool is_valid_argument_name(std::string_view name) noexcept {
+    if (name.empty() || is_ascii_digit(name[0])) {
+        return false;
+    }
+    for (const char c : name) {
+        if (!(c >= 'a' && c <= 'z') && !is_ascii_digit(c) && c != '_') {
+            return false;
+        }
+    }
+    return std::find(python_keywords.begin(), python_keywords.end(), name) == python_keywords.end();
+}
+
+void check_spec(CommandSpec& spec) {
+    if (!is_valid_command_id(spec.id)) {
+        fail(CommandErrc::invalid_spec, "invalid command id '" + spec.id + "'");
+    }
+    if (spec.owner.empty()) {
+        fail(CommandErrc::invalid_spec, "command '" + spec.id + "' has no owner");
+    }
+    std::set<std::string_view> names;
+    for (ArgSpec& arg : spec.args) {
+        const std::string where = "argument '" + arg.name + "' of command '" + spec.id + "'";
+        if (!is_valid_argument_name(arg.name)) {
+            fail(CommandErrc::invalid_spec, "invalid name of " + where);
+        }
+        if (!names.insert(arg.name).second) {
+            fail(CommandErrc::invalid_spec, "duplicate " + where);
+        }
+        if (arg.default_value) {
+            if (arg.required) {
+                fail(CommandErrc::invalid_spec, "required " + where + " has a default");
+            }
+            std::optional<Value> normalized = normalize(arg.type, *arg.default_value);
+            if (!normalized) {
+                fail(CommandErrc::invalid_spec, "the default of " + where + " is not of type " +
+                                                    std::string(to_string(arg.type)));
+            }
+            arg.default_value = std::move(normalized);
+        }
+    }
+}
 
 // --- Transaction ---------------------------------------------------------------------------------
 
@@ -173,35 +204,9 @@ CommandBus::CommandBus(model::Document& document) : document_(document), editor_
 CommandBus::~CommandBus() = default;
 
 void CommandBus::register_command(CommandSpec spec, CommandHandler handler) {
-    if (!is_valid_command_id(spec.id)) {
-        fail(CommandErrc::invalid_spec, "invalid command id '" + spec.id + "'");
-    }
-    if (spec.owner.empty()) {
-        fail(CommandErrc::invalid_spec, "command '" + spec.id + "' has no owner");
-    }
+    check_spec(spec);
     if (!handler) {
         fail(CommandErrc::invalid_spec, "command '" + spec.id + "' has no handler");
-    }
-    std::set<std::string_view> names;
-    for (ArgSpec& arg : spec.args) {
-        const std::string where = "argument '" + arg.name + "' of command '" + spec.id + "'";
-        if (!is_valid_argument_name(arg.name)) {
-            fail(CommandErrc::invalid_spec, "invalid name of " + where);
-        }
-        if (!names.insert(arg.name).second) {
-            fail(CommandErrc::invalid_spec, "duplicate " + where);
-        }
-        if (arg.default_value) {
-            if (arg.required) {
-                fail(CommandErrc::invalid_spec, "required " + where + " has a default");
-            }
-            std::optional<Value> normalized = normalize(arg.type, *arg.default_value);
-            if (!normalized) {
-                fail(CommandErrc::invalid_spec, "the default of " + where + " is not of type " +
-                                                    std::string(to_string(arg.type)));
-            }
-            arg.default_value = std::move(normalized);
-        }
     }
     if (commands_.contains(spec.id)) {
         fail(CommandErrc::duplicate_command, "command '" + spec.id + "' is already registered");

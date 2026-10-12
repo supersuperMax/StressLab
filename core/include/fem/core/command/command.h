@@ -34,6 +34,8 @@ enum class ArgType : std::uint8_t {
 
 /// "boolean", "integer", "number", "string", "path", "object", "list", "dict", "any".
 [[nodiscard]] std::string_view to_string(ArgType type) noexcept;
+/// The type named `name` by `to_string`, or nothing.
+[[nodiscard]] std::optional<ArgType> parse_arg_type(std::string_view name) noexcept;
 
 /// A keyword argument of a command.
 struct ArgSpec {
@@ -60,6 +62,16 @@ struct CommandSpec {
 
     [[nodiscard]] const ArgSpec* find_arg(std::string_view name) const;
 };
+
+/// True if `id` can be the id of a command (see `CommandSpec::id`).
+[[nodiscard]] bool is_valid_command_id(std::string_view id) noexcept;
+/// True if `name` can be the name of an argument (see `ArgSpec::name`).
+[[nodiscard]] bool is_valid_argument_name(std::string_view name) noexcept;
+/// Checks a spec as `CommandBus::register_command` does and converts the defaults of its arguments
+/// to their types (an integer default of a number argument becomes a number). Throws
+/// CommandError(invalid_spec). Lets a module manifest be checked before its commands are
+/// registered.
+void check_spec(CommandSpec& spec);
 
 /// Arguments as a command receives them: checked against its schema, with paths and numbers
 /// normalized and defaults filled in. The typed accessors throw CommandError(invalid_arguments)

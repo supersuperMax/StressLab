@@ -1,0 +1,11 @@
+# Made for a platform that does not exist yet: it uses a contribution point this one does not know.
+[extension]
+id = "test.future"
+name = "Future"
+version = "5.0.0"
+engine = "^99.0"
+kind = "wasm"
+teleport = true
+
+[[contributes.holograms]]
+id = "future.hologram"
