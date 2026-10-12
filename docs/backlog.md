@@ -28,3 +28,7 @@
 - **Лицензия на логотип и иконки.** `LICENSE` (MIT) сейчас покрывает весь репозиторий, включая
   `resources/branding/`. Решить, исключать ли бренд-кит из MIT (отдельная политика использования знака, как
   у многих открытых проектов). Появилось в 1.2a; нужно до 3.11.
+- **CI `full` на macOS падает с момента слияния 1.1.** Порт `libb2` (зависимость `qtbase`) собирается через
+  autotools, а на раннере `macos-14` нет `autoconf`, `autoconf-archive`, `automake` и `libtoolize`. На Linux они ставятся шагом
+  apt в `.github/workflows/build.yml`; для macOS нужен такой же шаг (`brew install autoconf autoconf-archive automake libtool`).
+  Замечено в 1.2a; нужно до 1.11 (первая GUI-задача).
