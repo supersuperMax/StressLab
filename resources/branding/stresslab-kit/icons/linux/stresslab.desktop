@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=StressLab
+Comment=Finite element analysis
+Exec=stresslab %F
+Icon=stresslab
+Categories=Science;Engineering;Education;
+Terminal=false
