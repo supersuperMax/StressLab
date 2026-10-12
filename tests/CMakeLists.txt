@@ -60,7 +60,7 @@ gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
 # pytest suite run both by the embedded interpreter and by plain Python.
 add_executable(fem_python_tests unit/python/journal_script_test.cpp)
-target_link_libraries(fem_python_tests PRIVATE fem::core fem_python_embed GTest::gtest_main)
+target_link_libraries(fem_python_tests PRIVATE fem_python_embed GTest::gtest_main)
 target_compile_definitions(fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 fem_copy_runtime_dlls(fem_python_tests)
 gtest_discover_tests(fem_python_tests DISCOVERY_MODE PRE_TEST)

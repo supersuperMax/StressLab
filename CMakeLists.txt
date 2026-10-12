@@ -16,12 +16,6 @@ project(
     DESCRIPTION "Cross-platform finite element analysis environment"
     LANGUAGES C CXX)
 
-# Repeated static libraries on link lines (the core reaches executables both directly and through
-# the Python bindings) make the macOS linker warn; CMake 3.29+ drops them where the linker allows.
-if(POLICY CMP0156)
-    cmake_policy(SET CMP0156 NEW)
-endif()
-
 option(FEM_BUILD_GUI "Build the Qt shell and other GUI components" ON)
 option(FEM_BUILD_TESTS "Build unit tests" ON)
 

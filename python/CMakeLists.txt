@@ -46,8 +46,19 @@ nanobind_set_visibility(fem_python_bindings)
 
 # --- The extension module for plain Python ------------------------------------------------------
 
-nanobind_add_module(fem_python_module NB_STATIC NB_SUPPRESS_WARNINGS bindings/module.cpp)
+# What nanobind_add_module(NB_STATIC) does, except linking nanobind a second time: it comes with
+# the bindings, and a library repeated on the link line makes the macOS linker warn.
+add_library(fem_python_module MODULE bindings/module.cpp)
 target_link_libraries(fem_python_module PRIVATE fem_python_bindings)
+set_target_properties(fem_python_module PROPERTIES LINKER_LANGUAGE CXX)
+nanobind_compile_options(fem_python_module)
+nanobind_link_options(fem_python_module)
+nanobind_extension(fem_python_module)
+nanobind_disable_stack_protector(fem_python_module)
+nanobind_disable_stack_protector(nanobind-static)
+nanobind_opt_size(fem_python_module)
+nanobind_strip(fem_python_module)
+nanobind_set_visibility(fem_python_module)
 set_target_properties(fem_python_module PROPERTIES OUTPUT_NAME _stresslab
                                                    LIBRARY_OUTPUT_DIRECTORY "${FEM_PYTHON_SITE_DIR}")
 if(WIN32)
