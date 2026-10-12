@@ -1,0 +1,98 @@
+name: Build and test
+
+on:
+  workflow_call:
+    inputs:
+      kind:
+        description: "Preset family: core (no GUI) or full"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ inputs.kind }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # pwsh instead of bash: Git Bash on Windows ships a `link` that shadows the MSVC linker.
+        shell: pwsh
+    env:
+      PRESET: ${{ inputs.kind }}-debug
+      VCPKG_DISABLE_METRICS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python tools (pytest, Ninja)
+        run: python -m pip install -r python/requirements-dev.txt
+
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install system packages for Qt
+        if: inputs.kind == 'full' && runner.os == 'Linux'
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y autoconf autoconf-archive automake libtool
+          '^libxcb.*-dev' libx11-xcb-dev libxrender-dev libxi-dev libxkbcommon-dev
+          libxkbcommon-x11-dev libgl-dev libegl-dev libglu1-mesa-dev
+
+      - name: Clone vcpkg
+        run: git clone --depth 1 https://github.com/microsoft/vcpkg "$env:RUNNER_TEMP/vcpkg"
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        run: '& "$env:RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat" -disableMetrics'
+
+      - name: Bootstrap vcpkg (macOS, Linux)
+        if: runner.os != 'Windows'
+        run: '& "$env:RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics'
+
+      # Package versions come from the baseline in vcpkg-configuration.json, not from this clone.
+      - name: Point CMake presets and binary caching at vcpkg
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/vcpkg-cache" | Out-Null
+          "VCPKG_ROOT=$env:RUNNER_TEMP/vcpkg" >> $env:GITHUB_ENV
+          "VCPKG_BINARY_SOURCES=clear;files,$env:RUNNER_TEMP/vcpkg-cache,readwrite" >> $env:GITHUB_ENV
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-${{ inputs.kind }}-${{ runner.os }}-
+            vcpkg-core-${{ runner.os }}-
+
+      - name: Configure
+        run: cmake --preset $env:PRESET
+
+      - name: Build
+        run: cmake --build --preset $env:PRESET
+
+      - name: C++ tests
+        run: ctest --preset $env:PRESET
+
+      - name: Python tests
+        if: inputs.kind == 'core'
+        run: python -m pytest
+
+      # Saved even when a later step failed: a Qt build takes too long to throw away.
+      - name: Save vcpkg binary cache
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}

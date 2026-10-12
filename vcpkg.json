@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "fem-app",
+  "version": "0.1.0",
+  "description": "Cross-platform finite element analysis environment",
+  "license": "MIT",
+  "dependencies": [
+    "fmt",
+    "gtest",
+    "nlohmann-json",
+    "spdlog",
+    "tomlplusplus"
+  ],
+  "features": {
+    "gui": {
+      "description": "Qt shell (shell/)",
+      "dependencies": [
+        "qt-advanced-docking-system",
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": [
+            "concurrent",
+            "freetype",
+            "gui",
+            "harfbuzz",
+            "opengl",
+            "png",
+            "widgets"
+          ]
+        },
+        {
+          "name": "qtbase",
+          "default-features": false,
+          "features": [
+            "egl",
+            "fontconfig",
+            "xcb",
+            "xcb-xlib",
+            "xrender"
+          ],
+          "platform": "linux"
+        }
+      ]
+    }
+  }
+}

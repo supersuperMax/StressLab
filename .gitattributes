@@ -1,0 +1,14 @@
+# Deterministic files: LF in the repository and in every working copy (CLAUDE.md, rule 6).
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.h5 binary
+*.hdf5 binary
+*.zst binary
+*.femx binary

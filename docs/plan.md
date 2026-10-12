@@ -484,5 +484,5 @@ Smoke-тест установленного приложения: запуск -
 
 | Задача | Статус | PR | Примечания |
 |---|---|---|---|
-| 1.1 | ○ | | |
+| 1.1 | ✓ | [#1](https://github.com/supersuperMax/StressLab/pull/1) | CI зелёный (`lint` и `core`) на Windows x64, macOS arm64, Ubuntu: `ctest` 2/2, `pytest` 7/7. Локально (Windows, MSVC 14.51) `core-debug` и `core-release` собираются без предупреждений. `full-*` ещё не собирался: первый запуск — после слияния в main. Отклонения: VTK не включён в фичу `gui` (появится в 3.7); SessionStart-хук не делался (сессия локальная) — оба пункта в `docs/backlog.md`. Правило 1 проверяет pytest-тест `python/tests/test_architecture_rules.py`. |
 | … | | | |
