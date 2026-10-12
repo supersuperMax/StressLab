@@ -14,6 +14,12 @@ target_sources(
             src/command/model_commands.cpp
             src/command/python_literal.cpp
             src/command/value.cpp
+            src/context/context_keys.cpp
+            src/context/core_keys.cpp
+            src/context/error.cpp
+            src/context/value.cpp
+            src/context/when.cpp
+            src/context/when_parser.cpp
             src/model/change_set.cpp
             src/model/document.cpp
             src/model/document_editor.cpp
@@ -22,7 +28,8 @@ target_sources(
             src/model/mesh.cpp
             src/model/object.cpp
             src/model/units.cpp
-            src/model/utf8.cpp)
+            src/model/utf8.cpp
+            src/text/number.cpp)
 target_include_directories(femcore PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(femcore PUBLIC cxx_std_20)
 target_compile_definitions(femcore PRIVATE FEM_VERSION_STRING="${PROJECT_VERSION}")

@@ -13,6 +13,11 @@ add_executable(
     unit/core/command/python_literal_test.cpp
     unit/core/command/transaction_test.cpp
     unit/core/command/undo_test.cpp
+    unit/core/context/context_keys_test.cpp
+    unit/core/context/core_keys_test.cpp
+    unit/core/context/watch_test.cpp
+    unit/core/context/when_evaluate_test.cpp
+    unit/core/context/when_grammar_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
