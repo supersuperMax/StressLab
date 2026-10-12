@@ -1,6 +1,7 @@
 # libfemcore: platform core. Must build without Qt GUI and VTK (CLAUDE.md, rule 2).
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 add_library(femcore)
 add_library(fem::core ALIAS femcore)
@@ -31,6 +32,10 @@ target_sources(
             src/extension/registry.cpp
             src/extension/semver.cpp
             src/extension/shared_library.cpp
+            src/job/error.cpp
+            src/job/job_manager.cpp
+            src/job/job_spec.cpp
+            src/job/local_executor.cpp
             src/model/change_set.cpp
             src/model/document.cpp
             src/model/document_editor.cpp
@@ -40,12 +45,22 @@ target_sources(
             src/model/object.cpp
             src/model/units.cpp
             src/model/utf8.cpp
+            src/task/error.cpp
+            src/task/task.cpp
+            src/task/task_pool.cpp
             src/text/number.cpp)
+# Child processes of the local executor: a Job Object on Windows, a process group elsewhere.
+if(WIN32)
+    target_sources(femcore PRIVATE src/job/process_win32.cpp)
+else()
+    target_sources(femcore PRIVATE src/job/process_posix.cpp)
+endif()
 target_include_directories(femcore PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(femcore PUBLIC cxx_std_20)
 target_compile_definitions(femcore PRIVATE FEM_VERSION_STRING="${PROJECT_VERSION}")
 # Object properties are nlohmann::json values, so the dependency is part of the public API.
-target_link_libraries(femcore PUBLIC nlohmann_json::nlohmann_json)
+# Tasks and jobs run on threads of their own.
+target_link_libraries(femcore PUBLIC nlohmann_json::nlohmann_json Threads::Threads)
 # Manifests of modules are read with toml++ only inside the core; native modules are loaded with
 # the dynamic loader (libdl where it is a separate library).
 target_link_libraries(femcore PRIVATE tomlplusplus::tomlplusplus ${CMAKE_DL_LIBS})
