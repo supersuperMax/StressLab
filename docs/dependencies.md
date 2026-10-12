@@ -12,7 +12,7 @@
 | {fmt} | 12.2.0 | MIT | vcpkg | пока не используется: журналу 1.3 хватило `std::to_chars` (см. `docs/backlog.md`) |
 | spdlog | 1.17.0 | MIT | vcpkg | логирование (задача 1.7) |
 | nlohmann/json | 3.12.0 | MIT | vcpkg, header-only | Model IR, настройки (с задачи 1.2) |
-| toml++ | 3.4.0 | MIT | vcpkg, header-only | манифесты модулей (задача 1.5) |
+| toml++ | 3.4.0 | MIT | vcpkg (на Windows — `tomlplusplus-3.dll` рядом с исполняемым файлом), только внутри `core/` | манифесты модулей: `core/src/extension/manifest.cpp` (с задачи 1.5) |
 | Qt 6 (qtbase: Core, Gui, Widgets) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`; в дистрибутиве только динамическая линковка | `shell/` |
 | Qt Advanced Docking System | 4.5.0 | LGPL-2.1-only | vcpkg (порт `qt-advanced-docking-system`), фича `gui` | `shell/` |
 

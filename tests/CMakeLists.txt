@@ -18,6 +18,13 @@ add_executable(
     unit/core/context/watch_test.cpp
     unit/core/context/when_evaluate_test.cpp
     unit/core/context/when_grammar_test.cpp
+    unit/core/extension/activation_test.cpp
+    unit/core/extension/manager_test.cpp
+    unit/core/extension/manifest_test.cpp
+    unit/core/extension/native_test.cpp
+    unit/core/extension/profile_test.cpp
+    unit/core/extension/registry_test.cpp
+    unit/core/extension/semver_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
@@ -26,10 +33,33 @@ add_executable(
     unit/core/model/units_test.cpp)
 target_link_libraries(fem_core_tests PRIVATE fem::core GTest::gtest_main)
 target_compile_definitions(
-    fem_core_tests PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}"
-                           FEM_EXPECTED_PRODUCT_NAME="${PROJECT_NAME}"
-                           FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+    fem_core_tests
+    PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}"
+            FEM_EXPECTED_PRODUCT_NAME="${PROJECT_NAME}"
+            FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+            FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
+            FEM_TEST_NATIVE_HELLO="$<TARGET_FILE:fem_test_extension_hello>"
+            FEM_TEST_NATIVE_BAD_ABI="$<TARGET_FILE:fem_test_extension_hello_bad_abi>")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
+
+# Native test modules (task 1.5), built like modules made outside the platform: plain C, only the
+# C ABI header, nothing of the core linked. `hello_bad_abi` claims an ABI version the platform does
+# not support. The file name is what `entry` names plus the suffix the platform looks for.
+foreach(fixture IN ITEMS hello hello_bad_abi)
+    add_library(fem_test_extension_${fixture} MODULE extensions/native-hello/hello.c)
+    target_include_directories(fem_test_extension_${fixture} PRIVATE ${PROJECT_SOURCE_DIR}/core/include)
+    set_target_properties(
+        fem_test_extension_${fixture}
+        PROPERTIES PREFIX ""
+                   OUTPUT_NAME ${fixture}
+                   C_VISIBILITY_PRESET hidden
+                   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/extension-fixtures)
+    if(APPLE)
+        set_target_properties(fem_test_extension_${fixture} PROPERTIES SUFFIX ".dylib")
+    endif()
+    add_dependencies(fem_core_tests fem_test_extension_${fixture})
+endforeach()
+target_compile_definitions(fem_test_extension_hello_bad_abi PRIVATE HELLO_ABI_VERSION=999)
 
 # Model IR benchmark (task 1.2): one million nodes without copying the arrays. Fails if they are
 # copied, so it runs with the tests; its timings are printed with `ctest -L benchmark -V`.

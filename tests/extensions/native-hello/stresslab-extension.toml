@@ -1,0 +1,28 @@
+# A native module built from hello.c by tests/CMakeLists.txt; the test copies it next to the library.
+[extension]
+id = "test.native"
+name = "Native test module"
+version = "1.0.0"
+engine = "^1.0"
+kind = "native"
+entry = "hello"
+activation = ["onCommand:hello.*"]
+
+[[contributes.commands]]
+id = "hello.greet"
+title = "Greet"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "hello.fail"
+title = "Fail"
+
+[[contributes.contextKeys]]
+name = "hello.activations"
+type = "number"
+default = 0
+
+[[contributes.contextKeys]]
+name = "hello.deactivations"
+type = "number"
+default = 0

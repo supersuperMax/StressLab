@@ -2,6 +2,8 @@
 
 #include "fem/core/command/error.h"
 
+#include <initializer_list>
+#include <optional>
 #include <string>
 
 namespace fem::command {
@@ -56,6 +58,17 @@ std::string_view to_string(ArgType type) noexcept {
             return "any";
     }
     return "unknown";
+}
+
+std::optional<ArgType> parse_arg_type(std::string_view name) noexcept {
+    for (const ArgType type :
+         {ArgType::boolean, ArgType::integer, ArgType::number, ArgType::string, ArgType::path,
+          ArgType::object, ArgType::list, ArgType::dict, ArgType::any}) {
+        if (to_string(type) == name) {
+            return type;
+        }
+    }
+    return std::nullopt;
 }
 
 const ArgSpec* CommandSpec::find_arg(std::string_view name) const {

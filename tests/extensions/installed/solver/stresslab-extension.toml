@@ -1,0 +1,33 @@
+[extension]
+id = "test.solver"
+name = "Solver"
+version = "2.1.0"
+engine = "^1.0"
+kind = "python"
+entry = "test_solver:activate"
+requires = ["test.base ^1.0"]
+activation = ["onSolverRequested:demo", "onOpenFile:*.res"]
+
+[[contributes.commands]]
+id = "solver.run"
+title = "Run"
+args = [{ name = "job", type = "string" }]
+
+[[contributes.solvers]]
+id = "demo"
+label = "Demo solver"
+analyses = ["static"]
+
+[[contributes.contextToolbar]]
+command = "solver.run"
+when = "stage == 'solve'"
+
+[[contributes.bottomPanelTabs]]
+id = "solver.log"
+title = "Solver log"
+when = "job.running"
+
+[[contributes.fileFormats]]
+id = "demo-res"
+extensions = [".res"]
+role = "results-import"

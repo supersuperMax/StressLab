@@ -1,0 +1,10 @@
+[extension]
+id = "test.broken"
+name = "Broken"
+version = "1.0.0"
+engine = "^1.0"
+
+[[contributes.menus]]
+location = "tools"
+command = "base.hello"
+tittle = "Hello"

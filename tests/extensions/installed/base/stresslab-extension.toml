@@ -1,0 +1,34 @@
+[extension]
+id = "test.base"
+name = "Base"
+version = "1.2.0"
+engine = "^1.0"
+kind = "python"
+entry = "test_base:activate"
+activation = ["onStartup"]
+
+[[contributes.commands]]
+id = "base.hello"
+title = "Hello"
+args = [{ name = "name", type = "string", default = "world" }]
+
+[[contributes.contextKeys]]
+name = "base.ready"
+type = "boolean"
+default = false
+
+[[contributes.treeNodeTypes]]
+type = "item"
+title = "Item"
+
+[[contributes.propertySchemas]]
+type = "item"
+schema = { type = "object" }
+
+[[contributes.menus]]
+location = "tools"
+command = "base.hello"
+when = "base.ready"
+
+[contributes.settings]
+"base.verbose" = { type = "boolean", default = false }

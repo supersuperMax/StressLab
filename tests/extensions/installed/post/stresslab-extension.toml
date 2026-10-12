@@ -1,0 +1,21 @@
+[extension]
+id = "test.post"
+name = "Post-processing"
+version = "0.3.0"
+engine = "^1.0"
+kind = "python"
+entry = "test_post:activate"
+requires = ["test.solver>=2.0"]
+activation = ["onCommand:solver.run"]
+
+[[contributes.commands]]
+id = "post.show"
+title = "Show results"
+
+[[contributes.resultFilters]]
+id = "post.safety"
+title = "Safety factor"
+
+[[contributes.viewportLayers]]
+id = "post.contours"
+title = "Contours"
