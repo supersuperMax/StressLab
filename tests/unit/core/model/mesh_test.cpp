@@ -11,6 +11,7 @@
 #include <vector>
 
 using namespace fem::model;
+using fem::model::testing::BusEditor;
 using fem::model::testing::make_blocks;
 using fem::model::testing::module_a;
 using fem::model::testing::module_object;
@@ -87,7 +88,8 @@ TEST(Mesh, TakesArraysWithoutCopying) {
     auto shared = std::make_shared<const Mesh>(std::move(mesh));
 
     Document doc;
-    const ObjectId id = doc.create(mesh_object("part", shared));
+    BusEditor edit{doc};
+    const ObjectId id = edit.create(mesh_object("part", shared));
     shared.reset();
 
     const std::shared_ptr<const Mesh> stored = doc.data<Mesh>(id);
@@ -172,12 +174,13 @@ TEST(MeshSets, AreCheckedAgainstTheMesh) {
 
 TEST(MeshObjects, SetsLiveUnderTheirMesh) {
     Document doc;
-    const ObjectId mesh = doc.create(mesh_object("part", small_mesh()));
-    const ObjectId nodes = doc.create(node_set_object(
+    BusEditor edit{doc};
+    const ObjectId mesh = edit.create(mesh_object("part", small_mesh()));
+    const ObjectId nodes = edit.create(node_set_object(
         mesh, "fixed", std::make_shared<const NodeSet>(std::vector<Index>{0, 1, 2})));
-    const ObjectId elements = doc.create(element_set_object(
+    const ObjectId elements = edit.create(element_set_object(
         mesh, "solid", std::make_shared<const ElementSet>(std::vector<Index>{0, 1})));
-    const ObjectId surface = doc.create(surface_object(
+    const ObjectId surface = edit.create(surface_object(
         mesh, "pressure", std::make_shared<const Surface>(std::vector<ElementSide>{{0, 1}})));
 
     const Object& mesh_object_ref = doc.get(mesh);
@@ -197,64 +200,68 @@ TEST(MeshObjects, SetsLiveUnderTheirMesh) {
 
 TEST(MeshObjects, SetsNeedAMeshParentAndMatchingIndices) {
     Document doc;
+    BusEditor edit{doc};
     doc.set_owner_enabled(module_a, true);
-    const ObjectId mesh = doc.create(mesh_object("part", small_mesh()));
-    const ObjectId group = doc.create(module_object(module_a, "group", "g"));
+    const ObjectId mesh = edit.create(mesh_object("part", small_mesh()));
+    const ObjectId group = edit.create(module_object(module_a, "group", "g"));
     const auto set = std::make_shared<const NodeSet>(std::vector<Index>{0});
 
-    EXPECT_MODEL_ERROR(doc.create(node_set_object({}, "orphan", set)), ModelErrc::invalid_data);
-    EXPECT_MODEL_ERROR(doc.create(node_set_object(group, "misplaced", set)),
+    EXPECT_MODEL_ERROR(edit.create(node_set_object({}, "orphan", set)), ModelErrc::invalid_data);
+    EXPECT_MODEL_ERROR(edit.create(node_set_object(group, "misplaced", set)),
                        ModelErrc::invalid_data);
     EXPECT_MODEL_ERROR(
-        doc.create(node_set_object(mesh, "outside",
-                                   std::make_shared<const NodeSet>(std::vector<Index>{5}))),
+        edit.create(node_set_object(mesh, "outside",
+                                    std::make_shared<const NodeSet>(std::vector<Index>{5}))),
         ModelErrc::invalid_data);
     EXPECT_EQ(doc.size(), 2U);
 }
 
 TEST(MeshObjects, CoreTypesRequireTheirData) {
     Document doc;
-    EXPECT_MODEL_ERROR(doc.create(mesh_object("empty", nullptr)), ModelErrc::invalid_data);
+    BusEditor edit{doc};
+    EXPECT_MODEL_ERROR(edit.create(mesh_object("empty", nullptr)), ModelErrc::invalid_data);
 
     NewObject wrong = mesh_object("wrong", small_mesh());
     wrong.data = std::make_shared<const NodeSet>(std::vector<Index>{0});
-    EXPECT_MODEL_ERROR(doc.create(wrong), ModelErrc::invalid_data);
+    EXPECT_MODEL_ERROR(edit.create(wrong), ModelErrc::invalid_data);
 
-    const ObjectId mesh = doc.create(mesh_object("part", small_mesh()));
+    const ObjectId mesh = edit.create(mesh_object("part", small_mesh()));
     NewObject wrong_set =
         element_set_object(mesh, "s", std::make_shared<const ElementSet>(std::vector<Index>{0}));
     wrong_set.type = std::string(core_types::node_set);
-    EXPECT_MODEL_ERROR(doc.create(wrong_set), ModelErrc::invalid_data);
+    EXPECT_MODEL_ERROR(edit.create(wrong_set), ModelErrc::invalid_data);
 }
 
 TEST(MeshObjects, ReplacingTheMeshKeepsSetsValid) {
     Document doc;
-    const ObjectId mesh = doc.create(mesh_object("part", small_mesh()));
-    const ObjectId set = doc.create(
+    BusEditor edit{doc};
+    const ObjectId mesh = edit.create(mesh_object("part", small_mesh()));
+    const ObjectId set = edit.create(
         node_set_object(mesh, "s", std::make_shared<const NodeSet>(std::vector<Index>{1})));
     const auto original = doc.data<Mesh>(mesh);
 
     // The set refers to node 1, which a two-node mesh still has...
-    doc.set_data(mesh, tiny_mesh());
+    edit.set_data(mesh, tiny_mesh());
     EXPECT_EQ(doc.data<Mesh>(mesh)->node_count(), 2U);
 
     // ...but not to element sides of a mesh without elements.
-    doc.create(
+    edit.create(
         surface_object(mesh, "faces", std::make_shared<const Surface>(std::vector<ElementSide>{})));
-    doc.set_data(mesh, original);
-    doc.set_data(doc.find_child(mesh, core_types::surface, "faces"),
-                 std::make_shared<const Surface>(std::vector<ElementSide>{{2, 0}}));
-    EXPECT_MODEL_ERROR(doc.set_data(mesh, tiny_mesh()), ModelErrc::invalid_data);
+    edit.set_data(mesh, original);
+    edit.set_data(doc.find_child(mesh, core_types::surface, "faces"),
+                  std::make_shared<const Surface>(std::vector<ElementSide>{{2, 0}}));
+    EXPECT_MODEL_ERROR(edit.set_data(mesh, tiny_mesh()), ModelErrc::invalid_data);
     EXPECT_EQ(doc.data<Mesh>(mesh), original);
 
-    EXPECT_MODEL_ERROR(doc.set_data(mesh, nullptr), ModelErrc::invalid_data);
-    EXPECT_MODEL_ERROR(doc.set_data(mesh, std::make_shared<const NodeSet>(std::vector<Index>{0})),
+    EXPECT_MODEL_ERROR(edit.set_data(mesh, nullptr), ModelErrc::invalid_data);
+    EXPECT_MODEL_ERROR(edit.set_data(mesh, std::make_shared<const NodeSet>(std::vector<Index>{0})),
                        ModelErrc::invalid_data);
-    EXPECT_MODEL_ERROR(doc.set_data(set, std::make_shared<const ElementSet>(std::vector<Index>{0})),
-                       ModelErrc::invalid_data);
-    EXPECT_MODEL_ERROR(doc.set_data(set, std::make_shared<const NodeSet>(std::vector<Index>{9})),
+    EXPECT_MODEL_ERROR(
+        edit.set_data(set, std::make_shared<const ElementSet>(std::vector<Index>{0})),
+        ModelErrc::invalid_data);
+    EXPECT_MODEL_ERROR(edit.set_data(set, std::make_shared<const NodeSet>(std::vector<Index>{9})),
                        ModelErrc::invalid_data);
 
-    doc.set_data(set, std::make_shared<const NodeSet>(std::vector<Index>{3, 4}));
+    edit.set_data(set, std::make_shared<const NodeSet>(std::vector<Index>{3, 4}));
     EXPECT_EQ(doc.data<NodeSet>(set)->size(), 2U);
 }

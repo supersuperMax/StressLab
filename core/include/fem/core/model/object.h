@@ -32,15 +32,15 @@ inline constexpr std::string_view surface = "surface";          ///< Data: `Surf
 
 /// Everything needed to create an object; see `Document::create`.
 struct NewObject {
-    std::string type;   ///< Object type, unique within its owner, e.g. "material".
-    std::string owner;  ///< Id of the module that defines the type, e.g. "fem.model.structural".
+    std::string type{};   ///< Object type, unique within its owner, e.g. "material".
+    std::string owner{};  ///< Id of the module that defines the type, e.g. "fem.model.structural".
     std::uint32_t schema_version = 1;
-    std::string name;  ///< UTF-8; if not empty, unique among siblings of the same type.
+    std::string name{};  ///< UTF-8; if not empty, unique among siblings of the same type.
     Properties properties = Properties::object();
-    ObjectId parent;  ///< Invalid id for a root object.
-    std::vector<ObjectId> dependencies;
+    ObjectId parent{};  ///< Invalid id for a root object.
+    std::vector<ObjectId> dependencies{};
     /// Bulk data. Only core types have it for now; a set must be a child of its mesh.
-    std::shared_ptr<const ObjectData> data;
+    std::shared_ptr<const ObjectData> data{};
 };
 
 [[nodiscard]] NewObject mesh_object(std::string name, std::shared_ptr<const Mesh> mesh,

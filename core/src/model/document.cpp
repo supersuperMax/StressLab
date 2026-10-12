@@ -2,11 +2,15 @@
 
 #include "fem/core/model/error.h"
 
+#include "change.h"
 #include "utf8.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace fem::model {
 
@@ -180,8 +184,9 @@ void Document::throw_wrong_data(ObjectId id) {
 }
 
 // --- Changes -------------------------------------------------------------------------------------
+// Every change validates first, then records itself and applies the record (see `record`).
 
-ObjectId Document::create(NewObject init) {
+ObjectId Document::create(NewObject init, ChangeSet& changes) {
     if (init.type.empty() || init.owner.empty()) {
         throw ModelError(ModelErrc::invalid_argument, "object type and owner must not be empty");
     }
@@ -209,46 +214,36 @@ ObjectId Document::create(NewObject init) {
     }
     check_data(init.owner, init.type, init.parent, init.data);
 
-    // Validation is over: from here on the id is taken and the document changes.
+    // Validation is over: from here on the id is taken and the document changes. The new object
+    // enters the document the way undo puts a removed one back: as a map node, after its siblings.
     const ObjectId id{next_id_++};
-    Object& object = objects_.emplace(id, Object(id, std::move(init))).first->second;
-    if (object.parent_.is_valid()) {
-        get_mutable(object.parent_).children_.push_back(id);
-    } else {
-        roots_.push_back(id);
-    }
-    if (!object.name_.empty()) {
-        names_.emplace(NameKey{object.parent_, object.type_, object.name_}, id);
-    }
-    for (const ObjectId target : object.dependencies_) {
-        dependents_[target].insert(id);
-    }
+    const std::size_t position = siblings(init.parent).size();
+    std::map<ObjectId, Object> staging;
+    staging.emplace(id, Object(id, std::move(init)));
+    record(changes, {change::Existence{id, staging.extract(id), position}});
     return id;
 }
 
-void Document::rename(ObjectId id, std::string name) {
-    Object& object = get_editable(id);
+void Document::rename(ObjectId id, std::string name, ChangeSet& changes) {
+    const Object& object = get_editable(id);
     if (name == object.name_) {
         return;
     }
     check_name(&object, object.parent_, object.type_, name);
-    if (!object.name_.empty()) {
-        names_.erase(NameKey{object.parent_, object.type_, object.name_});
-    }
-    object.name_ = std::move(name);
-    if (!object.name_.empty()) {
-        names_.emplace(NameKey{object.parent_, object.type_, object.name_}, id);
-    }
+    record(changes, {change::Name{id, std::move(name)}});
 }
 
-void Document::set_properties(ObjectId id, Properties properties) {
-    Object& object = get_editable(id);
+void Document::set_properties(ObjectId id, Properties properties, ChangeSet& changes) {
+    const Object& object = get_editable(id);
     check_properties(properties);
-    object.properties_ = std::move(properties);
+    if (properties == object.properties_) {
+        return;
+    }
+    record(changes, {change::PropertyValues{id, std::move(properties)}});
 }
 
-void Document::set_data(ObjectId id, std::shared_ptr<const ObjectData> data) {
-    Object& object = get_editable(id);
+void Document::set_data(ObjectId id, std::shared_ptr<const ObjectData> data, ChangeSet& changes) {
+    const Object& object = get_editable(id);
     check_data(object.owner_, object.type_, object.parent_, data);
     if (const auto* mesh = dynamic_cast<const Mesh*>(data.get())) {
         for (const ObjectId child : object.children_) {
@@ -265,11 +260,14 @@ void Document::set_data(ObjectId id, std::shared_ptr<const ObjectData> data) {
             }
         }
     }
-    object.data_ = std::move(data);
+    if (data == object.data_) {
+        return;
+    }
+    record(changes, {change::Data{id, std::move(data)}});
 }
 
-bool Document::add_dependency(ObjectId dependent, ObjectId target) {
-    Object& object = get_editable(dependent);
+bool Document::add_dependency(ObjectId dependent, ObjectId target, ChangeSet& changes) {
+    const Object& object = get_editable(dependent);
     if (target == dependent || !contains(target)) {
         throw ModelError(ModelErrc::invalid_dependency,
                          "dependency on itself or on a missing object " + to_string(target),
@@ -282,21 +280,15 @@ bool Document::add_dependency(ObjectId dependent, ObjectId target) {
         throw ModelError(ModelErrc::dependency_cycle,
                          "dependency on " + to_string(target) + " would close a cycle", dependent);
     }
-    auto& dependencies = object.dependencies_;
-    dependencies.insert(std::lower_bound(dependencies.begin(), dependencies.end(), target), target);
-    dependents_[target].insert(dependent);
+    record(changes, {change::Dependency{dependent, target}});
     return true;
 }
 
-bool Document::remove_dependency(ObjectId dependent, ObjectId target) {
-    Object& object = get_editable(dependent);
-    auto& dependencies = object.dependencies_;
-    const auto it = std::lower_bound(dependencies.begin(), dependencies.end(), target);
-    if (it == dependencies.end() || *it != target) {
+bool Document::remove_dependency(ObjectId dependent, ObjectId target, ChangeSet& changes) {
+    if (!get_editable(dependent).depends_on(target)) {
         return false;
     }
-    dependencies.erase(it);
-    erase_dependent(dependents_, target, dependent);
+    record(changes, {change::Dependency{dependent, target}});
     return true;
 }
 
@@ -321,7 +313,7 @@ std::vector<RemovalBlocker> Document::removal_blockers(ObjectId id) const {
     return blockers;
 }
 
-RemoveResult Document::remove(ObjectId id) {
+RemoveResult Document::remove(ObjectId id, ChangeSet& changes) {
     RemoveResult result;
     result.blockers = removal_blockers(id);
     if (!result.ok()) {
@@ -329,25 +321,160 @@ RemoveResult Document::remove(ObjectId id) {
     }
 
     result.removed = subtree(id);
-    const ObjectId parent = get(id).parent_;
-    std::vector<ObjectId>& siblings = parent.is_valid() ? get_mutable(parent).children_ : roots_;
-    siblings.erase(std::find(siblings.begin(), siblings.end(), id));
-
-    for (const ObjectId member : result.removed) {
-        const Object& object = get(member);
-        // Dependencies of removed objects go away; dependencies *on* removed objects stay, so
-        // active dependents see them as missing.
-        for (const ObjectId target : object.dependencies_) {
-            erase_dependent(dependents_, target, member);
-        }
-        if (!object.name_.empty()) {
-            names_.erase(NameKey{object.parent_, object.type_, object.name_});
-        }
-    }
-    for (const ObjectId member : result.removed) {
-        objects_.erase(member);
+    // Leaves first: each record takes out an object without children, so undo, which applies
+    // the records backwards, puts the parents back before their children.
+    for (auto member = result.removed.rbegin(); member != result.removed.rend(); ++member) {
+        record(changes, {change::Existence{*member, {}, 0}});
     }
     return result;
+}
+
+void Document::set_units(const UnitSystem& units, ChangeSet& changes) {
+    if (units == units_) {
+        return;
+    }
+    record(changes, {change::Units{units}});
+}
+
+// --- History -------------------------------------------------------------------------------------
+
+ChangeSet Document::new_changes() const noexcept {
+    return ChangeSet(next_id_);
+}
+
+void Document::record(ChangeSet& changes, ChangeSet::Change&& change) {
+    changes.changes_.push_back(std::move(change));
+    toggle(changes.changes_.back());
+}
+
+void Document::apply(ChangeSet& changes, bool backwards) {
+    if (backwards) {
+        for (auto change = changes.changes_.rbegin(); change != changes.changes_.rend(); ++change) {
+            toggle(*change);
+        }
+    } else {
+        for (ChangeSet::Change& change : changes.changes_) {
+            toggle(change);
+        }
+    }
+    changes.undone_ = backwards;
+}
+
+void Document::rollback(ChangeSet& changes) {
+    apply(changes, true);
+    next_id_ = changes.next_id_;
+    changes.changes_.clear();
+    changes.undone_ = false;
+}
+
+void Document::check_history(const ChangeSet& changes) const {
+    const auto check_owner = [this](const Object& object) {
+        if (!is_owner_enabled(object.owner_)) {
+            throw ModelError(
+                ModelErrc::opaque_object,
+                "the step changes an object of disabled module '" + object.owner_ + "'",
+                object.id_);
+        }
+    };
+    for (const ChangeSet::Change& change : changes.changes_) {
+        std::visit(
+            [&](const auto& record) {
+                using Record = std::decay_t<decltype(record)>;
+                if constexpr (std::is_same_v<Record, change::Existence>) {
+                    const bool present = record.node.empty();
+                    const Object* object = present ? find(record.id) : &record.node.mapped();
+                    if (object == nullptr) {
+                        return;  // Created and removed by the same set: another record holds it.
+                    }
+                    check_owner(*object);
+                    if (const Object* parent = find(object->parent_)) {
+                        check_owner(*parent);
+                    }
+                    // Taking out an object that an opaque one depends on would break it.
+                    const auto entry = dependents_.find(record.id);
+                    if (present && entry != dependents_.end()) {
+                        for (const ObjectId dependent : entry->second) {
+                            if (const Object* other = find(dependent)) {
+                                check_owner(*other);
+                            }
+                        }
+                    }
+                } else if constexpr (!std::is_same_v<Record, change::Units>) {
+                    // An object missing from the document is put back by an existence record of
+                    // the same set, which checks it.
+                    if (const Object* object = find(record.id)) {
+                        check_owner(*object);
+                    }
+                }
+            },
+            change.record);
+    }
+}
+
+void Document::toggle(ChangeSet::Change& change) {
+    std::visit(
+        [this](auto& record) {
+            using Record = std::decay_t<decltype(record)>;
+            if constexpr (std::is_same_v<Record, change::Existence>) {
+                if (record.node.empty()) {
+                    // Take the object out; it has no children by now.
+                    const auto entry = objects_.find(record.id);
+                    const Object& object = entry->second;
+                    std::vector<ObjectId>& list = siblings(object.parent_);
+                    const auto place = std::find(list.begin(), list.end(), record.id);
+                    record.position = static_cast<std::size_t>(place - list.begin());
+                    list.erase(place);
+                    if (!object.name_.empty()) {
+                        names_.erase(NameKey{object.parent_, object.type_, object.name_});
+                    }
+                    // Dependencies *on* the object stay, so active dependents see them as missing.
+                    for (const ObjectId target : object.dependencies_) {
+                        erase_dependent(dependents_, target, record.id);
+                    }
+                    record.node = objects_.extract(entry);
+                } else {
+                    const Object& object = record.node.mapped();
+                    std::vector<ObjectId>& list = siblings(object.parent_);
+                    list.insert(list.begin() + static_cast<std::ptrdiff_t>(record.position),
+                                record.id);
+                    if (!object.name_.empty()) {
+                        names_.emplace(NameKey{object.parent_, object.type_, object.name_},
+                                       record.id);
+                    }
+                    for (const ObjectId target : object.dependencies_) {
+                        dependents_[target].insert(record.id);
+                    }
+                    objects_.insert(std::move(record.node));
+                }
+            } else if constexpr (std::is_same_v<Record, change::Name>) {
+                Object& object = get_mutable(record.id);
+                if (!object.name_.empty()) {
+                    names_.erase(NameKey{object.parent_, object.type_, object.name_});
+                }
+                std::swap(object.name_, record.name);
+                if (!object.name_.empty()) {
+                    names_.emplace(NameKey{object.parent_, object.type_, object.name_}, record.id);
+                }
+            } else if constexpr (std::is_same_v<Record, change::PropertyValues>) {
+                std::swap(get_mutable(record.id).properties_, record.properties);
+            } else if constexpr (std::is_same_v<Record, change::Data>) {
+                std::swap(get_mutable(record.id).data_, record.data);
+            } else if constexpr (std::is_same_v<Record, change::Dependency>) {
+                std::vector<ObjectId>& dependencies = get_mutable(record.id).dependencies_;
+                const auto place =
+                    std::lower_bound(dependencies.begin(), dependencies.end(), record.target);
+                if (place != dependencies.end() && *place == record.target) {
+                    dependencies.erase(place);
+                    erase_dependent(dependents_, record.target, record.id);
+                } else {
+                    dependencies.insert(place, record.target);
+                    dependents_[record.target].insert(record.id);
+                }
+            } else {
+                std::swap(units_, record.units);
+            }
+        },
+        change.record);
 }
 
 // --- Helpers -------------------------------------------------------------------------------------
@@ -358,6 +485,10 @@ Object& Document::get_mutable(ObjectId id) {
         throw ModelError(ModelErrc::unknown_object, "no such object", id);
     }
     return it->second;
+}
+
+std::vector<ObjectId>& Document::siblings(ObjectId parent) {
+    return parent.is_valid() ? get_mutable(parent).children_ : roots_;
 }
 
 Object& Document::get_editable(ObjectId id) {

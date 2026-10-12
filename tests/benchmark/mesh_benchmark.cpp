@@ -1,5 +1,5 @@
 // Benchmark of the Model IR mesh (task 1.2 of docs/plan.md): a structured hex mesh with one million
-// nodes is built, stored in a document and traversed without copying its arrays.
+// nodes is built, stored in a document by a command and traversed without copying its arrays.
 //
 // Allocations are counted per phase by replacing the global operator new. Once the arrays are
 // filled, the later phases may allocate only small bookkeeping objects; the traversals allocate
@@ -7,6 +7,7 @@
 //
 // Usage: fem_model_benchmark [nodes-per-axis]   (default 100, i.e. 1 000 000 nodes)
 
+#include "fem/core/command/command_bus.h"
 #include "fem/core/model/document.h"
 #include "fem/core/model/mesh.h"
 
@@ -148,10 +149,18 @@ int main(int argc, char** argv) {
         mesh = std::make_shared<const Mesh>(std::move(nodes), std::move(blocks));
     });
 
+    // Meshes enter a document through module commands (importers, meshers); this command takes
+    // the mesh built above. Undo keeps a reference to it, not a copy.
     Document doc(UnitSystem::mm_t_s());
+    fem::command::CommandBus bus(doc);
     ObjectId id;
-    const Phase insert = measure("insert into Document",
-                                 [&] { id = doc.create(mesh_object("box", std::move(mesh))); });
+    bus.register_command({.id = "benchmark.insert_mesh", .owner = "benchmark"},
+                         [&](fem::command::CommandContext& context) {
+                             id = context.editor().create(mesh_object("box", std::move(mesh)));
+                             return fem::command::CommandResult{};
+                         });
+    const Phase insert =
+        measure("insert into Document", [&] { bus.execute("benchmark.insert_mesh"); });
 
     double coordinate_sum = 0.0;
     const Phase node_pass = measure("traverse nodes", [&] {

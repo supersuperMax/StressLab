@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fem/core/model/change_set.h"
 #include "fem/core/model/object.h"
 #include "fem/core/model/object_id.h"
 #include "fem/core/model/units.h"
@@ -46,14 +47,18 @@ struct RemoveResult {
 /// unchanged and cannot be edited or removed, and nothing they depend on can be removed
 /// (docs/architecture.md §4.6, item 4). Objects of the core are never opaque.
 ///
-/// Not thread-safe: the model is changed from one thread (through the Command Bus, task 1.3).
-/// Object data is immutable and may be read from any thread.
+/// The public interface only reads the model. Changes go through `DocumentEditor`, which only the
+/// Command Bus hands out, to running commands (CLAUDE.md, rule 3). The document does not move:
+/// the bus and the views keep references to it.
+///
+/// Not thread-safe: the model is changed from one thread. Object data is immutable and may be
+/// read from any thread.
 class Document {
 public:
     explicit Document(UnitSystem units = UnitSystem::si());
 
-    Document(Document&&) = default;
-    Document& operator=(Document&&) = default;
+    Document(Document&&) = delete;
+    Document& operator=(Document&&) = delete;
     Document(const Document&) = delete;
     Document& operator=(const Document&) = delete;
     ~Document() = default;
@@ -61,8 +66,6 @@ public:
     // --- Units -----------------------------------------------------------------------------------
 
     [[nodiscard]] const UnitSystem& units() const noexcept { return units_; }
-    /// Declares the unit system of the model. Values are not converted.
-    void set_units(const UnitSystem& units) noexcept { units_ = units; }
 
     // --- Modules ---------------------------------------------------------------------------------
 
@@ -104,34 +107,41 @@ public:
     template <class T>
     [[nodiscard]] std::shared_ptr<const T> data(ObjectId id) const;
 
-    // --- Changes ---------------------------------------------------------------------------------
-    // Task 1.3 routes these through the Command Bus. All of them throw ModelError and leave the
-    // document unchanged if the request is invalid.
-
-    /// Creates an object and returns its new id. The object may belong to a disabled module
-    /// (this is how a model with such objects is loaded), but its parent must not be opaque.
-    ObjectId create(NewObject init);
-    void rename(ObjectId id, std::string name);
-    void set_properties(ObjectId id, Properties properties);
-    /// Replaces the bulk data. Replacing a mesh checks the sets under it against the new mesh.
-    void set_data(ObjectId id, std::shared_ptr<const ObjectData> data);
-
-    /// Returns false if the dependency already exists. Refuses cycles and missing targets.
-    bool add_dependency(ObjectId dependent, ObjectId target);
-    /// Returns false if there was no such dependency.
-    bool remove_dependency(ObjectId dependent, ObjectId target);
-
     /// What prevents removing `id` with its subtree; empty if it can be removed.
     [[nodiscard]] std::vector<RemovalBlocker> removal_blockers(ObjectId id) const;
-    /// Removes `id` with its subtree, unless that would lose or break an opaque object; then
-    /// nothing changes and the result lists the reasons. Active objects that depend on a removed
-    /// object keep the dependency, which becomes missing (see `missing_dependencies`).
-    [[nodiscard]] RemoveResult remove(ObjectId id);
 
 private:
+    friend class DocumentEditor;
+
     using NameKey = std::tuple<ObjectId, std::string, std::string>;  // parent, type, name
 
+    // --- Changes (see DocumentEditor), recorded into `changes` -----------------------------------
+
+    ObjectId create(NewObject init, ChangeSet& changes);
+    void rename(ObjectId id, std::string name, ChangeSet& changes);
+    void set_properties(ObjectId id, Properties properties, ChangeSet& changes);
+    void set_data(ObjectId id, std::shared_ptr<const ObjectData> data, ChangeSet& changes);
+    bool add_dependency(ObjectId dependent, ObjectId target, ChangeSet& changes);
+    bool remove_dependency(ObjectId dependent, ObjectId target, ChangeSet& changes);
+    RemoveResult remove(ObjectId id, ChangeSet& changes);
+    void set_units(const UnitSystem& units, ChangeSet& changes);
+
+    // --- History ---------------------------------------------------------------------------------
+
+    [[nodiscard]] ChangeSet new_changes() const noexcept;
+    /// Applies the records backwards or forwards; each record keeps the value it replaced.
+    void apply(ChangeSet& changes, bool backwards);
+    /// Applies the records backwards, gives back the ids they took and empties the set.
+    void rollback(ChangeSet& changes);
+    /// Throws ModelError(opaque_object) if applying `changes` would change an object of a disabled
+    /// module, add something under one or remove something one depends on.
+    void check_history(const ChangeSet& changes) const;
+    /// Records `change` and applies it, so that it holds the value it replaced.
+    void record(ChangeSet& changes, ChangeSet::Change&& change);
+    void toggle(ChangeSet::Change& change);
+
     Object& get_mutable(ObjectId id);
+    std::vector<ObjectId>& siblings(ObjectId parent);
     Object& get_editable(ObjectId id);
     void check_name(const Object* self, ObjectId parent, const std::string& type,
                     const std::string& name) const;
