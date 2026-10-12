@@ -109,3 +109,9 @@
   документу приложения, снимаются при `Interpreter::detach` и при выходе из Python. Когда оболочка (1.11)
   начнёт открывать и закрывать документы, она должна вызывать `detach`/`attach` при смене документа, иначе
   Python будет держать закрытый документ. Появилось в 1.8.
+- **Недействительный stdin во встроенном Python на Windows.** В CI (Windows, Debug) `subprocess.run` внутри
+  `stresslab --python -m pytest` однажды получил недействительный хэндл stdin (`WinError 6` из
+  `DuplicateHandle`); повторить локально не удалось, тест обходит это через `stdin=subprocess.DEVNULL`.
+  Возможная причина — две CRT в Debug-сборке (`ucrtbased` программы и `ucrtbase` Python) и перехват fd 0
+  pytest'ом. Разобраться в 1.10, когда `--headless run-script` начнёт запускать скрипты пользователей с
+  `subprocess`. Появилось в 1.8.
