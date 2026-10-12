@@ -958,6 +958,14 @@ void Parser::parse_settings(const toml::node& node, Contributions& out) {
             }
         }
         setting.type = type.value_or(Type::string);
+        if (const auto scope = fields.text("scope", false)) {
+            if (*scope == "user") {
+                setting.scope = SettingContribution::Scope::user;
+            } else if (*scope != "project") {
+                error(entry->get("scope")->source(),
+                      "unknown setting scope '" + *scope + "'; expected project or user");
+            }
+        }
         const auto fits = [&type](const toml::node& item) {
             switch (*type) {
                 case Type::boolean:

@@ -1,0 +1,29 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "setting.general.language": "Язык интерфейса. Пусто — язык системы.",
+    "setting.history.undoLimit": "Сколько шагов можно отменить. 0 — без ограничения.",
+    "setting.log.level": "Самые незначительные сообщения, которые попадают в журнал работы.",
+    "settings.error.above_maximum": "«{key}» должно быть не больше {maximum}, а не {value}.",
+    "settings.error.below_minimum": "«{key}» должно быть не меньше {minimum}, а не {value}.",
+    "settings.error.duplicate_setting": "Настройка «{key}» модуля «{owner}» не учитывается: она уже есть у другого модуля.",
+    "settings.error.invalid_file": "Файл настроек повреждён и не прочитан.",
+    "settings.error.io": "Файл настроек не удаётся прочитать или записать.",
+    "settings.error.not_in_enum": "«{key}» должно быть одним из {values}, а не {value}.",
+    "settings.error.unknown_setting": "Настройки «{key}» нет: возможно, выключен модуль, которому она принадлежит.",
+    "settings.error.wrong_scope": "«{key}» задаётся только в настройках пользователя, а не в проекте.",
+    "settings.error.wrong_type": "«{key}» должно быть {type}, а не {value}.",
+    "settings.ignored": {
+      "few": "Не учитываются {count} настройки.",
+      "many": "Не учитываются {count} настроек.",
+      "one": "Не учитывается {count} настройка.",
+      "other": "Не учитываются {count} настройки."
+    },
+    "settings.type.boolean": "логическим значением (true или false)",
+    "settings.type.integer": "целым числом",
+    "settings.type.number": "числом",
+    "settings.type.path": "путём",
+    "settings.type.string": "текстом"
+  }
+}

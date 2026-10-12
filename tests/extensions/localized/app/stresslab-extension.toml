@@ -1,0 +1,20 @@
+# Settings and catalogs of a module. Read by tests/unit/core/bindings_test.cpp.
+[extension]
+id = "test.app"
+name = "%app.name%"
+version = "1.0.0"
+engine = "^1.0"
+
+[contributes.settings]
+"app.threads" = { type = "integer", default = 2, minimum = 1, maximum = 64, description = "%setting.threads%" }
+"app.executable" = { type = "path", default = "", scope = "user", description = "%setting.executable%" }
+"app.mode" = { type = "string", default = "fast", enum = ["fast", "exact"] }
+"app.verbose" = { type = "boolean" }
+
+[[contributes.localization]]
+language = "en"
+path = "l10n/en.json"
+
+[[contributes.localization]]
+language = "ru"
+path = "l10n/ru.json"

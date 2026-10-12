@@ -1,6 +1,7 @@
 #include "fem/core/extension/manager.h"
 
 #include "fem/core/extension/error.h"
+#include "fem/core/log/log.h"
 #include "fem/core/product.h"
 #include "fem/core/version.h"
 
@@ -514,6 +515,7 @@ void ExtensionManager::activate_record(Record& record, std::vector<std::string>&
     }
     const auto fail = [&](const std::string& reason) {
         info.activation_error = reason;
+        log::logger("extension")->error("module '{}' failed to activate: {}", info.id(), reason);
         emit(ExtensionEvent::Kind::activation_failed, info.id(), reason);
         throw ExtensionError(ExtensionErrc::activation_failed,
                              "module '" + info.id() + "': " + reason);

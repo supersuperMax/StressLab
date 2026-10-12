@@ -17,8 +17,10 @@
 // application, read from its manifest without loading its code. Every record keeps `owner`, the id
 // of the module, so the shell can remove what a disabled module added.
 //
-// Text meant for users (titles, labels, descriptions) is kept as written in the manifest; its
-// translation is task 1.7. Paths (icons, catalogs) are relative to the module folder and use '/'.
+// Text meant for users (titles, labels, descriptions) is kept as written in the manifest; text of
+// the form "%key%" names a string of the module's catalogs
+// (`fem::l10n::Localization::manifest_text`). Paths (icons, catalogs) are relative to the module
+// folder and use '/'.
 namespace fem::extension {
 
 /// `commands`: an action with an id, called from menus, the palette, toolbars and Python.
@@ -148,22 +150,31 @@ struct ResultFilterContribution {
     std::string title;
 };
 
-/// `settings`: a setting of the module. Values are checked against the schema in task 1.7.
+/// `settings`: a setting of the module; `fem::settings::Settings` checks values against it.
 struct SettingContribution {
     enum class Type : std::uint8_t { boolean, integer, number, string, path };
+    /// Where a value may be set.
+    enum class Scope : std::uint8_t {
+        project,  ///< In the settings of the user and of a project; the project wins.
+        user,     ///< Only in the settings of the user: paths to programs, the language.
+    };
 
     std::string owner;
     std::string key;  ///< E.g. "solver.threads".
     Type type = Type::string;
+    Scope scope = Scope::project;
     nlohmann::json default_value;  ///< Null if none.
+    /// May be "%key%" of a string catalog of the owner (docs/adr/0008-settings-logging-l10n.md).
     std::string description;
-    /// The whole entry of the manifest as JSON (type, default, description, enum, minimum,
-    /// maximum), for the settings form and validation.
+    /// The whole entry of the manifest as JSON (type, scope, default, description, enum,
+    /// minimum, maximum), for the settings form and validation.
     nlohmann::json schema = nlohmann::json::object();
 };
 
 /// "boolean", "integer", "number", "string", "path".
 [[nodiscard]] std::string_view to_string(SettingContribution::Type type) noexcept;
+/// "project", "user".
+[[nodiscard]] std::string_view to_string(SettingContribution::Scope scope) noexcept;
 
 /// `keybindings`: a shortcut for a command.
 struct KeybindingContribution {
@@ -181,7 +192,8 @@ struct IconContribution {
     std::string path;
 };
 
-/// `localization`: a catalog of translated strings (format: task 1.7).
+/// `localization`: a catalog of translated strings of one language; the format is described in
+/// `fem/core/l10n/catalog.h`.
 struct LocalizationContribution {
     std::string owner;
     std::string language;  ///< E.g. "ru", "en", "pt-BR".

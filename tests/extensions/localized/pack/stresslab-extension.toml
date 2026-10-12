@@ -1,0 +1,14 @@
+# A language pack: translations for another module and for the core.
+[extension]
+id = "test.pack"
+name = "Language pack"
+version = "1.0.0"
+engine = "^1.0"
+
+[[contributes.localization]]
+language = "ru"
+path = "ru.json"
+
+[[contributes.localization]]
+language = "de"
+path = "de.json"

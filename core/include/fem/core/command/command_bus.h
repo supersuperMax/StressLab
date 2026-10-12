@@ -119,6 +119,15 @@ public:
     /// steps to redo.
     bool redo();
 
+    /// How many steps can be undone; 0 (the default) means no limit. When a new step goes over
+    /// the limit, the oldest one is forgotten; lowering the limit forgets the oldest steps at once.
+    /// Steps to redo are not limited. The setting "history.undoLimit" drives it
+    /// (`fem::bind_undo_limit`).
+    void set_undo_limit(std::size_t limit);
+    [[nodiscard]] std::size_t undo_limit() const noexcept { return undo_limit_; }
+    /// How many steps can be undone now.
+    [[nodiscard]] std::size_t undo_count() const noexcept { return undo_stack_.size(); }
+
     /// Starts a group of commands that is undone as one step. Transactions nest; while one is
     /// open, undo and redo are refused and nothing is sent to listeners. The label names the
     /// step for undo and in the journal. Throws CommandError(invalid_state) inside a command.
@@ -164,6 +173,8 @@ private:
                       model::ChangeSet& changes);
     void complete_step(std::string label, model::ChangeSet changes, const std::string& entry);
     void check_idle(std::string_view action) const;
+    /// Forgets the oldest steps over the undo limit.
+    void trim_undo_stack();
 
     // For Transaction.
     void commit(std::uint64_t id);
@@ -175,6 +186,7 @@ private:
     std::map<std::string, std::shared_ptr<const Registered>, std::less<>> commands_;
     std::vector<Step> undo_stack_;
     std::vector<Step> redo_stack_;
+    std::size_t undo_limit_ = 0;
     std::vector<OpenTransaction> transactions_;
     std::uint64_t next_transaction_id_ = 1;
     int running_ = 0;  // Depth of commands being run.

@@ -9,9 +9,9 @@
 | Зависимость | Версия | Лицензия | Как подключена | Где используется |
 |---|---|---|---|---|
 | GoogleTest | 1.17.0 | BSD-3-Clause | vcpkg, только тесты | `tests/` |
-| {fmt} | 12.2.0 | MIT | vcpkg | пока не используется: журналу 1.3 хватило `std::to_chars` (см. `docs/backlog.md`) |
-| spdlog | 1.17.0 | MIT | vcpkg | логирование (задача 1.7) |
-| nlohmann/json | 3.12.0 | MIT | vcpkg, header-only | Model IR, настройки (с задачи 1.2) |
+| {fmt} | 12.2.0 | MIT | vcpkg, через spdlog (на Windows — `fmt.dll`) | формат строк лога; числа в переводах (`fem::l10n::to_text`, с задачи 1.7). Журналу 1.3 хватило `std::to_chars` (см. `docs/backlog.md`) |
+| spdlog | 1.17.0 | MIT | vcpkg, линкуется к `femcore` открыто: логгеры — объекты spdlog (на Windows — `spdlog.dll`) | логирование, `core/src/log/` (с задачи 1.7); файл открывает свой приёмник ротации (ADR 0008 п. 15) |
+| nlohmann/json | 3.12.0 | MIT | vcpkg, header-only | Model IR (с задачи 1.2), настройки и каталоги строк (с задачи 1.7) |
 | toml++ | 3.4.0 | MIT | vcpkg (на Windows — `tomlplusplus-3.dll` рядом с исполняемым файлом), только внутри `core/` | манифесты модулей: `core/src/extension/manifest.cpp` (с задачи 1.5) |
 | Qt 6 (qtbase: Core, Gui, Widgets) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`; в дистрибутиве только динамическая линковка | `shell/` |
 | Qt Advanced Docking System | 4.5.0 | LGPL-2.1-only | vcpkg (порт `qt-advanced-docking-system`), фича `gui` | `shell/` |

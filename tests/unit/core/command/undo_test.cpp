@@ -57,6 +57,10 @@ protected:
             static_cast<std::uint64_t>(bus.execute(mc::create, args).value.as_integer()));
     }
 
+    [[nodiscard]] bool exists(const std::string& name) const {
+        return doc.find_child({}, "item", name).is_valid();
+    }
+
     Document doc;
     CommandBus bus{doc};
     JournalRecorder journal{bus};
@@ -371,4 +375,41 @@ TEST_F(UndoTest, UndoWorksAfterTheCommandWasUnregistered) {
     EXPECT_EQ(doc.size(), 0U);
     ASSERT_TRUE(bus.redo());
     EXPECT_EQ(doc.size(), 1U);
+}
+
+TEST_F(UndoTest, TheUndoLimitForgetsTheOldestSteps) {
+    EXPECT_EQ(bus.undo_limit(), 0U) << "no limit by default";
+    bus.set_undo_limit(3);
+    for (const char* name : {"a", "b", "c", "d", "e"}) {
+        create(name);
+    }
+    EXPECT_EQ(bus.undo_count(), 3U);
+    EXPECT_TRUE(bus.undo());
+    EXPECT_TRUE(bus.undo());
+    EXPECT_TRUE(bus.undo());
+    EXPECT_FALSE(bus.undo()) << "the steps creating a and b are forgotten";
+    EXPECT_TRUE(exists("a"));
+    EXPECT_TRUE(exists("b"));
+    EXPECT_FALSE(exists("c"));
+    // Steps to redo are not limited, and redoing them refills the stack up to the limit.
+    EXPECT_TRUE(bus.redo());
+    EXPECT_TRUE(bus.redo());
+    EXPECT_TRUE(bus.redo());
+    EXPECT_EQ(bus.undo_count(), 3U);
+}
+
+TEST_F(UndoTest, LoweringTheUndoLimitForgetsStepsAtOnce) {
+    for (const char* name : {"a", "b", "c", "d"}) {
+        create(name);
+    }
+    bus.set_undo_limit(1);
+    EXPECT_EQ(bus.undo_count(), 1U);
+    EXPECT_EQ(bus.undo_label(), mc::create);
+    EXPECT_TRUE(bus.undo());
+    EXPECT_FALSE(exists("d"));
+    EXPECT_FALSE(bus.undo());
+    bus.set_undo_limit(0);
+    create("e");
+    create("f");
+    EXPECT_EQ(bus.undo_count(), 2U);
 }

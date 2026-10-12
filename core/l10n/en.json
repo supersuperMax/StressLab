@@ -1,0 +1,27 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "setting.general.language": "Language of the interface. Empty means the language of the system.",
+    "setting.history.undoLimit": "How many steps can be undone. 0 means no limit.",
+    "setting.log.level": "The least important messages written to the log.",
+    "settings.error.above_maximum": "“{key}” must be at most {maximum}, not {value}.",
+    "settings.error.below_minimum": "“{key}” must be at least {minimum}, not {value}.",
+    "settings.error.duplicate_setting": "The setting “{key}” of module “{owner}” is ignored: another module already has it.",
+    "settings.error.invalid_file": "The settings file is damaged and was not read.",
+    "settings.error.io": "The settings file cannot be read or written.",
+    "settings.error.not_in_enum": "“{key}” must be one of {values}, not {value}.",
+    "settings.error.unknown_setting": "There is no setting “{key}”: the module it belongs to may be disabled.",
+    "settings.error.wrong_scope": "“{key}” can be set only in the settings of the user, not in a project.",
+    "settings.error.wrong_type": "“{key}” must be {type}, not {value}.",
+    "settings.ignored": {
+      "one": "{count} setting is ignored.",
+      "other": "{count} settings are ignored."
+    },
+    "settings.type.boolean": "true or false",
+    "settings.type.integer": "an integer",
+    "settings.type.number": "a number",
+    "settings.type.path": "a path",
+    "settings.type.string": "text"
+  }
+}
