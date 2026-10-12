@@ -14,8 +14,9 @@
 #include <system_error>
 
 #if !defined(__cpp_lib_to_chars)
-#include <locale>
-#include <sstream>
+#include <algorithm>
+#include <clocale>
+#include <cstdlib>
 #endif
 
 namespace fem::command {
@@ -205,12 +206,16 @@ std::optional<double> parse_double(std::string_view text) {
         return std::nullopt;
     }
 #else
-    // Without floating-point from_chars (older libc++): a stream in the classic locale, so the
-    // decimal point does not depend on the user's locale.
-    std::istringstream in{std::string(text)};
-    in.imbue(std::locale::classic());
-    in >> value;
-    if (in.fail() || in.peek() != std::char_traits<char>::eof()) {
+    // Without floating-point from_chars (libc++ on macOS): strtod, which is correctly rounded and
+    // reads subnormal numbers (a stream refuses them). It follows the C locale, which a GUI may
+    // set to one with ',', so the decimal point of that locale replaces '.' first.
+    std::string copy(text);
+    if (const char point = *std::localeconv()->decimal_point; point != '.') {
+        std::replace(copy.begin(), copy.end(), '.', point);
+    }
+    char* end = nullptr;
+    value = std::strtod(copy.c_str(), &end);
+    if (end != copy.c_str() + copy.size()) {
         return std::nullopt;
     }
 #endif
