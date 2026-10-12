@@ -11,4 +11,4 @@
 *.h5 binary
 *.hdf5 binary
 *.zst binary
-*.femx binary
+*.slpack binary

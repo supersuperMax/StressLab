@@ -7,13 +7,16 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
 endif()
 
 project(
-    fem_app
+    StressLab
     VERSION 0.1.0
     DESCRIPTION "Cross-platform finite element analysis environment"
     LANGUAGES CXX)
 
 option(FEM_BUILD_GUI "Build the Qt shell and other GUI components" ON)
 option(FEM_BUILD_TESTS "Build unit tests" ON)
+
+# Brand kit paths (icons, logos) for the shell and packaging.
+include(cmake/Branding.cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

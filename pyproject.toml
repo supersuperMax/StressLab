@@ -1,4 +1,4 @@
-# Tool configuration only. The `femapp` Python package is built by CMake (task 1.8).
+# Tool configuration only. The `stresslab` Python package is built by CMake (task 1.8).
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -8,6 +8,8 @@ addopts = ["-ra", "--strict-markers"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# The brand kit (with its generator script) is kept exactly as supplied.
+extend-exclude = ["resources"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "FA"]
@@ -18,3 +20,4 @@ required-imports = ["from __future__ import annotations"]
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+extend-exclude = "^/resources/"
