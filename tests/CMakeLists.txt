@@ -5,6 +5,7 @@ add_executable(
     fem_core_tests
     unit/core/version_test.cpp
     unit/core/product_test.cpp
+    unit/core/concurrent_signal_test.cpp
     unit/core/filesystem_test.cpp
     unit/core/signal_test.cpp
     unit/core/command/command_bus_test.cpp
@@ -25,12 +26,16 @@ add_executable(
     unit/core/extension/profile_test.cpp
     unit/core/extension/registry_test.cpp
     unit/core/extension/semver_test.cpp
+    unit/core/job/job_manager_test.cpp
+    unit/core/job/local_executor_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
     unit/core/model/mesh_test.cpp
     unit/core/model/opaque_test.cpp
-    unit/core/model/units_test.cpp)
+    unit/core/model/units_test.cpp
+    unit/core/task/task_pool_test.cpp
+    unit/core/task/task_test.cpp)
 target_link_libraries(fem_core_tests PRIVATE fem::core GTest::gtest_main)
 target_compile_definitions(
     fem_core_tests
@@ -39,7 +44,8 @@ target_compile_definitions(
             FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
             FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
             FEM_TEST_NATIVE_HELLO="$<TARGET_FILE:fem_test_extension_hello>"
-            FEM_TEST_NATIVE_BAD_ABI="$<TARGET_FILE:fem_test_extension_hello_bad_abi>")
+            FEM_TEST_NATIVE_BAD_ABI="$<TARGET_FILE:fem_test_extension_hello_bad_abi>"
+            FEM_TEST_FAKE_PROCESS="$<TARGET_FILE:fem_test_fake_process>")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # Native test modules (task 1.5), built like modules made outside the platform: plain C, only the
@@ -60,6 +66,13 @@ foreach(fixture IN ITEMS hello hello_bad_abi)
     add_dependencies(fem_core_tests fem_test_extension_${fixture})
 endforeach()
 target_compile_definitions(fem_test_extension_hello_bad_abi PRIVATE HELLO_ABI_VERSION=999)
+
+# The fake solver of the local executor tests (task 1.6). The tests copy it into a folder with
+# Cyrillic letters and spaces, so it depends on nothing: the C runtime is linked statically.
+add_executable(fem_test_fake_process fixtures/fake-process/fake_process.cpp)
+set_target_properties(fem_test_fake_process PROPERTIES MSVC_RUNTIME_LIBRARY
+                                                       "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+add_dependencies(fem_core_tests fem_test_fake_process)
 
 # Model IR benchmark (task 1.2): one million nodes without copying the arrays. Fails if they are
 # copied, so it runs with the tests; its timings are printed with `ctest -L benchmark -V`.

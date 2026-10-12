@@ -5,11 +5,14 @@
 #include "fem/core/command/error.h"
 #include "fem/core/command/model_commands.h"
 #include "fem/core/model/error.h"
+#include "fem/core/task/task.h"
+#include "fem/core/task/task_pool.h"
 
 #include "command_test_support.h"
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -30,8 +33,6 @@ namespace fs = std::filesystem;
 namespace mc = fem::command::model_commands;
 
 namespace {
-
-class FakeTask : public fem::task::Task {};
 
 class CommandBusTest : public ::testing::Test {
 protected:
@@ -285,17 +286,21 @@ TEST_F(CommandBusTest, CommandsRunByACommandShareItsStepAndJournalLine) {
 }
 
 TEST_F(CommandBusTest, CommandMayReturnATask) {
-    const auto task = std::make_shared<FakeTask>();
+    // The command returns at once; its work goes on in the background (task 1.6).
+    fem::task::TaskPool pool(1);
     bus.register_command({.id = "test.background", .owner = test_owner}, [&](CommandContext&) {
         CommandResult result;
-        result.task = task;
+        result.task =
+            pool.submit("background", [](fem::task::TaskControl&) -> Value { return 42; });
         return result;
     });
     const CommandResult result = bus.execute("test.background");
-    EXPECT_EQ(result.task, task);
+    ASSERT_NE(result.task, nullptr);
     EXPECT_TRUE(result.value.is_none());
     EXPECT_EQ(journal.entries(), std::vector<std::string>{"stresslab.cmd(\"test.background\")"});
     EXPECT_FALSE(bus.can_undo());  // Nothing in the model changed.
+    ASSERT_TRUE(result.task->wait_for(std::chrono::seconds(10)));
+    EXPECT_EQ(result.task->result(), Value(42));
 }
 
 TEST_F(CommandBusTest, EditorKeptAfterTheCommandCannotChangeTheModel) {
