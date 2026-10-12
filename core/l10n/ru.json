@@ -2,6 +2,8 @@
   "format": "stresslab.l10n",
   "formatVersion": 1,
   "strings": {
+    "app.unknownOption": "Неизвестный параметр «{option}».",
+    "app.usage": "Использование:\n  {program} --python [аргументы python]   запускает встроенный Python с модулем stresslab, подключённым к новому документу: -m модуль, -c код, скрипт или интерактивный режим\n  {program} --version                     выводит версию",
     "setting.general.language": "Язык интерфейса. Пусто — язык системы.",
     "setting.history.undoLimit": "Сколько шагов можно отменить. 0 — без ограничения.",
     "setting.log.level": "Самые незначительные сообщения, которые попадают в журнал работы.",

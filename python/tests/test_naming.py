@@ -59,6 +59,9 @@ def repository_files() -> list[str]:
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
+        # Not the inherited stdin: under pytest's capture inside `stresslab --python` on the Windows
+        # CI runner it was once an invalid handle (WinError 6).
+        stdin=subprocess.DEVNULL,
     ).stdout
     return sorted({name for name in output.decode("utf-8").split("\0") if name})
 

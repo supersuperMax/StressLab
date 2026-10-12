@@ -57,6 +57,31 @@ target_compile_definitions(
             FEM_TEST_FAKE_PROCESS="$<TARGET_FILE:fem_test_fake_process>")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
+# The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
+# pytest suite run both by the embedded interpreter and by plain Python.
+add_executable(fem_python_tests unit/python/journal_script_test.cpp)
+target_link_libraries(fem_python_tests PRIVATE fem_python_embed GTest::gtest_main)
+target_compile_definitions(fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+fem_copy_runtime_dlls(fem_python_tests)
+gtest_discover_tests(fem_python_tests DISCOVERY_MODE PRE_TEST)
+
+execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c "import pytest, numpy"
+    RESULT_VARIABLE fem_pytest_missing
+    OUTPUT_QUIET ERROR_QUIET)
+if(fem_pytest_missing)
+    message(WARNING "pytest or numpy is not installed for ${Python_EXECUTABLE}: the Python tests "
+                    "are not added to ctest (python -m pip install -r python/requirements-dev.txt)")
+else()
+    set(fem_pytest_args -m pytest -q -p no:cacheprovider ${PROJECT_SOURCE_DIR}/python/tests)
+    add_test(NAME Python.Pytest.Embedded COMMAND stresslab --python ${fem_pytest_args}
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    add_test(NAME Python.Pytest.Plain COMMAND "${Python_EXECUTABLE}" ${fem_pytest_args}
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    set_tests_properties(Python.Pytest.Plain PROPERTIES ENVIRONMENT
+                                                        "STRESSLAB_PYTHON_SITE=${FEM_PYTHON_SITE_DIR}")
+endif()
+
 # Native test modules (task 1.5), built like modules made outside the platform: plain C, only the
 # C ABI header, nothing of the core linked. `hello_bad_abi` claims an ABI version the platform does
 # not support. The file name is what `entry` names plus the suffix the platform looks for.

@@ -2,6 +2,8 @@
   "format": "stresslab.l10n",
   "formatVersion": 1,
   "strings": {
+    "app.unknownOption": "Unknown option “{option}”.",
+    "app.usage": "Usage:\n  {program} --python [arguments of python]   runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --version                          prints the version",
     "setting.general.language": "Language of the interface. Empty means the language of the system.",
     "setting.history.undoLimit": "How many steps can be undone. 0 means no limit.",
     "setting.log.level": "The least important messages written to the log.",
