@@ -42,13 +42,16 @@ fs::path working_folder(const JobSpec& spec) {
 Environment environment_of(const JobSpec& spec) {
     Environment environment =
         spec.inherit_environment ? detail::current_environment() : Environment{};
-    for (const auto& [name, value] : spec.environment) {
+    // Not a structured binding: AppleClang cannot capture one in the lambda below.
+    for (const auto& variable : spec.environment) {
+        const std::string& name = variable.first;
+        const std::optional<std::string>& value = variable.second;
         if (name.empty() || name.find('=') != std::string::npos) {
             throw JobError(JobErrc::launch_failed, "'" + name + "' is not a variable name");
         }
         check_text(name, "a variable name");
-        std::erase_if(environment, [&](const auto& variable) {
-            return detail::same_variable_name(variable.first, name);
+        std::erase_if(environment, [&](const auto& inherited) {
+            return detail::same_variable_name(inherited.first, name);
         });
         if (value) {
             check_text(*value, "variable '" + name + "'");
