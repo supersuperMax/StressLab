@@ -1,8 +1,14 @@
-# FEM-APP
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="resources/branding/stresslab-kit/logo/svg/stresslab-horizontal-reversed.svg">
+    <img alt="StressLab" src="resources/branding/stresslab-kit/logo/svg/stresslab-horizontal-color.svg" height="64">
+  </picture>
+</h1>
 
-Кросс-платформенный пакет конечно-элементного анализа с модульной оболочкой в стиле VS Code.
+StressLab — кросс-платформенный пакет конечно-элементного анализа с модульной оболочкой в стиле VS Code.
 Ядро распространяется под лицензией MIT (см. `LICENSE`). Проект на раннем этапе: план работ — `docs/plan.md`,
-архитектура — `docs/architecture.md`, интерфейс — `docs/interface-design.md`.
+архитектура — `docs/architecture.md`, интерфейс — `docs/interface-design.md`. Логотип, иконки и правила их
+использования — в `resources/branding/stresslab-kit/` (`guidelines.md`).
 
 ## Сборка
 

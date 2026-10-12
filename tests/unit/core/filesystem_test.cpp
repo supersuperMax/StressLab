@@ -41,7 +41,7 @@ private:
 
 TEST(Filesystem, ReadsAndWritesFilesWithCyrillicAndSpacesInPath) {
     constexpr std::u8string_view file_name = u8"модель 1.txt";
-    const TempDir dir(fs::path(u8"fem app тестовый каталог"));
+    const TempDir dir(fs::path(u8"тестовый каталог с пробелами"));
     const fs::path file = dir.path() / fs::path(file_name);
 
     {

@@ -4,6 +4,7 @@ include(GoogleTest)
 add_executable(
     fem_core_tests
     unit/core/version_test.cpp
+    unit/core/product_test.cpp
     unit/core/filesystem_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
@@ -12,7 +13,8 @@ add_executable(
     unit/core/model/opaque_test.cpp
     unit/core/model/units_test.cpp)
 target_link_libraries(fem_core_tests PRIVATE fem::core GTest::gtest_main)
-target_compile_definitions(fem_core_tests PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(fem_core_tests PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}"
+                                                  FEM_EXPECTED_PRODUCT_NAME="${PROJECT_NAME}")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # Model IR benchmark (task 1.2): one million nodes without copying the arrays. Fails if they are

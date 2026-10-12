@@ -1,0 +1,12 @@
+{"brand":"StressLab","tagline":"Модульный пакет конечно-элементного анализа",
+"brief":"Кросс-платформенный пакет МКЭ, аналог Ansys/Abaqus. Главная фишка: всё (сеточник, решатель, постпроцессинг) является модулем, который можно подключить, отключить или заменить.",
+"adjectives":["инженерный","модульный","открытый","точный"],
+"criteria":"Узнаётся на 16 px, работает в один цвет, уходит от синих эпюр и сеток конкурентов, показывает модульность.",
+"industry":"software","nav":["Модули","Документация","Скачать"],
+"brand_color":"#FF5A36","tile_color":"#1B1F24","greyscale":false,"designer":"StressLab","round":2,
+"concepts":[{"name":"Четвертьмодель","symbol":"out/logo/svg/stresslab-symbol-color.svg","lockup":"out/logo/svg/stresslab-horizontal-color.svg",
+"symbol_on_tile":"out/logo/svg/stresslab-symbol-reversed.svg","symbol_on_dark":"out/logo/svg/stresslab-symbol-reversed.svg","lockup_on_dark":"out/logo/svg/stresslab-horizontal-reversed.svg","stacked_on_tile":"out/logo/svg/stresslab-stacked-reversed.svg",
+"idea":"Пластина с отверстием, классическая задача МКЭ, собрана из четырёх модулей; коралловый модуль подключается на место.",
+"rationale":["Четверть пластины по симметрии: инженерная шутка «для своих»","Четыре одинаковых модуля и один подключаемый показывают модульность","Квадратный силуэт заполняет плитку иконки и держится на 16 px"]}],
+"recommendation":"Четвертьмодель: графит #1B1F24 и коралловый #FF5A36 (горячий конец шкалы напряжений).",
+"next_steps":["Проверить товарный знак","Подключить иконки в сборку для Windows, macOS и Linux"]}
