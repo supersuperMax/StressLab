@@ -9,7 +9,7 @@
 | Зависимость | Версия | Лицензия | Как подключена | Где используется |
 |---|---|---|---|---|
 | GoogleTest | 1.17.0 | BSD-3-Clause | vcpkg, только тесты | `tests/` |
-| {fmt} | 12.2.0 | MIT | vcpkg | ядро (с задачи 1.3) |
+| {fmt} | 12.2.0 | MIT | vcpkg | пока не используется: журналу 1.3 хватило `std::to_chars` (см. `docs/backlog.md`) |
 | spdlog | 1.17.0 | MIT | vcpkg | логирование (задача 1.7) |
 | nlohmann/json | 3.12.0 | MIT | vcpkg, header-only | Model IR, настройки (с задачи 1.2) |
 | toml++ | 3.4.0 | MIT | vcpkg, header-only | манифесты модулей (задача 1.5) |

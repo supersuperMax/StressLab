@@ -10,6 +10,7 @@
 #include <vector>
 
 using namespace fem::model;
+using fem::model::testing::BusEditor;
 using fem::model::testing::module_a;
 using fem::model::testing::module_b;
 using fem::model::testing::module_object;
@@ -25,19 +26,20 @@ protected:
     void SetUp() override {
         doc.set_owner_enabled(module_a, true);
         doc.set_owner_enabled(module_b, true);
-        mesh = doc.create(mesh_object("part", small_mesh()));
-        set = doc.create(node_set_object(
+        mesh = edit.create(mesh_object("part", small_mesh()));
+        set = edit.create(node_set_object(
             mesh, "fixed", std::make_shared<const NodeSet>(std::vector<Index>{0, 1})));
-        load = doc.create(module_object(module_a, "load", "p", {}, {set}));
+        load = edit.create(module_object(module_a, "load", "p", {}, {set}));
 
         NewObject damping = module_object(module_b, "damping", "rayleigh", {}, {set});
         damping.schema_version = 2;
         damping.properties = {{"alpha", 0.1}, {"beta", 1e-5}};
-        opaque = doc.create(damping);
+        opaque = edit.create(damping);
         doc.set_owner_enabled(module_b, false);
     }
 
     Document doc;
+    BusEditor edit{doc};
     ObjectId mesh, set, load, opaque;
 };
 
@@ -61,7 +63,8 @@ TEST_F(OpaqueTest, ObjectsOfDisabledModulesAreOpaque) {
 TEST(Opaque, ObjectsOfUnknownModulesAreOpaque) {
     // A model loaded with objects of a module that is not installed.
     Document doc;
-    const ObjectId id = doc.create(module_object("vendor.unknown", "thing", "t"));
+    BusEditor edit{doc};
+    const ObjectId id = edit.create(module_object("vendor.unknown", "thing", "t"));
     EXPECT_TRUE(doc.is_opaque(id));
     EXPECT_EQ(doc.owners(), std::vector<std::string>{"vendor.unknown"});
 }
@@ -82,12 +85,12 @@ TEST_F(OpaqueTest, OpaqueObjectIsKeptUnchanged) {
 }
 
 TEST_F(OpaqueTest, OpaqueObjectCannotBeEdited) {
-    EXPECT_MODEL_ERROR(doc.rename(opaque, "other"), ModelErrc::opaque_object);
-    EXPECT_MODEL_ERROR(doc.set_properties(opaque, {{"alpha", 0.2}}), ModelErrc::opaque_object);
-    EXPECT_MODEL_ERROR(doc.set_data(opaque, nullptr), ModelErrc::opaque_object);
-    EXPECT_MODEL_ERROR(doc.add_dependency(opaque, load), ModelErrc::opaque_object);
-    EXPECT_MODEL_ERROR(doc.remove_dependency(opaque, set), ModelErrc::opaque_object);
-    EXPECT_MODEL_ERROR(doc.create(module_object(module_a, "note", "n", opaque)),
+    EXPECT_MODEL_ERROR(edit.rename(opaque, "other"), ModelErrc::opaque_object);
+    EXPECT_MODEL_ERROR(edit.set_properties(opaque, {{"alpha", 0.2}}), ModelErrc::opaque_object);
+    EXPECT_MODEL_ERROR(edit.set_data(opaque, nullptr), ModelErrc::opaque_object);
+    EXPECT_MODEL_ERROR(edit.add_dependency(opaque, load), ModelErrc::opaque_object);
+    EXPECT_MODEL_ERROR(edit.remove_dependency(opaque, set), ModelErrc::opaque_object);
+    EXPECT_MODEL_ERROR(edit.create(module_object(module_a, "note", "n", opaque)),
                        ModelErrc::opaque_object);
 
     EXPECT_EQ(doc.get(opaque).name(), "rayleigh");
@@ -95,20 +98,20 @@ TEST_F(OpaqueTest, OpaqueObjectCannotBeEdited) {
     EXPECT_TRUE(doc.get(opaque).children().empty());
 
     doc.set_owner_enabled(module_b, true);
-    doc.rename(opaque, "other");
+    edit.rename(opaque, "other");
     EXPECT_EQ(doc.get(opaque).name(), "other");
 }
 
 TEST_F(OpaqueTest, ActiveObjectsMayDependOnOpaqueOnes) {
-    EXPECT_TRUE(doc.add_dependency(load, opaque));
-    EXPECT_TRUE(doc.remove_dependency(load, opaque));
+    EXPECT_TRUE(edit.add_dependency(load, opaque));
+    EXPECT_TRUE(edit.remove_dependency(load, opaque));
 }
 
 TEST_F(OpaqueTest, OpaqueObjectCannotBeRemoved) {
     const std::vector<RemovalBlocker> expected = {{Reason::opaque, opaque, opaque}};
     EXPECT_EQ(doc.removal_blockers(opaque), expected);
 
-    const RemoveResult result = doc.remove(opaque);
+    const RemoveResult result = edit.remove(opaque);
     EXPECT_FALSE(result.ok());
     EXPECT_TRUE(result.removed.empty());
     EXPECT_EQ(result.blockers, expected);
@@ -119,7 +122,7 @@ TEST_F(OpaqueTest, ObjectRequiredByOpaqueObjectCannotBeRemoved) {
     const std::vector<RemovalBlocker> expected = {{Reason::required_by_opaque, set, opaque}};
     EXPECT_EQ(doc.removal_blockers(set), expected);
 
-    const RemoveResult result = doc.remove(set);
+    const RemoveResult result = edit.remove(set);
     EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.blockers, expected);
     EXPECT_TRUE(doc.contains(set));
@@ -129,7 +132,7 @@ TEST_F(OpaqueTest, ObjectRequiredByOpaqueObjectCannotBeRemoved) {
 
 TEST_F(OpaqueTest, AncestorOfRequiredObjectCannotBeRemoved) {
     // Removing the mesh would take the set with it.
-    const RemoveResult result = doc.remove(mesh);
+    const RemoveResult result = edit.remove(mesh);
     EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.blockers,
               (std::vector<RemovalBlocker>{{Reason::required_by_opaque, set, opaque}}));
@@ -139,11 +142,11 @@ TEST_F(OpaqueTest, AncestorOfRequiredObjectCannotBeRemoved) {
 
 TEST_F(OpaqueTest, AncestorOfOpaqueObjectCannotBeRemoved) {
     doc.set_owner_enabled(module_b, true);
-    const ObjectId step = doc.create(module_object(module_a, "step", "s1"));
-    const ObjectId child = doc.create(module_object(module_b, "damping", "local", step));
+    const ObjectId step = edit.create(module_object(module_a, "step", "s1"));
+    const ObjectId child = edit.create(module_object(module_b, "damping", "local", step));
     doc.set_owner_enabled(module_b, false);
 
-    const RemoveResult result = doc.remove(step);
+    const RemoveResult result = edit.remove(step);
     EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.blockers, (std::vector<RemovalBlocker>{{Reason::opaque, child, child}}));
     EXPECT_TRUE(doc.contains(step));
@@ -153,9 +156,9 @@ TEST_F(OpaqueTest, AncestorOfOpaqueObjectCannotBeRemoved) {
 TEST_F(OpaqueTest, ActiveDependentsDoNotBlockRemoval) {
     // The active load depends on the set as well; once the opaque object is gone, the set can go.
     doc.set_owner_enabled(module_b, true);
-    ASSERT_TRUE(doc.remove(opaque).ok());
+    ASSERT_TRUE(edit.remove(opaque).ok());
 
-    const RemoveResult result = doc.remove(set);
+    const RemoveResult result = edit.remove(set);
     ASSERT_TRUE(result.ok());
     EXPECT_EQ(doc.missing_dependencies(load), std::vector<ObjectId>{set});
 }
@@ -163,17 +166,17 @@ TEST_F(OpaqueTest, ActiveDependentsDoNotBlockRemoval) {
 TEST_F(OpaqueTest, EnablingTheModuleLiftsTheRestrictions) {
     doc.set_owner_enabled(module_b, true);
     EXPECT_TRUE(doc.removal_blockers(set).empty());
-    ASSERT_TRUE(doc.remove(mesh).ok());
+    ASSERT_TRUE(edit.remove(mesh).ok());
     EXPECT_EQ(doc.missing_dependencies(opaque), std::vector<ObjectId>{set});
 }
 
 TEST_F(OpaqueTest, AllBlockersAreReportedInOrder) {
     doc.set_owner_enabled(module_b, true);
-    const ObjectId other_set = doc.create(
+    const ObjectId other_set = edit.create(
         node_set_object(mesh, "top", std::make_shared<const NodeSet>(std::vector<Index>{3})));
     const ObjectId second =
-        doc.create(module_object(module_b, "damping", "second", {}, {other_set}));
-    const ObjectId inside = doc.create(module_object(module_b, "marker", "m", mesh));
+        edit.create(module_object(module_b, "damping", "second", {}, {other_set}));
+    const ObjectId inside = edit.create(module_object(module_b, "marker", "m", mesh));
     doc.set_owner_enabled(module_b, false);
 
     const std::vector<RemovalBlocker> expected = {
@@ -182,15 +185,15 @@ TEST_F(OpaqueTest, AllBlockersAreReportedInOrder) {
         {Reason::opaque, inside, inside},
     };
     EXPECT_EQ(doc.removal_blockers(mesh), expected);
-    EXPECT_EQ(doc.remove(mesh).blockers, expected);
+    EXPECT_EQ(edit.remove(mesh).blockers, expected);
 }
 
 TEST_F(OpaqueTest, OpaqueObjectInsideRemovedSubtreeIsReportedOnce) {
     // An opaque object that depends on something in the same subtree would be lost, not broken.
     doc.set_owner_enabled(module_b, true);
-    const ObjectId group = doc.create(module_object(module_a, "group", "g"));
-    const ObjectId target = doc.create(module_object(module_a, "item", "t", group));
-    const ObjectId inner = doc.create(module_object(module_b, "damping", "d", group, {target}));
+    const ObjectId group = edit.create(module_object(module_a, "group", "g"));
+    const ObjectId target = edit.create(module_object(module_a, "item", "t", group));
+    const ObjectId inner = edit.create(module_object(module_b, "damping", "d", group, {target}));
     doc.set_owner_enabled(module_b, false);
 
     EXPECT_EQ(doc.removal_blockers(group),

@@ -6,6 +6,13 @@ add_executable(
     unit/core/version_test.cpp
     unit/core/product_test.cpp
     unit/core/filesystem_test.cpp
+    unit/core/signal_test.cpp
+    unit/core/command/command_bus_test.cpp
+    unit/core/command/journal_test.cpp
+    unit/core/command/model_commands_test.cpp
+    unit/core/command/python_literal_test.cpp
+    unit/core/command/transaction_test.cpp
+    unit/core/command/undo_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
@@ -13,8 +20,10 @@ add_executable(
     unit/core/model/opaque_test.cpp
     unit/core/model/units_test.cpp)
 target_link_libraries(fem_core_tests PRIVATE fem::core GTest::gtest_main)
-target_compile_definitions(fem_core_tests PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}"
-                                                  FEM_EXPECTED_PRODUCT_NAME="${PROJECT_NAME}")
+target_compile_definitions(
+    fem_core_tests PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}"
+                           FEM_EXPECTED_PRODUCT_NAME="${PROJECT_NAME}"
+                           FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # Model IR benchmark (task 1.2): one million nodes without copying the arrays. Fails if they are

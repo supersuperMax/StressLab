@@ -36,6 +36,10 @@ std::string_view to_string(ModelErrc code) noexcept {
             return "invalid_mesh";
         case ModelErrc::invalid_data:
             return "invalid_data";
+        case ModelErrc::removal_blocked:
+            return "removal_blocked";
+        case ModelErrc::outside_command:
+            return "outside_command";
     }
     return "unknown";
 }

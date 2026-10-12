@@ -21,6 +21,8 @@ enum class ModelErrc {
     dependency_cycle,    ///< The dependency would close a cycle.
     invalid_mesh,        ///< Mesh arrays are inconsistent or reference missing nodes.
     invalid_data,        ///< Object data does not match its type, parent or mesh.
+    removal_blocked,     ///< Removing would lose or break an object of a disabled module.
+    outside_command,     ///< The document was edited outside a running command.
 };
 
 [[nodiscard]] std::string_view to_string(ModelErrc code) noexcept;

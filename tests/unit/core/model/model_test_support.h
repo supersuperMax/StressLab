@@ -1,11 +1,14 @@
 #pragma once
 
+#include "fem/core/command/command_bus.h"
 #include "fem/core/model/document.h"
+#include "fem/core/model/document_editor.h"
 #include "fem/core/model/error.h"
 #include "fem/core/model/mesh.h"
 
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -15,6 +18,63 @@ namespace fem::model::testing {
 
 inline constexpr const char* module_a = "test.module-a";
 inline constexpr const char* module_b = "test.module-b";
+
+/// Changes a document with the calls of `DocumentEditor`, through the Command Bus like any code
+/// outside the core: every call runs as a command of a test module.
+class BusEditor {
+public:
+    explicit BusEditor(Document& doc) : bus_(doc) {
+        bus_.register_command({.id = "test.edit", .owner = "test.harness"},
+                              [this](command::CommandContext& context) {
+                                  edit_(context.editor());
+                                  return command::CommandResult{};
+                              });
+    }
+
+    ObjectId create(NewObject init) {
+        ObjectId id;
+        run([&](DocumentEditor& editor) { id = editor.create(std::move(init)); });
+        return id;
+    }
+    void rename(ObjectId id, std::string name) {
+        run([&](DocumentEditor& editor) { editor.rename(id, std::move(name)); });
+    }
+    void set_properties(ObjectId id, Properties properties) {
+        run([&](DocumentEditor& editor) { editor.set_properties(id, std::move(properties)); });
+    }
+    void set_data(ObjectId id, std::shared_ptr<const ObjectData> data) {
+        run([&](DocumentEditor& editor) { editor.set_data(id, std::move(data)); });
+    }
+    bool add_dependency(ObjectId dependent, ObjectId target) {
+        bool added = false;
+        run([&](DocumentEditor& editor) { added = editor.add_dependency(dependent, target); });
+        return added;
+    }
+    bool remove_dependency(ObjectId dependent, ObjectId target) {
+        bool removed = false;
+        run([&](DocumentEditor& editor) { removed = editor.remove_dependency(dependent, target); });
+        return removed;
+    }
+    RemoveResult remove(ObjectId id) {
+        RemoveResult result;
+        run([&](DocumentEditor& editor) { result = editor.remove(id); });
+        return result;
+    }
+    void set_units(const UnitSystem& units) {
+        run([&](DocumentEditor& editor) { editor.set_units(units); });
+    }
+
+    [[nodiscard]] command::CommandBus& bus() { return bus_; }
+
+private:
+    void run(const std::function<void(DocumentEditor&)>& edit) {
+        edit_ = edit;
+        bus_.execute("test.edit");
+    }
+
+    command::CommandBus bus_;
+    std::function<void(DocumentEditor&)> edit_;
+};
 
 inline NewObject module_object(std::string owner, std::string type, std::string name = {},
                                ObjectId parent = {}, std::vector<ObjectId> dependencies = {}) {

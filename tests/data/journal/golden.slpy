@@ -1,0 +1,18 @@
+# StressLab session journal
+import stresslab
+from pathlib import Path
+
+stresslab.cmd("model.set_units", length="mm", mass="t", time="s", temperature="degC")
+stresslab.cmd("model.create", type="material", owner="test.module", name="Сталь «Ст3»", properties={"E": 210000.0, "alpha": 1.2e-05, "note": "ГОСТ 380-2005\n\"кипящая\"\tсталь", "nu": 0.3, "rho": 7.85e-09, "table": [[20.0, 210000.0], [400.0, 170000.0]]})
+stresslab.cmd("model.create", type="part", owner="test.module", name="Кронштейн")
+stresslab.cmd("model.create", type="load", owner="test.module", name="P1", parent=2, dependencies=[1], properties={"direction": [0.0, 0.0, -1.0], "value": -1500})
+stresslab.cmd("model.rename", object=3, name="Сила 1")
+stresslab.undo()
+stresslab.redo()
+with stresslab.transaction("Нагрузки"):
+    stresslab.cmd("model.create", type="load", owner="test.module", name="p", parent=2)
+    stresslab.cmd("model.set_properties", object=4, properties={"empty": {}, "value": 0.5})
+    stresslab.cmd("model.add_dependency", object=4, target=1)
+stresslab.cmd("test.load", file=Path("D:/Проекты/модель 1.dat"), options={"scale": 2})
+stresslab.cmd("model.remove", object=3)
+stresslab.cmd("model.remove_dependency", object=4, target=1)

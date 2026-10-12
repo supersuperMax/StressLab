@@ -7,7 +7,16 @@ add_library(fem::core ALIAS femcore)
 target_sources(
     femcore
     PRIVATE src/version.cpp
+            src/command/command.cpp
+            src/command/command_bus.cpp
+            src/command/error.cpp
+            src/command/journal.cpp
+            src/command/model_commands.cpp
+            src/command/python_literal.cpp
+            src/command/value.cpp
+            src/model/change_set.cpp
             src/model/document.cpp
+            src/model/document_editor.cpp
             src/model/element_type.cpp
             src/model/error.cpp
             src/model/mesh.cpp
