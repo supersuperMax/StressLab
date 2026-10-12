@@ -103,7 +103,7 @@ id = "full.safety"
 title = "Safety factor"
 
 [contributes.settings]
-"full.executable" = { type = "path", default = "", description = "Путь к решателю" }
+"full.executable" = { type = "path", default = "", scope = "user", description = "Путь к решателю" }
 "full.threads" = { type = "integer", default = 0, minimum = 0, maximum = 256 }
 "full.mode" = { type = "string", default = "fast", enum = ["fast", "exact"] }
 

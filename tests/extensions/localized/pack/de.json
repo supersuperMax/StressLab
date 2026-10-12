@@ -1,0 +1,9 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "modules": {
+    "fem.core": {
+      "settings.type.integer": "eine ganze Zahl"
+    }
+  }
+}

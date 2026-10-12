@@ -1,0 +1,17 @@
+# Catalogs that cannot be loaded: the module is enabled anyway.
+[extension]
+id = "test.broken"
+name = "Broken catalogs"
+version = "1.0.0"
+engine = "^1.0"
+
+[contributes.settings]
+"broken.flag" = { type = "boolean", default = true }
+
+[[contributes.localization]]
+language = "ru"
+path = "ru.json"
+
+[[contributes.localization]]
+language = "en"
+path = "missing.json"

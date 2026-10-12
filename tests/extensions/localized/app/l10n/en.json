@@ -1,0 +1,11 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "app.name": "Demo module",
+    "jobs.count": {"one": "{count} job", "other": "{count} jobs"},
+    "only.english": "Only in English",
+    "setting.executable": "Path to the program",
+    "setting.threads": "Number of threads"
+  }
+}

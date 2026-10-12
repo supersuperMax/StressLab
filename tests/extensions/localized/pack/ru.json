@@ -1,0 +1,10 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "modules": {
+    "test.app": {
+      "only.english": "Перевод из пакета",
+      "setting.threads": "Потоки (из пакета)"
+    }
+  }
+}

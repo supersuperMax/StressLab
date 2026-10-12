@@ -38,4 +38,14 @@ std::string_view to_string(SettingContribution::Type type) noexcept {
     return "unknown";
 }
 
+std::string_view to_string(SettingContribution::Scope scope) noexcept {
+    switch (scope) {
+        case SettingContribution::Scope::project:
+            return "project";
+        case SettingContribution::Scope::user:
+            return "user";
+    }
+    return "unknown";
+}
+
 }  // namespace fem::extension

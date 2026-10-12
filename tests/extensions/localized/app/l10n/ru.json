@@ -1,0 +1,10 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "app.name": "Демонстрационный модуль",
+    "jobs.count": {"one": "{count} задание", "few": "{count} задания", "many": "{count} заданий", "other": "{count} задания"},
+    "setting.executable": "Путь к программе",
+    "setting.threads": "Число потоков"
+  }
+}

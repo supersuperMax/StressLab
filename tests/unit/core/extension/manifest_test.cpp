@@ -187,12 +187,15 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(c.settings[0].type, SettingContribution::Type::path);
     EXPECT_EQ(c.settings[0].default_value, "");
     EXPECT_EQ(c.settings[0].description, utf8(u8"Путь к решателю"));
+    EXPECT_EQ(c.settings[0].scope, SettingContribution::Scope::user);
+    EXPECT_EQ(c.settings[0].schema["scope"], "user");
     EXPECT_EQ(c.settings[1].key, "full.mode");
     EXPECT_EQ(c.settings[1].schema["enum"], nlohmann::json::parse(R"(["fast", "exact"])"));
     EXPECT_EQ(c.settings[2].key, "full.threads");
     EXPECT_EQ(c.settings[2].type, SettingContribution::Type::integer);
     EXPECT_EQ(c.settings[2].default_value, 0);
     EXPECT_EQ(c.settings[2].schema["maximum"], 256);
+    EXPECT_EQ(c.settings[2].scope, SettingContribution::Scope::project);
 
     ASSERT_EQ(c.keybindings.size(), 1U);
     EXPECT_EQ(c.keybindings[0].key, "Mod+Shift+R");
@@ -450,6 +453,10 @@ TEST(Manifest, ReportsErrorsWithTheirPosition) {
              "[contributes.settings]\n"
              "\"case.x\" = { type = \"string\", default = \"c\", enum = [\"a\", \"b\"] }\n"),
          9, 41, "is not one of the values of 'enum'"},
+        {"unknown setting scope",
+         with_header(
+             "[contributes.settings]\n\"case.x\" = { type = \"string\", scope = \"machine\" }\n"),
+         9, 39, "unknown setting scope 'machine'; expected project or user"},
         {"unknown setting field",
          with_header(
              "[contributes.settings]\n\"case.x\" = { type = \"string\", markdown = \"x\" }\n"),

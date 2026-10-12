@@ -4,6 +4,7 @@ include(GoogleTest)
 add_executable(
     fem_core_tests
     unit/core/version_test.cpp
+    unit/core/bindings_test.cpp
     unit/core/product_test.cpp
     unit/core/concurrent_signal_test.cpp
     unit/core/filesystem_test.cpp
@@ -28,20 +29,28 @@ add_executable(
     unit/core/extension/semver_test.cpp
     unit/core/job/job_manager_test.cpp
     unit/core/job/local_executor_test.cpp
+    unit/core/l10n/catalog_test.cpp
+    unit/core/l10n/core_catalogs_test.cpp
+    unit/core/l10n/localization_test.cpp
+    unit/core/log/log_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
     unit/core/model/mesh_test.cpp
     unit/core/model/opaque_test.cpp
     unit/core/model/units_test.cpp
+    unit/core/settings/settings_test.cpp
+    unit/core/settings/settings_validation_test.cpp
     unit/core/task/task_pool_test.cpp
-    unit/core/task/task_test.cpp)
+    unit/core/task/task_test.cpp
+    unit/core/user_folders_test.cpp)
 target_link_libraries(fem_core_tests PRIVATE fem::core GTest::gtest_main)
 target_compile_definitions(
     fem_core_tests
     PRIVATE FEM_EXPECTED_VERSION="${PROJECT_VERSION}"
             FEM_EXPECTED_PRODUCT_NAME="${PROJECT_NAME}"
             FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+            FEM_CORE_L10N_DIR="${PROJECT_SOURCE_DIR}/core/l10n"
             FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
             FEM_TEST_NATIVE_HELLO="$<TARGET_FILE:fem_test_extension_hello>"
             FEM_TEST_NATIVE_BAD_ABI="$<TARGET_FILE:fem_test_extension_hello_bad_abi>"

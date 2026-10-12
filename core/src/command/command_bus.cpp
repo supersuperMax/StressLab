@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <iterator>
 #include <optional>
 #include <set>
@@ -377,6 +378,7 @@ void CommandBus::complete_step(std::string label, model::ChangeSet changes,
     ModelChange change{ModelChange::Cause::execute, label, changes.summary()};
     undo_stack_.push_back(Step{std::move(label), std::move(changes)});
     redo_stack_.clear();
+    trim_undo_stack();
     model_changed_.emit(change);
 }
 
@@ -397,6 +399,18 @@ void CommandBus::check_idle(std::string_view action) const {
     if (!transactions_.empty()) {
         fail(CommandErrc::invalid_state,
              std::string(action) + " is not allowed inside a transaction");
+    }
+}
+
+void CommandBus::set_undo_limit(std::size_t limit) {
+    undo_limit_ = limit;
+    trim_undo_stack();
+}
+
+void CommandBus::trim_undo_stack() {
+    if (undo_limit_ > 0 && undo_stack_.size() > undo_limit_) {
+        const auto excess = static_cast<std::ptrdiff_t>(undo_stack_.size() - undo_limit_);
+        undo_stack_.erase(undo_stack_.begin(), undo_stack_.begin() + excess);
     }
 }
 

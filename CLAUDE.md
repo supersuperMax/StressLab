@@ -57,7 +57,7 @@ shell/         Qt-оболочка: окно, доки, дерево, свойс
 app/           исполняемый `stresslab` (GUI и `--headless`)
 extensions/    встроенные модули, каждый в своей папке с stresslab-extension.toml
 tests/         unit-тесты, golden-модели (tests/models/*.inp + ожидаемые результаты)
-cmake/         CMake-модули: Branding.cmake (пути к иконкам и логотипам)
+cmake/         CMake-модули: Branding.cmake (пути к иконкам и логотипам), EmbedCatalogs.cmake (строки ядра)
 resources/     не-код: бренд-кит в resources/branding/
 docs/          документы, ADR, руководство по модулям
 ```
