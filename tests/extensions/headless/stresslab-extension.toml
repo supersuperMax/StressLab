@@ -1,0 +1,30 @@
+# A python module for the headless tests (python/tests/test_headless.py): activated at startup,
+# a command that creates an object, work in the background and in a task that asks the
+# application for a command, and a crash.
+[extension]
+id = "test.headless"
+name = "Headless test module"
+version = "1.0.0"
+engine = "^0.1"
+kind = "python"
+entry = "headless_module:activate"
+activation = ["onStartup"]
+
+[[contributes.commands]]
+id = "headless.make"
+title = "Create a part"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "headless.background"
+title = "Create a part later, from a background thread"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "headless.task_make"
+title = "A task that creates a part through the application"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "headless.crash"
+title = "Crash the host"

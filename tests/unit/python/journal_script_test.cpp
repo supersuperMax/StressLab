@@ -10,6 +10,7 @@
 
 #include "../core/command/command_test_support.h"
 #include "../core/command/journal_test_support.h"
+#include "python_test_support.h"
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -24,34 +25,19 @@ using fem::command::testing::golden_path;
 using fem::command::testing::JournalSession;
 using fem::command::testing::run_random_session;
 using fem::command::testing::utf8;
-using fem::python::Interpreter;
 using fem::python::PythonError;
+using fem::python::testing::interpreter;
 namespace fs = std::filesystem;
 
 namespace {
-
-// One interpreter for the whole test program: Python cannot start twice in a process.
-Interpreter* python = nullptr;
-
-class PythonEnvironment : public ::testing::Environment {
-public:
-    void SetUp() override { python = new Interpreter(); }
-    void TearDown() override {
-        delete python;
-        python = nullptr;
-    }
-};
-
-[[maybe_unused]] const ::testing::Environment* const environment =
-    ::testing::AddGlobalTestEnvironment(new PythonEnvironment());
 
 /// Lends a session to Python while it lives, as the application does.
 class Attached {
 public:
     explicit Attached(JournalSession& session) : core_keys_(session.bus, keys_) {
-        python->attach(session.bus, keys_);
+        interpreter().attach(session.bus, keys_);
     }
-    ~Attached() { python->detach(); }
+    ~Attached() { interpreter().detach(); }
     Attached(const Attached&) = delete;
     Attached& operator=(const Attached&) = delete;
 
@@ -96,7 +82,7 @@ TEST(PythonJournal, GoldenJournalRunsAsAScript) {
     JournalSession scripted;
     {
         const Attached attached(scripted);
-        python->run_file(golden_path());
+        interpreter().run_file(golden_path());
     }
     EXPECT_EQ(dump(scripted.doc), dump(parsed.doc));
     // Run by Python, the calls are journaled again exactly as they were written.
@@ -115,7 +101,7 @@ TEST(PythonJournal, HundredsOfCommandsRunAsAScriptIntoTheSameDocument) {
     JournalSession replayed;
     {
         const Attached attached(replayed);
-        python->run_file(file);
+        interpreter().run_file(file);
     }
     EXPECT_EQ(dump(replayed.doc), dump(original.doc));
     EXPECT_EQ(replayed.journal.file(), journal);
@@ -132,7 +118,7 @@ TEST(PythonJournal, AnErrorInTheScriptCarriesItsTraceback) {
     JournalSession session;
     const Attached attached(session);
     try {
-        python->run_string(
+        interpreter().run_string(
             utf8(u8"import stresslab\nstresslab.cmd('model.rename', object=99, "
                  u8"name='нет')\n"));
         FAIL() << "expected PythonError";
@@ -142,14 +128,14 @@ TEST(PythonJournal, AnErrorInTheScriptCarriesItsTraceback) {
         EXPECT_NE(text.find("line 2"), std::string::npos) << text;
     }
     // A script that exits with code 0 has succeeded.
-    EXPECT_NO_THROW(python->run_string("raise SystemExit(0)"));
-    EXPECT_THROW(python->run_string("raise SystemExit(3)"), PythonError);
+    EXPECT_NO_THROW(interpreter().run_string("raise SystemExit(0)"));
+    EXPECT_THROW(interpreter().run_string("raise SystemExit(3)"), PythonError);
 }
 
 TEST(PythonJournal, PythonWorksWithTheAttachedDocument) {
     JournalSession session;
     const Attached attached(session);
-    python->run_string(
+    interpreter().run_string(
         utf8(u8R"(
 import stresslab
 doc = stresslab.active_document()
@@ -168,7 +154,7 @@ assert stresslab.context["history.canUndo"] is True
 TEST(PythonJournal, CommandsWrittenInPythonRunFromTheApplication) {
     JournalSession session;
     const Attached attached(session);
-    python->run_string(R"(
+    interpreter().run_string(R"(
 import stresslab
 def make(ctx, name):
     return ctx.execute("model.create", type="part", owner="test.module", name=name)
@@ -187,7 +173,7 @@ TEST(PythonJournal, DetachTakesBackWhatPythonKeeps) {
     JournalSession session;
     {
         const Attached attached(session);
-        python->run_string(R"(
+        interpreter().run_string(R"(
 import builtins, stresslab
 builtins.kept_document = stresslab.active_document()
 builtins.kept_changes = []
@@ -199,7 +185,7 @@ stresslab.register_command("py.noop", lambda ctx: None, owner="py.module")
     // The command of Python and its listener have left the bus; Python's handle is closed.
     EXPECT_EQ(session.bus.find_command("py.noop"), nullptr);
     session.bus.execute("model.create", {{"type", "part"}, {"owner", "test.module"}});
-    python->run_string(R"(
+    interpreter().run_string(R"(
 import builtins, stresslab
 assert builtins.kept_changes == []
 assert not builtins.kept_subscription.active
@@ -215,5 +201,5 @@ del builtins.kept_document, builtins.kept_changes, builtins.kept_subscription
 
 TEST(PythonJournal, JournalHeaderImportsTheModule) {
     // The header is all a journal needs to run: `stresslab` and `Path` are imported.
-    EXPECT_NO_THROW(python->run_string(journal_header() + "assert Path and stresslab\n"));
+    EXPECT_NO_THROW(interpreter().run_string(journal_header() + "assert Path and stresslab\n"));
 }

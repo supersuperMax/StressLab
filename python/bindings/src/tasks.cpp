@@ -6,6 +6,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -44,14 +45,39 @@ MessageSeverity to_severity(std::string_view name) {
     throw nb::value_error(("unknown message severity '" + std::string(name) + "'").c_str());
 }
 
-/// Waits for the task without holding the GIL; false if the time ran out.
+/// How long a wait goes without looking at signals and pending calls.
+constexpr std::chrono::milliseconds wait_slice{50};
+
+/// Waits for the task without holding the GIL; false if the time ran out. Waits in slices and
+/// between them lets Python handle signals (Ctrl+C) and run pending calls: the application may
+/// have work for this thread that the task waits for (a module's task that asks the model for
+/// something, `Interpreter::call_soon`).
 bool wait(const Task& task, const std::optional<double>& timeout) {
-    const nb::gil_scoped_release unlocked;
-    if (!timeout) {
-        task.wait();
-        return true;
+    using clock = std::chrono::steady_clock;
+    const std::optional<clock::time_point> deadline =
+        timeout ? std::optional(clock::now() + std::chrono::duration_cast<clock::duration>(
+                                                   std::chrono::duration<double>(*timeout)))
+                : std::nullopt;
+    while (true) {
+        auto slice = std::chrono::duration_cast<clock::duration>(wait_slice);
+        if (deadline) {
+            slice = std::max(clock::duration::zero(), std::min(slice, *deadline - clock::now()));
+        }
+        bool finished = false;
+        {
+            const nb::gil_scoped_release unlocked;
+            finished = task.wait_for(slice);
+        }
+        if (finished) {
+            return true;
+        }
+        if (deadline && clock::now() >= *deadline) {
+            return false;
+        }
+        if (PyErr_CheckSignals() != 0 || Py_MakePendingCalls() != 0) {
+            throw nb::python_error();
+        }
     }
-    return task.wait_for(std::chrono::duration<double>(*timeout));
 }
 
 }  // namespace
