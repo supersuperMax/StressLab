@@ -98,6 +98,10 @@ endif()
 # pytest (python/tests/test_headless.py) with the real executable.
 add_executable(stresslab_app_tests unit/app/command_line_test.cpp)
 target_link_libraries(stresslab_app_tests PRIVATE stresslab_app GTest::gtest_main)
+# A folder of its own: fem_python_tests copies the same DLLs (python312.dll) next to itself after
+# linking, and two copies of one file at once fail on Windows.
+set_target_properties(stresslab_app_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                     ${CMAKE_CURRENT_BINARY_DIR}/app)
 fem_copy_runtime_dlls(stresslab_app_tests)
 gtest_discover_tests(stresslab_app_tests DISCOVERY_MODE PRE_TEST)
 
