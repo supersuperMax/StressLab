@@ -1,8 +1,10 @@
-// The `stresslab` executable. So far it only runs the embedded Python (task 1.8):
+// The `stresslab` executable:
 //
-//     stresslab --python [python arguments]     e.g. --python -m pytest, --python script.py
+//     stresslab --python [python arguments]                         the embedded Python (task 1.8)
+//     stresslab --headless [options] run-script <file.py> [args]   a script without the window
+//                                                                    (task 1.10, ADR 0011)
 //
-// `--headless run-script` comes with task 1.10, the window with task 1.11.
+// The window comes with task 1.11.
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/context/context_keys.h"
@@ -10,8 +12,13 @@
 #include "fem/core/l10n/localization.h"
 #include "fem/core/model/document.h"
 #include "fem/core/product.h"
+#include "fem/core/user_folders.h"
 #include "fem/core/version.h"
 #include "fem/python/interpreter.h"
+
+#include "command_line.h"
+#include "executable_path.h"
+#include "headless.h"
 
 #include <cstdio>
 #include <exception>
@@ -20,6 +27,9 @@
 #include <vector>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 
@@ -30,6 +40,18 @@ void print(const std::string& text, std::FILE* stream) {
     std::fputc('\n', stream);
 }
 
+fem::app::HeadlessEnvironment headless_environment() {
+    fem::app::HeadlessEnvironment environment;
+    environment.executable = fem::app::executable_path();
+    environment.builtin_extensions = fem::app::path_from_utf8(FEM_BUILTIN_EXTENSIONS_DIR);
+    try {
+        environment.user_settings = fem::user_folders().config / "settings.json";
+    } catch (const std::exception&) {
+        // No home folder (a service account): no settings of the user.
+    }
+    return environment;
+}
+
 int run(const std::vector<std::string>& args) {
     fem::l10n::Localization localization;
     localization.set_language(fem::l10n::system_language());
@@ -37,18 +59,26 @@ int run(const std::vector<std::string>& args) {
         return localization.text("fem.core", key, values);
     };
 
-    if (args.empty() || args[0] == "--help" || args[0] == "-h") {
-        print(text("app.usage", {{"program", "stresslab"}}), stdout);
-        return args.empty() ? 2 : 0;
-    }
-    if (args[0] == "--version") {
-        print(std::string(fem::kProductName) + " " + std::string(fem::version()), stdout);
-        return 0;
-    }
-    if (args[0] != "--python") {
-        print(text("app.unknownOption", {{"option", args[0]}}), stderr);
+    fem::app::CommandLine line;
+    try {
+        line = fem::app::parse_command_line(args);
+    } catch (const fem::app::CommandLineError& error) {
+        print(text(error.key(), error.args()), stderr);
         print(text("app.usage", {{"program", "stresslab"}}), stderr);
-        return 2;
+        return fem::app::exit_usage;
+    }
+
+    switch (line.mode) {
+        case fem::app::CommandLine::Mode::help:
+            print(text("app.usage", {{"program", "stresslab"}}), stdout);
+            return args.empty() ? fem::app::exit_usage : fem::app::exit_success;
+        case fem::app::CommandLine::Mode::version:
+            print(std::string(fem::kProductName) + " " + std::string(fem::version()), stdout);
+            return fem::app::exit_success;
+        case fem::app::CommandLine::Mode::headless:
+            return fem::app::run_headless(line.headless, headless_environment());
+        case fem::app::CommandLine::Mode::python:
+            break;
     }
 
     // The application's document: what `stresslab.cmd` changes in the scripts.
@@ -56,7 +86,7 @@ int run(const std::vector<std::string>& args) {
     fem::command::CommandBus bus(document);
     fem::context::ContextKeys keys;
     const fem::context::CoreKeys core_keys(bus, keys);
-    return fem::python::Interpreter::run_main({args.begin() + 1, args.end()}, bus, keys);
+    return fem::python::Interpreter::run_main(line.python_args, bus, keys);
 }
 
 int run_safely(const std::vector<std::string>& args) {
@@ -64,7 +94,7 @@ int run_safely(const std::vector<std::string>& args) {
         return run(args);
     } catch (const std::exception& error) {
         print(error.what(), stderr);
-        return 1;
+        return fem::app::exit_failure;
     }
 }
 

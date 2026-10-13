@@ -133,6 +133,10 @@ public:
     /// step for undo and in the journal. Throws CommandError(invalid_state) inside a command.
     [[nodiscard]] Transaction begin_transaction(std::string label = {});
     [[nodiscard]] bool in_transaction() const noexcept { return !transactions_.empty(); }
+    /// No command is running and no transaction is open: what runs now is a step of its own, not
+    /// a part of another one. Work that waits for the model (requests of out-of-process modules)
+    /// is done at such points.
+    [[nodiscard]] bool is_idle() const noexcept { return running_ == 0 && transactions_.empty(); }
 
     // --- Events ----------------------------------------------------------------------------------
 

@@ -354,3 +354,27 @@ TEST_F(CommandBusTest, ListenersMayRunCommands) {
     EXPECT_EQ(journal.entries().size(), 2U);
     EXPECT_EQ(bus.undo_label(), mc::rename);
 }
+
+TEST_F(CommandBusTest, IsIdleOutsideCommandsAndTransactions) {
+    EXPECT_TRUE(bus.is_idle());
+    bool idle_inside = true;
+    bus.register_command({.id = "test.probe", .owner = test_owner}, [&](CommandContext&) {
+        idle_inside = bus.is_idle();
+        return CommandResult{};
+    });
+    bus.execute("test.probe");
+    EXPECT_FALSE(idle_inside);
+    EXPECT_TRUE(bus.is_idle());
+    {
+        Transaction transaction = bus.begin_transaction("group");
+        EXPECT_FALSE(bus.is_idle());
+        transaction.commit();
+    }
+    EXPECT_TRUE(bus.is_idle());
+    // Model listeners run after the step: commands they run are steps of their own.
+    bool idle_in_listener = false;
+    const fem::Subscription subscription =
+        bus.on_model_changed([&](const ModelChange&) { idle_in_listener = bus.is_idle(); });
+    create("a");
+    EXPECT_TRUE(idle_in_listener);
+}

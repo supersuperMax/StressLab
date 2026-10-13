@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -21,6 +22,10 @@ using fem::log::LogOptions;
 std::string read(const fs::path& file) {
     std::ifstream in(file, std::ios::binary);
     return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+std::string utf8(std::u8string_view text) {
+    return {text.begin(), text.end()};
 }
 
 std::size_t count(const std::string& text, const std::string& what) {
@@ -78,6 +83,32 @@ TEST_F(LogTest, NothingIsWrittenWithoutLogging) {
     { Logging logging({.folder = folder}); }
     fem::log::logger("quiet")->error("after the file was closed");
     EXPECT_EQ(read(file()), "");
+}
+
+TEST_F(LogTest, WithoutAFolderThereIsNoFile) {
+    {
+        Logging logging({.level = Level::debug});
+        EXPECT_TRUE(logging.file().empty());
+        fem::log::logger("test")->info("goes nowhere");
+        logging.flush();
+    }
+    EXPECT_FALSE(fs::exists(folder.parent_path()));
+}
+
+TEST_F(LogTest, WritesToTheStandardOutput) {
+    ::testing::internal::CaptureStdout();
+    {
+        Logging logging({.level = Level::info, .console = fem::log::Console::standard_output});
+        fem::log::logger("test")->debug("too detailed");
+        fem::log::logger("test")->warn(utf8(u8"в консоль"));
+    }
+    fem::log::logger("test")->warn("after the console was closed");
+    const std::string text = ::testing::internal::GetCapturedStdout();
+    // Date and time, the level and the category, without the thread; '\n' on every OS.
+    const std::string line = " [warning] [test] " + utf8(u8"в консоль") + "\n";
+    ASSERT_GT(text.size(), line.size());
+    EXPECT_EQ(text.substr(23), line) << text;
+    EXPECT_EQ(text[4], '-');
 }
 
 TEST_F(LogTest, TheLevelCanChange) {
