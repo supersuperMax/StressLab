@@ -1,4 +1,5 @@
 find_package(GTest CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 include(GoogleTest)
 
 add_executable(
@@ -21,6 +22,7 @@ add_executable(
     unit/core/context/when_evaluate_test.cpp
     unit/core/context/when_grammar_test.cpp
     unit/core/extension/activation_test.cpp
+    unit/core/extension/host_runtime_test.cpp
     unit/core/extension/manager_test.cpp
     unit/core/extension/manifest_test.cpp
     unit/core/extension/native_test.cpp
@@ -29,6 +31,8 @@ add_executable(
     unit/core/extension/semver_test.cpp
     unit/core/job/job_manager_test.cpp
     unit/core/job/local_executor_test.cpp
+    unit/core/ipc/json_rpc_test.cpp
+    unit/core/ipc/shared_memory_test.cpp
     unit/core/l10n/catalog_test.cpp
     unit/core/l10n/core_catalogs_test.cpp
     unit/core/l10n/localization_test.cpp
@@ -54,7 +58,11 @@ target_compile_definitions(
             FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
             FEM_TEST_NATIVE_HELLO="$<TARGET_FILE:fem_test_extension_hello>"
             FEM_TEST_NATIVE_BAD_ABI="$<TARGET_FILE:fem_test_extension_hello_bad_abi>"
-            FEM_TEST_FAKE_PROCESS="$<TARGET_FILE:fem_test_fake_process>")
+            FEM_TEST_FAKE_PROCESS="$<TARGET_FILE:fem_test_fake_process>"
+            FEM_TEST_PROCESS_MODULE="$<TARGET_FILE:fem_test_process_module>"
+            FEM_TEST_PYTHON="${Python_EXECUTABLE}"
+            FEM_TEST_HOST_PACKAGE_DIR="${PROJECT_SOURCE_DIR}/python"
+            FEM_TEST_STRESSLAB="$<TARGET_FILE:stresslab>")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
@@ -107,6 +115,15 @@ add_executable(fem_test_fake_process fixtures/fake-process/fake_process.cpp)
 set_target_properties(fem_test_fake_process PROPERTIES MSVC_RUNTIME_LIBRARY
                                                        "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_dependencies(fem_core_tests fem_test_fake_process)
+
+# The process module of the extension host tests (task 1.9): speaks the protocol of modules itself.
+# Copied next to its manifest into a folder with Cyrillic letters, so the C runtime is static.
+add_executable(fem_test_process_module fixtures/process-module/process_module.cpp)
+target_link_libraries(fem_test_process_module PRIVATE nlohmann_json::nlohmann_json)
+set_target_properties(fem_test_process_module PROPERTIES MSVC_RUNTIME_LIBRARY
+                                                         "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# The host tests also start the extension host on the interpreter of the application.
+add_dependencies(fem_core_tests fem_test_process_module stresslab fem_python_package)
 
 # Model IR benchmark (task 1.2): one million nodes without copying the arrays. Fails if they are
 # copied, so it runs with the tests; its timings are printed with `ctest -L benchmark -V`.

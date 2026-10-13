@@ -75,8 +75,32 @@ std::string_view to_string(ExtensionEvent::Kind kind) noexcept {
             return "extension.activationFailed";
         case ExtensionEvent::Kind::deactivated:
             return "extension.deactivated";
+        case ExtensionEvent::Kind::crashed:
+            return "extension.crashed";
     }
     return "unknown";
+}
+
+std::string_view to_string(CrashReason reason) noexcept {
+    switch (reason) {
+        case CrashReason::crashed:
+            return "crashed";
+        case CrashReason::hung:
+            return "hung";
+    }
+    return "unknown";
+}
+
+std::string crash_message(const ExtensionInfo& extension, const CrashReport& crash,
+                          const l10n::Localization& localization) {
+    const std::string name = localization.manifest_text(extension.id(), extension.manifest->name);
+    const l10n::Args args{{"module", name}, {"count", std::int64_t{crash.count}}};
+    if (!crash.restarted) {
+        return localization.text(model::core_owner, "extension.gaveUp", args);
+    }
+    return localization.text(
+        model::core_owner,
+        crash.reason == CrashReason::hung ? "extension.hung" : "extension.crashed", args);
 }
 
 // --- ExtensionHost -------------------------------------------------------------------------------
@@ -97,6 +121,25 @@ void ExtensionHost::set_context_key(std::string_view name, context::ContextValue
                                                           "', not to '" + extension_.id() + "'");
     }
     keys_.set(name, std::move(value));
+}
+
+bool ExtensionHost::evaluate_context(const context::WhenExpression& expression) const {
+    return keys_.evaluate(expression);
+}
+
+Subscription ExtensionHost::watch_context(context::WhenExpression expression,
+                                          std::function<void(bool)> listener) {
+    return keys_.watch(std::move(expression), std::move(listener));
+}
+
+void ExtensionHost::report_crash(CrashReport report) {
+    const std::string& id = extension_.id();
+    log::logger("extension")
+        ->error("module '{}' {} ({} time(s) in a row); {}: {}", id, to_string(report.reason),
+                report.count, report.restarted ? "restarted" : "not restarted any more",
+                report.details);
+    std::string message = report.details;
+    manager_.emit(ExtensionEvent::Kind::crashed, id, std::move(message), std::move(report));
 }
 
 // --- ExtensionManager ----------------------------------------------------------------------------
@@ -536,7 +579,7 @@ void ExtensionManager::activate_record(Record& record, std::vector<std::string>&
     }
     // The runtime may be replaced while it runs; keep this one alive.
     const std::shared_ptr<ExtensionRuntime> code = runtime->second;
-    auto host = std::unique_ptr<ExtensionHost>(new ExtensionHost(info, keys_));
+    auto host = std::unique_ptr<ExtensionHost>(new ExtensionHost(info, keys_, *this));
     std::unique_ptr<ExtensionInstance> instance;
     try {
         instance = code->activate(info, *host);
@@ -651,8 +694,9 @@ Subscription ExtensionManager::on_event(std::function<void(const ExtensionEvent&
     return events_.subscribe(std::move(listener));
 }
 
-void ExtensionManager::emit(ExtensionEvent::Kind kind, const std::string& id, std::string message) {
-    events_.emit(ExtensionEvent{kind, id, std::move(message)});
+void ExtensionManager::emit(ExtensionEvent::Kind kind, const std::string& id, std::string message,
+                            std::optional<CrashReport> crash) {
+    events_.emit(ExtensionEvent{kind, id, std::move(message), std::move(crash)});
 }
 
 }  // namespace fem::extension

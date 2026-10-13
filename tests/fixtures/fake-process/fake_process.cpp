@@ -13,6 +13,7 @@
 //   cwd                 the current folder
 //   write FILE TEXT     write TEXT to FILE
 //   stdin               read standard input to its end, print "stdin N bytes"
+//   cat                 copy standard input to standard output as lines come, until its end
 //   flood N             N long lines to standard output and to standard error, interleaved
 //   spawn-heartbeat F   start a copy of itself running `heartbeat F`, sharing the output, and go on
 //   heartbeat FILE      append a byte to FILE every 20 ms, forever
@@ -182,6 +183,11 @@ int run(const std::vector<std::string>& args) {
                 bytes += n;
             }
             write(stdout, "stdin " + std::to_string(bytes) + " bytes\n");
+        } else if (command == "cat") {
+            char buffer[4096];
+            while (std::fgets(buffer, sizeof(buffer), stdin) != nullptr) {
+                write(stdout, buffer);
+            }
         } else if (command == "flood") {
             const int count = std::stoi(next());
             const std::string filler(100, '#');

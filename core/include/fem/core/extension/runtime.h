@@ -3,14 +3,40 @@
 #include "fem/core/command/command.h"
 #include "fem/core/context/context_keys.h"
 #include "fem/core/context/value.h"
+#include "fem/core/context/when.h"
+#include "fem/core/signal.h"
 
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
 
 namespace fem::extension {
 
+class ExtensionManager;
 struct ExtensionInfo;
+
+/// Why the code of a running module stopped (out-of-process modules).
+enum class CrashReason : std::uint8_t {
+    crashed,  ///< Its process ended unexpectedly.
+    hung,     ///< It stopped answering and was ended.
+};
+
+/// "crashed", "hung".
+[[nodiscard]] std::string_view to_string(CrashReason reason) noexcept;
+
+/// What a runtime tells the application when the code of a module stopped.
+struct CrashReport {
+    CrashReason reason = CrashReason::crashed;
+    /// The code was started and activated again; otherwise it crashed too often and its commands
+    /// fail until the module is disabled and enabled.
+    bool restarted = false;
+    /// How many times it stopped within the restart window, this time included.
+    int count = 1;
+    /// For the log: exit code, the last lines it wrote to its error output, the command it ran.
+    std::string details;
+};
 
 /// What the code of an active module may do in the application besides running its commands.
 /// Given by the Extension Manager to `ExtensionRuntime::activate`; valid until the module is
@@ -33,15 +59,26 @@ public:
     /// `declare_context_key`. Throws ExtensionError(conflict) for a key of another owner and
     /// ContextError as `ContextKeys::set` does.
     void set_context_key(std::string_view name, context::ContextValue value);
+    /// The value of a `when` expression over the context keys.
+    [[nodiscard]] bool evaluate_context(const context::WhenExpression& expression) const;
+    /// Calls `listener` with the new value whenever the value of `expression` changes, as
+    /// `ContextKeys::watch` does. The subscription must not outlive the module's activation.
+    [[nodiscard]] Subscription watch_context(context::WhenExpression expression,
+                                             std::function<void(bool)> listener);
+    /// Tells the application that the code of the module stopped: the manager logs it and sends
+    /// "extension.crashed" with the report, so the shell can show a message.
+    void report_crash(CrashReport report);
 
 private:
     friend class ExtensionManager;
 
-    ExtensionHost(const ExtensionInfo& extension, context::ContextKeys& keys) noexcept
-        : extension_(extension), keys_(keys) {}
+    ExtensionHost(const ExtensionInfo& extension, context::ContextKeys& keys,
+                  ExtensionManager& manager) noexcept
+        : extension_(extension), keys_(keys), manager_(manager) {}
 
     const ExtensionInfo& extension_;
     context::ContextKeys& keys_;
+    ExtensionManager& manager_;
 };
 
 /// The loaded and activated code of a module.
@@ -66,7 +103,7 @@ public:
 
 /// Loads and activates the code of one kind of module (`ExtensionKind`). The core has the runtime
 /// of native modules; the runtimes of python and process modules come with the extension host
-/// (task 1.9) and are given to `ExtensionManager::set_runtime`.
+/// (`HostRuntime`, task 1.9) and are given to `ExtensionManager::set_runtime`.
 class ExtensionRuntime {
 public:
     ExtensionRuntime() = default;

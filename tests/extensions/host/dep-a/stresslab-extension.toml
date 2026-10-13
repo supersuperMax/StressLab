@@ -1,0 +1,13 @@
+# Two python modules with a package of the same name and different versions in their own
+# site-packages (tests/unit/core/extension/host_runtime_test.cpp): each sees its own.
+[extension]
+id = "test.dep-a"
+name = "Module A with its own dependency"
+version = "1.0.0"
+engine = "^1.0"
+kind = "python"
+entry = "dep_a:activate"
+
+[[contributes.commands]]
+id = "depa.version"
+title = "Version of shared_dep"

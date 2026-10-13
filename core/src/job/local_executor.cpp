@@ -129,7 +129,19 @@ void refuse_batch_files(const fs::path& program) {
 LocalExecutor::LocalExecutor(LocalExecutorOptions options) : options_(options) {}
 
 std::unique_ptr<Execution> LocalExecutor::start(const JobSpec& spec, OutputSink sink) {
+    return start_process(spec, std::move(sink), false);
+}
+
+std::unique_ptr<InteractiveExecution> LocalExecutor::start_interactive(const JobSpec& spec,
+                                                                       OutputSink sink) {
+    return start_process(spec, std::move(sink), true);
+}
+
+std::unique_ptr<InteractiveExecution> LocalExecutor::start_process(const JobSpec& spec,
+                                                                   OutputSink sink,
+                                                                   bool with_input) const {
     detail::ProcessLaunch launch;
+    launch.input = with_input;
     launch.workdir = working_folder(spec);
     for (const fs::path& input : spec.inputs) {
         const fs::path file = input.is_absolute() ? input : launch.workdir / input;

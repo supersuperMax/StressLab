@@ -8,6 +8,7 @@
 #include "fem/core/extension/registry.h"
 #include "fem/core/extension/runtime.h"
 #include "fem/core/extension/semver.h"
+#include "fem/core/l10n/localization.h"
 #include "fem/core/model/document.h"
 #include "fem/core/signal.h"
 
@@ -18,6 +19,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -75,16 +77,26 @@ struct ExtensionEvent {
         activated,          ///< Its code was loaded and activated.
         activation_failed,  ///< Its code could not be activated; `message` says why.
         deactivated,        ///< It was disabled: everything it contributed is gone.
+        /// Its code stopped (an out-of-process module crashed or hung); `crash` says what and
+        /// whether it was restarted. The model is intact: the command it was running was undone.
+        crashed,
     };
 
     Kind kind = Kind::enabled;
     std::string id;
     std::string message;
+    /// For `crashed`.
+    std::optional<CrashReport> crash;
 };
 
 /// "extension.enabled", "extension.activated", "extension.activationFailed",
-/// "extension.deactivated".
+/// "extension.deactivated", "extension.crashed".
 [[nodiscard]] std::string_view to_string(ExtensionEvent::Kind kind) noexcept;
+
+/// The message the user sees when the code of a module stopped, in the language of
+/// `localization` (strings "extension.crashed", "extension.hung", "extension.gaveUp" of the core).
+[[nodiscard]] std::string crash_message(const ExtensionInfo& extension, const CrashReport& crash,
+                                        const l10n::Localization& localization);
 
 /// A command of an installed module, enabled or not, for the command palette: a command of a
 /// disabled module is offered with "enable the module" (docs/architecture.md §4.6, item 8).
@@ -250,7 +262,9 @@ private:
     /// ExtensionError(activation_failed).
     void activate_record(Record& record, std::vector<std::string>& activated);
     command::CommandResult run_command(const std::string& owner, command::CommandContext& context);
-    void emit(ExtensionEvent::Kind kind, const std::string& id, std::string message = {});
+    void emit(ExtensionEvent::Kind kind, const std::string& id, std::string message = {},
+              std::optional<CrashReport> crash = std::nullopt);
+    friend class ExtensionHost;
 
     model::Document& document_;
     command::CommandBus& bus_;

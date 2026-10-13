@@ -33,6 +33,9 @@ target_sources(
             src/extension/contributions.cpp
             src/extension/error.cpp
             src/extension/files.cpp
+            src/extension/host_data.cpp
+            src/extension/host_runtime.cpp
+            src/extension/json_value.cpp
             src/extension/manager.cpp
             src/extension/manifest.cpp
             src/extension/native_runtime.cpp
@@ -45,6 +48,8 @@ target_sources(
             src/job/job_spec.cpp
             src/job/local_executor.cpp
             src/io/files.cpp
+            src/ipc/json_rpc.cpp
+            src/ipc/shared_memory.cpp
             src/l10n/catalog.cpp
             src/l10n/error.cpp
             src/l10n/language.cpp
@@ -75,6 +80,10 @@ if(WIN32)
     target_link_libraries(femcore PRIVATE shell32 ole32)
 else()
     target_sources(femcore PRIVATE src/job/process_posix.cpp)
+endif()
+# shm_open is in librt on glibc older than 2.34; the library is still there (empty) on newer ones.
+if(UNIX AND NOT APPLE)
+    target_link_libraries(femcore PRIVATE rt)
 endif()
 target_include_directories(femcore PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 # The generated catalog source includes its header from src/.
