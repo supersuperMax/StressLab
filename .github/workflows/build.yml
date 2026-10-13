@@ -46,7 +46,7 @@ jobs:
           sudo apt-get update &&
           sudo apt-get install -y autoconf autoconf-archive automake libtool
           '^libxcb.*-dev' libx11-xcb-dev libxrender-dev libxi-dev libxkbcommon-dev
-          libxkbcommon-x11-dev libgl-dev libegl-dev libglu1-mesa-dev
+          libxkbcommon-x11-dev libgl-dev libegl-dev libglu1-mesa-dev libltdl-dev
 
       # libb2, a dependency of qtbase, is built with autotools.
       - name: Install build tools for Qt (macOS)
@@ -71,13 +71,17 @@ jobs:
           "VCPKG_ROOT=$env:RUNNER_TEMP/vcpkg" >> $env:GITHUB_ENV
           "VCPKG_BINARY_SOURCES=clear;files,$env:RUNNER_TEMP/vcpkg-cache,readwrite" >> $env:GITHUB_ENV
 
+      # A cache entry cannot be overwritten, so each run saves one of its own and the next run
+      # restores the newest by prefix: a run that stopped half-way (cancelled, failed) must not leave
+      # its packages as the only entry for these manifests.
       - name: Restore vcpkg binary cache
         id: vcpkg-cache
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
             vcpkg-${{ inputs.kind }}-${{ runner.os }}-
             vcpkg-core-${{ runner.os }}-
 
