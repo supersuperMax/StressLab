@@ -1,0 +1,94 @@
+# A python module for the extension host tests (tests/unit/core/extension/host_runtime_test.cpp):
+# its commands work, fail, crash the host, hang it, run tasks and pass meshes through shared
+# memory.
+[extension]
+id = "test.faulty"
+name = "Faulty test module"
+version = "1.0.0"
+engine = "^1.0"
+kind = "python"
+entry = "faulty:activate"
+activation = ["onCommand:faulty.*"]
+
+[[contributes.commands]]
+id = "faulty.echo"
+title = "Echo"
+args = [{ name = "value", type = "any", required = false }]
+
+[[contributes.commands]]
+id = "faulty.create"
+title = "Create an object"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "faulty.nested"
+title = "Create objects through other commands"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "faulty.raise"
+title = "Create an object, then raise an exception"
+
+[[contributes.commands]]
+id = "faulty.crash"
+title = "Create an object, then crash the host"
+args = [{ name = "code", type = "integer", required = false, default = 3 }]
+
+[[contributes.commands]]
+id = "faulty.hang"
+title = "Never return"
+
+[[contributes.commands]]
+id = "faulty.task"
+title = "A task with progress"
+args = [{ name = "steps", type = "integer" }]
+
+[[contributes.commands]]
+id = "faulty.wait_cancel"
+title = "A task that runs until it is cancelled"
+
+[[contributes.commands]]
+id = "faulty.task_crash"
+title = "A task that crashes the host"
+
+[[contributes.commands]]
+id = "faulty.mesh_in"
+title = "Create a mesh of a chain of line elements"
+args = [{ name = "nodes", type = "integer" }]
+
+[[contributes.commands]]
+id = "faulty.mesh_out"
+title = "Read a mesh"
+args = [{ name = "object", type = "object" }]
+
+[[contributes.commands]]
+id = "faulty.set_key"
+title = "Set a context key"
+args = [{ name = "value", type = "number" }]
+
+[[contributes.commands]]
+id = "faulty.watch"
+title = "Watch a when expression"
+args = [{ name = "when", type = "string" }]
+
+[[contributes.commands]]
+id = "faulty.seen"
+title = "What the module has seen: watched values and model changes"
+
+[[contributes.commands]]
+id = "faulty.background"
+title = "Create an object from a background thread"
+args = [{ name = "name", type = "string" }]
+
+[[contributes.commands]]
+id = "faulty.info"
+title = "Process id and path of the host"
+
+[[contributes.commands]]
+id = "faulty.undeclared"
+title = "Declared, but its code is not registered"
+
+[[contributes.contextKeys]]
+name = "faulty.value"
+type = "number"
+default = 0

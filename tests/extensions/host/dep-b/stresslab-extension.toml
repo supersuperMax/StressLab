@@ -1,0 +1,12 @@
+# See dep-a: the same package name, another version.
+[extension]
+id = "test.dep-b"
+name = "Module B with its own dependency"
+version = "1.0.0"
+engine = "^1.0"
+kind = "python"
+entry = "dep_b:activate"
+
+[[contributes.commands]]
+id = "depb.version"
+title = "Version of shared_dep"

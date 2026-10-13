@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -177,10 +178,30 @@ Pipe make_pipe() {
     return pipe;
 }
 
-class WindowsProcess final : public Execution {
+/// A pipe whose read end the child inherits: its standard input.
+Pipe make_input_pipe() {
+    SECURITY_ATTRIBUTES inherit{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+    HANDLE read = nullptr;
+    HANDLE write = nullptr;
+    constexpr DWORD buffer_size = 65536;
+    if (!CreatePipe(&read, &write, &inherit, buffer_size)) {
+        throw_last_error("cannot create a pipe");
+    }
+    Pipe pipe{Handle(read), Handle(write)};
+    if (!SetHandleInformation(pipe.write.get(), HANDLE_FLAG_INHERIT, 0)) {
+        throw_last_error("cannot create a pipe");
+    }
+    return pipe;
+}
+
+class WindowsProcess final : public InteractiveExecution {
 public:
-    WindowsProcess(Handle process, Handle job, Handle output, Handle error, OutputSink sink)
-        : process_(std::move(process)), job_(std::move(job)), sink_(std::move(sink)) {
+    WindowsProcess(Handle process, Handle job, Handle input, Handle output, Handle error,
+                   OutputSink sink)
+        : process_(std::move(process)),
+          job_(std::move(job)),
+          input_(std::move(input)),
+          sink_(std::move(sink)) {
         readers_[0] = std::thread(&WindowsProcess::read, this, std::move(output),
                                   OutputStream::standard_output);
         readers_[1] = std::thread(&WindowsProcess::read, this, std::move(error),
@@ -200,6 +221,28 @@ public:
     }
 
     void cancel() noexcept override { TerminateJobObject(job_.get(), terminated_exit_code); }
+
+    bool write_input(std::string_view bytes) override {
+        const std::lock_guard lock(input_mutex_);
+        while (!bytes.empty()) {
+            if (!input_) {
+                return false;
+            }
+            DWORD written = 0;
+            const auto size = static_cast<DWORD>(std::min<std::size_t>(bytes.size(), 1 << 20));
+            if (!WriteFile(input_.get(), bytes.data(), size, &written, nullptr)) {
+                input_.reset();  // The program has closed its input or ended.
+                return false;
+            }
+            bytes.remove_prefix(written);
+        }
+        return true;
+    }
+
+    void close_input() noexcept override {
+        const std::lock_guard lock(input_mutex_);
+        input_.reset();
+    }
 
     ExitStatus wait() override {
         WaitForSingleObject(process_.get(), INFINITE);
@@ -240,6 +283,8 @@ private:
 
     Handle process_;
     Handle job_;
+    std::mutex input_mutex_;
+    Handle input_;  // Our end of the program's standard input; empty without one.
     OutputSink sink_;
     std::array<std::thread, 2> readers_;
     bool waited_ = false;
@@ -295,7 +340,7 @@ std::vector<std::filesystem::path> program_candidates(const std::filesystem::pat
     return candidates;
 }
 
-std::unique_ptr<Execution> start_process(const ProcessLaunch& launch, OutputSink sink) {
+std::unique_ptr<InteractiveExecution> start_process(const ProcessLaunch& launch, OutputSink sink) {
     const std::wstring& program = launch.program.native();
     std::wstring command_line = L"\"" + program + L"\"";
     for (const std::string& arg : launch.args) {
@@ -310,11 +355,20 @@ std::unique_ptr<Execution> start_process(const ProcessLaunch& launch, OutputSink
 
     Pipe output = make_pipe();
     Pipe error = make_pipe();
-    SECURITY_ATTRIBUTES inherit{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
-    Handle input(CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &inherit,
-                             OPEN_EXISTING, 0, nullptr));
-    if (!input) {
-        throw_last_error("cannot open NUL");
+    // The program's standard input: our pipe, or NUL.
+    Handle input;
+    Handle input_writer;
+    if (launch.input) {
+        Pipe pipe = make_input_pipe();
+        input = std::move(pipe.read);
+        input_writer = std::move(pipe.write);
+    } else {
+        SECURITY_ATTRIBUTES inherit{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        input = Handle(CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   &inherit, OPEN_EXISTING, 0, nullptr));
+        if (!input) {
+            throw_last_error("cannot open NUL");
+        }
     }
 
     // Closing the last handle of the job kills its processes: they do not outlive the
@@ -386,8 +440,8 @@ std::unique_ptr<Execution> start_process(const ProcessLaunch& launch, OutputSink
     error.write.reset();
     input.reset();
     return std::make_unique<WindowsProcess>(std::move(process), std::move(job),
-                                            std::move(output.read), std::move(error.read),
-                                            std::move(sink));
+                                            std::move(input_writer), std::move(output.read),
+                                            std::move(error.read), std::move(sink));
 }
 
 }  // namespace fem::job::detail

@@ -6,6 +6,7 @@
 #include "process.h"
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -102,6 +103,40 @@ Pipe make_pipe() {
     return Pipe{Fd(fds[0]), Fd(fds[1])};
 }
 
+/// A connected pair of sockets for the standard input of a child: `read` is its end, `write` ours.
+/// A socket rather than a pipe, because writing to a socket can be told not to raise SIGPIPE when
+/// the child has gone (MSG_NOSIGNAL, SO_NOSIGPIPE), without touching the signal handling of the
+/// application.
+Pipe make_input_channel() {
+    std::array<int, 2> fds{-1, -1};
+#ifdef __linux__
+    if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds.data()) != 0) {
+        throw_errno("cannot create a socket pair", errno);
+    }
+#else
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds.data()) != 0) {
+        throw_errno("cannot create a socket pair", errno);
+    }
+    ::fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+    ::fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+#endif
+    Pipe channel{Fd(fds[0]), Fd(fds[1])};
+#ifdef SO_NOSIGPIPE
+    const int on = 1;
+    ::setsockopt(channel.write.get(), SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
+    // The child only reads, we only write.
+    ::shutdown(channel.read.get(), SHUT_WR);
+    ::shutdown(channel.write.get(), SHUT_RD);
+    return channel;
+}
+
+#ifdef MSG_NOSIGNAL
+constexpr int send_flags = MSG_NOSIGNAL;
+#else
+constexpr int send_flags = 0;  // SO_NOSIGPIPE is set on the socket instead.
+#endif
+
 /// What the child reports through the close-on-exec pipe when it cannot exec.
 enum ChildStage : int { redirect = 1, change_folder = 2, exec = 3 };
 
@@ -112,11 +147,14 @@ enum ChildStage : int { redirect = 1, change_folder = 2, exec = 3 };
     ::_exit(127);
 }
 
-class PosixProcess final : public Execution {
+class PosixProcess final : public InteractiveExecution {
 public:
-    PosixProcess(pid_t pid, Fd output, Fd error, OutputSink sink,
+    PosixProcess(pid_t pid, Fd input, Fd output, Fd error, OutputSink sink,
                  std::chrono::milliseconds terminate_grace)
-        : pid_(pid), sink_(std::move(sink)), terminate_grace_(terminate_grace) {
+        : pid_(pid),
+          input_(std::move(input)),
+          sink_(std::move(sink)),
+          terminate_grace_(terminate_grace) {
         readers_[0] = std::thread(&PosixProcess::read, this, std::move(output),
                                   OutputStream::standard_output);
         readers_[1] =
@@ -158,6 +196,30 @@ public:
             ::kill(-pid_, terminate_grace_.count() > 0 ? SIGTERM : SIGKILL);
         }
         changed_.notify_all();
+    }
+
+    bool write_input(std::string_view bytes) override {
+        const std::lock_guard lock(input_mutex_);
+        while (!bytes.empty()) {
+            if (input_.get() < 0) {
+                return false;
+            }
+            const ssize_t count = ::send(input_.get(), bytes.data(), bytes.size(), send_flags);
+            if (count < 0 && errno == EINTR) {
+                continue;
+            }
+            if (count <= 0) {
+                input_.reset();  // The program has closed its input or ended.
+                return false;
+            }
+            bytes.remove_prefix(static_cast<std::size_t>(count));
+        }
+        return true;
+    }
+
+    void close_input() noexcept override {
+        const std::lock_guard lock(input_mutex_);
+        input_.reset();
     }
 
     ExitStatus wait() override {
@@ -234,6 +296,8 @@ private:
     }
 
     const pid_t pid_;
+    std::mutex input_mutex_;
+    Fd input_;  // Our end of the program's standard input; empty without one.
     OutputSink sink_;
     std::array<std::thread, 2> readers_;
     std::mutex mutex_;
@@ -274,7 +338,7 @@ std::vector<std::filesystem::path> program_candidates(const std::filesystem::pat
     return {program};
 }
 
-std::unique_ptr<Execution> start_process(const ProcessLaunch& launch, OutputSink sink) {
+std::unique_ptr<InteractiveExecution> start_process(const ProcessLaunch& launch, OutputSink sink) {
     // Everything the child needs is prepared before fork: it may not allocate.
     const std::string program = launch.program.native();
     const std::string workdir = launch.workdir.native();
@@ -304,15 +368,22 @@ std::unique_ptr<Execution> start_process(const ProcessLaunch& launch, OutputSink
     Pipe error;
     Pipe report;
     Fd input;
+    Fd input_writer;
     pid_t pid = -1;
     {
         const std::lock_guard lock(spawn_mutex());
         output = make_pipe();
         error = make_pipe();
         report = make_pipe();
-        input = Fd(::open("/dev/null", O_RDONLY | O_CLOEXEC));
-        if (input.get() < 0) {
-            throw_errno("cannot open /dev/null", errno);
+        if (launch.input) {
+            Pipe channel = make_input_channel();
+            input = std::move(channel.read);
+            input_writer = std::move(channel.write);
+        } else {
+            input = Fd(::open("/dev/null", O_RDONLY | O_CLOEXEC));
+            if (input.get() < 0) {
+                throw_errno("cannot open /dev/null", errno);
+            }
         }
         pid = ::fork();
         if (pid < 0) {
@@ -363,8 +434,9 @@ std::unique_ptr<Execution> start_process(const ProcessLaunch& launch, OutputSink
                 throw_errno("cannot redirect the output of '" + program + "'", message[1]);
         }
     }
-    return std::make_unique<PosixProcess>(pid, std::move(output.read), std::move(error.read),
-                                          std::move(sink), launch.terminate_grace);
+    return std::make_unique<PosixProcess>(pid, std::move(input_writer), std::move(output.read),
+                                          std::move(error.read), std::move(sink),
+                                          launch.terminate_grace);
 }
 
 }  // namespace fem::job::detail

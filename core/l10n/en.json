@@ -4,6 +4,12 @@
   "strings": {
     "app.unknownOption": "Unknown option “{option}”.",
     "app.usage": "Usage:\n  {program} --python [arguments of python]   runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --version                          prints the version",
+    "extension.crashed": "Module “{module}” stopped working and was restarted. The model is intact: the command it was running is cancelled.",
+    "extension.gaveUp": {
+      "one": "Module “{module}” stopped working {count} time in a row and is not restarted any more. The model is intact. Disable and enable the module to try again.",
+      "other": "Module “{module}” stopped working {count} times in a row and is not restarted any more. The model is intact. Disable and enable the module to try again."
+    },
+    "extension.hung": "Module “{module}” stopped responding and was restarted. The model is intact: the command it was running is cancelled.",
     "setting.general.language": "Language of the interface. Empty means the language of the system.",
     "setting.history.undoLimit": "How many steps can be undone. 0 means no limit.",
     "setting.log.level": "The least important messages written to the log.",

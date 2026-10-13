@@ -4,6 +4,7 @@
 // process_posix.cpp; one of them is compiled.
 
 #include "fem/core/job/executor.h"
+#include "fem/core/job/local_executor.h"
 
 #include <chrono>
 #include <filesystem>
@@ -41,6 +42,8 @@ struct ProcessLaunch {
     Environment environment;
     std::filesystem::path workdir;
     std::chrono::milliseconds terminate_grace{0};
+    /// A channel to the standard input of the program; otherwise it reads an empty input.
+    bool input = false;
 };
 
 // Implemented per OS.
@@ -54,8 +57,9 @@ struct ProcessLaunch {
 /// Names to try for a program without its extension: on Windows with ".exe" and ".com".
 [[nodiscard]] std::vector<std::filesystem::path> program_candidates(
     const std::filesystem::path& program);
-/// Throws JobError(launch_failed) if the program cannot be started.
-[[nodiscard]] std::unique_ptr<Execution> start_process(const ProcessLaunch& launch,
-                                                       OutputSink sink);
+/// Throws JobError(launch_failed) if the program cannot be started. Without `launch.input`
+/// writing to the input of the result fails.
+[[nodiscard]] std::unique_ptr<InteractiveExecution> start_process(const ProcessLaunch& launch,
+                                                                  OutputSink sink);
 
 }  // namespace fem::job::detail

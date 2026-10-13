@@ -489,6 +489,91 @@ TEST(LocalExecutor, DestroyingRunningExecutionStopsIt) {
     EXPECT_TRUE(stays_the_same(heartbeat));
 }
 
+// --- Interactive programs (task 1.9) -------------------------------------------------------------
+
+/// Output of an interactive program collected for the test.
+struct Collected {
+    std::mutex mutex;
+    std::string text;
+
+    fem::job::OutputSink sink() {
+        return [this](OutputStream stream, std::string_view bytes) {
+            if (stream == out) {
+                const std::lock_guard lock(mutex);
+                text += bytes;
+            }
+        };
+    }
+    std::string get() {
+        const std::lock_guard lock(mutex);
+        return text;
+    }
+};
+
+TEST(LocalExecutorInteractive, TalksToProgramThroughItsInput) {
+    LocalExecutor executor;
+    Collected output;
+    const std::unique_ptr<fem::job::InteractiveExecution> execution =
+        executor.start_interactive(fake({"cat"}), output.sink());
+    ASSERT_TRUE(execution->write_input("первая строка\n"));
+    ASSERT_TRUE(wait_until([&] { return output.get() == "первая строка\n"; }));
+    // An answer comes before the next question is asked: a conversation, not one batch.
+    ASSERT_TRUE(execution->write_input("second\n"));
+    ASSERT_TRUE(wait_until([&] { return output.get() == "первая строка\nsecond\n"; }));
+    execution->close_input();
+    execution->close_input();
+    EXPECT_EQ(execution->wait(), (ExitStatus{0, std::nullopt}));
+    EXPECT_FALSE(execution->write_input("after\n"));
+}
+
+TEST(LocalExecutorInteractive, WritesLargeInputWhileProgramReads) {
+    LocalExecutor executor;
+    Collected output;
+    const std::unique_ptr<fem::job::InteractiveExecution> execution =
+        executor.start_interactive(fake({"stdin"}), output.sink());
+    const std::string line(999, 'x');
+    std::string input;
+    for (int i = 0; i < 4000; ++i) {
+        input += line + "\n";  // 4 MB: far more than a pipe holds.
+    }
+    ASSERT_TRUE(execution->write_input(input));
+    execution->close_input();
+    EXPECT_TRUE(execution->wait().succeeded());
+    EXPECT_EQ(output.get(), "stdin " + std::to_string(input.size()) + " bytes\n");
+}
+
+TEST(LocalExecutorInteractive, WritingToEndedProgramFailsQuietly) {
+    LocalExecutor executor;
+    Collected output;
+    const std::unique_ptr<fem::job::InteractiveExecution> execution =
+        executor.start_interactive(fake({"exit", "4"}), output.sink());
+    EXPECT_EQ(execution->wait().exit_code, 4);
+    // No SIGPIPE on POSIX: the test process would die here otherwise.
+    bool written = true;
+    for (int i = 0; i < 100 && written; ++i) {
+        written = execution->write_input(std::string(65536, 'y'));
+    }
+    EXPECT_FALSE(written);
+}
+
+TEST(LocalExecutorInteractive, CancelEndsProgramWaitingForInput) {
+    LocalExecutor executor({.terminate_grace = 100ms});
+    Collected output;
+    const std::unique_ptr<fem::job::InteractiveExecution> execution =
+        executor.start_interactive(fake({"cat"}), output.sink());
+    execution->cancel();
+    EXPECT_FALSE(execution->wait().succeeded());
+}
+
+TEST(LocalExecutorInteractive, PlainStartHasNoInput) {
+    LocalExecutor executor;
+    Collected output;
+    const std::unique_ptr<fem::job::Execution> execution =
+        executor.start(fake({"stdin"}), output.sink());
+    EXPECT_TRUE(execution->wait().succeeded());
+    EXPECT_EQ(output.get(), "stdin 0 bytes\n");
+}
+
 TEST(LocalExecutor, StartThrowsForMissingInput) {
     LocalExecutor executor;
     JobSpec spec = fake({});

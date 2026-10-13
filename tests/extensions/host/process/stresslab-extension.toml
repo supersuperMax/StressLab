@@ -1,0 +1,31 @@
+# A process module: tests/fixtures/process-module, built by tests/CMakeLists.txt; the test copies
+# the executable next to this manifest.
+[extension]
+id = "test.process"
+name = "Process test module"
+version = "1.0.0"
+engine = "^1.0"
+kind = "process"
+entry = "process_module"
+activation = ["onCommand:proc.*"]
+
+[[contributes.commands]]
+id = "proc.echo"
+title = "Echo"
+args = [{ name = "text", type = "string", required = false }]
+
+[[contributes.commands]]
+id = "proc.mesh"
+title = "Create a small mesh with arrays inline"
+
+[[contributes.commands]]
+id = "proc.crash"
+title = "Crash"
+
+[[contributes.commands]]
+id = "proc.hang"
+title = "Hang"
+
+[[contributes.commands]]
+id = "proc.stop_answering"
+title = "Return, then stop reading"

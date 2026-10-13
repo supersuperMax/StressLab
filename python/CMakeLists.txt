@@ -1,6 +1,6 @@
 # Python API (task 1.8, docs/architecture.md §4.7): the `stresslab` package with its native part
-# `_stresslab` (nanobind), and the embedded interpreter of the application. The extension host
-# (task 1.9) comes later.
+# `_stresslab` (nanobind), and the embedded interpreter of the application. The extension host of
+# python modules (task 1.9) is the pure Python package `stresslab_host`, copied next to it.
 #
 # Python is found by the root CMakeLists.txt. nanobind comes from pip
 # (python/requirements-dev.txt), not from vcpkg: the vcpkg port builds a Python of its own
@@ -75,7 +75,17 @@ endif()
 
 # --- The pure Python part -----------------------------------------------------------------------
 
-set(fem_python_package_files stresslab/__init__.py stresslab/_commands.py stresslab/py.typed)
+set(fem_python_package_files
+    stresslab/__init__.py
+    stresslab/_commands.py
+    stresslab/py.typed
+    stresslab_host/__init__.py
+    stresslab_host/__main__.py
+    stresslab_host/_data.py
+    stresslab_host/_host.py
+    stresslab_host/_rpc.py
+    stresslab_host/_shm.py
+    stresslab_host/py.typed)
 set(fem_python_package_outputs)
 foreach(file IN LISTS fem_python_package_files)
     add_custom_command(

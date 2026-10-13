@@ -1,0 +1,12 @@
+# A python module whose activate() raises (tests/unit/core/extension/host_runtime_test.cpp).
+[extension]
+id = "test.broken"
+name = "Module that cannot activate"
+version = "1.0.0"
+engine = "^1.0"
+kind = "python"
+entry = "broken:activate"
+
+[[contributes.commands]]
+id = "broken.run"
+title = "Run"
