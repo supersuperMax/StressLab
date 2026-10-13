@@ -23,9 +23,12 @@ namespace fem {
 [[nodiscard]] Subscription bind_catalogs(extension::ExtensionManager& manager,
                                          l10n::Localization& localization);
 
-/// The language follows the setting "general.language" ("" is the language of the system).
+/// The language follows the setting "general.language" ("" is the language of the system:
+/// `system_language`, or `l10n::system_language()` if that is empty; the window passes the one
+/// it reads from Qt, which also knows it on macOS).
 [[nodiscard]] Subscription bind_language(settings::Settings& settings,
-                                         l10n::Localization& localization);
+                                         l10n::Localization& localization,
+                                         std::string system_language = {});
 
 /// The undo stack is limited by the setting "history.undoLimit".
 [[nodiscard]] Subscription bind_undo_limit(settings::Settings& settings, command::CommandBus& bus);

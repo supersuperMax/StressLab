@@ -46,7 +46,12 @@ jobs:
           sudo apt-get update &&
           sudo apt-get install -y autoconf autoconf-archive automake libtool
           '^libxcb.*-dev' libx11-xcb-dev libxrender-dev libxi-dev libxkbcommon-dev
-          libxkbcommon-x11-dev libgl-dev libegl-dev libglu1-mesa-dev
+          libxkbcommon-x11-dev libgl-dev libegl-dev libglu1-mesa-dev libltdl-dev
+
+      # libb2, a dependency of qtbase, is built with autotools.
+      - name: Install build tools for Qt (macOS)
+        if: inputs.kind == 'full' && runner.os == 'macOS'
+        run: brew install autoconf autoconf-archive automake libtool
 
       - name: Clone vcpkg
         run: git clone --depth 1 https://github.com/microsoft/vcpkg "$env:RUNNER_TEMP/vcpkg"
@@ -66,13 +71,17 @@ jobs:
           "VCPKG_ROOT=$env:RUNNER_TEMP/vcpkg" >> $env:GITHUB_ENV
           "VCPKG_BINARY_SOURCES=clear;files,$env:RUNNER_TEMP/vcpkg-cache,readwrite" >> $env:GITHUB_ENV
 
+      # A cache entry cannot be overwritten, so each run saves one of its own and the next run
+      # restores the newest by prefix: a run that stopped half-way (cancelled, failed) must not leave
+      # its packages as the only entry for these manifests.
       - name: Restore vcpkg binary cache
         id: vcpkg-cache
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            vcpkg-${{ inputs.kind }}-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
             vcpkg-${{ inputs.kind }}-${{ runner.os }}-
             vcpkg-core-${{ runner.os }}-
 
@@ -84,6 +93,23 @@ jobs:
 
       - name: C++ tests
         run: ctest --preset $env:PRESET
+
+      # Pictures of the window for the review, on the platform of the OS (the platform without a
+      # screen has no fonts on Windows); Linux has no screen here, its fonts come from fontconfig.
+      - name: Screenshots of the window
+        if: inputs.kind == 'full'
+        env:
+          STRESSLAB_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'cocoa' || 'offscreen' }}
+        run: '& "./build/$env:PRESET/tests/shell/fem_shell_tests" --gtest_filter=ShellScreenshots.*'
+
+      - name: Upload screenshots of the window
+        if: always() && inputs.kind == 'full'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ runner.os }}
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: warn
 
       - name: Python tests
         if: inputs.kind == 'core'

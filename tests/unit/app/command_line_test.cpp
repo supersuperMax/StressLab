@@ -33,8 +33,11 @@ std::string error_of(const std::vector<std::string>& args) {
     return "no error";
 }
 
+TEST(CommandLine, NoArgumentsOpenTheWindow) {
+    EXPECT_EQ(parse_command_line({}).mode, Mode::window);
+}
+
 TEST(CommandLine, HelpVersionAndPython) {
-    EXPECT_EQ(parse_command_line({}).mode, Mode::help);
     EXPECT_EQ(parse_command_line({"--help"}).mode, Mode::help);
     EXPECT_EQ(parse_command_line({"-h"}).mode, Mode::help);
     EXPECT_EQ(parse_command_line({"--version"}).mode, Mode::version);

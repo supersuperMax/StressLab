@@ -1,10 +1,10 @@
 // The `stresslab` executable:
 //
-//     stresslab --python [python arguments]                         the embedded Python (task 1.8)
-//     stresslab --headless [options] run-script <file.py> [args]   a script without the window
+//     stresslab                                                     the window (task 1.11, ADR
+//     0012) stresslab --python [python arguments]                         the embedded Python
+//     (task 1.8) stresslab --headless [options] run-script <file.py> [args]   a script without the
+//     window
 //                                                                    (task 1.10, ADR 0011)
-//
-// The window comes with task 1.11.
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/context/context_keys.h"
@@ -16,9 +16,13 @@
 #include "fem/core/version.h"
 #include "fem/python/interpreter.h"
 
+#include "application.h"
 #include "command_line.h"
 #include "executable_path.h"
 #include "headless.h"
+#ifdef FEM_WITH_WINDOW
+#include "window.h"
+#endif
 
 #include <cstdio>
 #include <exception>
@@ -40,8 +44,8 @@ void print(const std::string& text, std::FILE* stream) {
     std::fputc('\n', stream);
 }
 
-fem::app::HeadlessEnvironment headless_environment() {
-    fem::app::HeadlessEnvironment environment;
+fem::app::Environment application_environment() {
+    fem::app::Environment environment;
     environment.executable = fem::app::executable_path();
     environment.builtin_extensions = fem::app::path_from_utf8(FEM_BUILTIN_EXTENSIONS_DIR);
     try {
@@ -51,6 +55,20 @@ fem::app::HeadlessEnvironment headless_environment() {
     }
     return environment;
 }
+
+#ifdef FEM_WITH_WINDOW
+/// The executable is a console program, for --headless and --python. Started for the window from
+/// Explorer, it gets a console of its own, which goes away here; started from a terminal, it
+/// keeps the terminal for its messages.
+void detach_from_console() {
+#ifdef _WIN32
+    DWORD processes[2];
+    if (GetConsoleProcessList(processes, 2) == 1) {
+        FreeConsole();
+    }
+#endif
+}
+#endif
 
 int run(const std::vector<std::string>& args) {
     fem::l10n::Localization localization;
@@ -69,14 +87,23 @@ int run(const std::vector<std::string>& args) {
     }
 
     switch (line.mode) {
+        case fem::app::CommandLine::Mode::window:
+#ifdef FEM_WITH_WINDOW
+            detach_from_console();
+            return fem::app::run_window(application_environment());
+#else
+            // A build without the GUI: tell what it can do.
+            print(text("app.usage", {{"program", "stresslab"}}), stdout);
+            return fem::app::exit_usage;
+#endif
         case fem::app::CommandLine::Mode::help:
             print(text("app.usage", {{"program", "stresslab"}}), stdout);
-            return args.empty() ? fem::app::exit_usage : fem::app::exit_success;
+            return fem::app::exit_success;
         case fem::app::CommandLine::Mode::version:
             print(std::string(fem::kProductName) + " " + std::string(fem::version()), stdout);
             return fem::app::exit_success;
         case fem::app::CommandLine::Mode::headless:
-            return fem::app::run_headless(line.headless, headless_environment());
+            return fem::app::run_headless(line.headless, application_environment());
         case fem::app::CommandLine::Mode::python:
             break;
     }

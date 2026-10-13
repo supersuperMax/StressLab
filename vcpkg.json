@@ -26,6 +26,7 @@
             "harfbuzz",
             "opengl",
             "png",
+            "testlib",
             "widgets"
           ]
         },
@@ -33,6 +34,7 @@
           "name": "qtbase",
           "default-features": false,
           "features": [
+            "dbus",
             "egl",
             "fontconfig",
             "xcb",
@@ -40,7 +42,8 @@
             "xrender"
           ],
           "platform": "linux"
-        }
+        },
+        "qtsvg"
       ]
     }
   }

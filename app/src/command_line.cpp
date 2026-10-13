@@ -76,10 +76,12 @@ std::filesystem::path path_from_utf8(const std::string& text) {
 
 CommandLine parse_command_line(const std::vector<std::string>& args) {
     CommandLine line;
-    if (args.empty() || args[0] == "--help" || args[0] == "-h") {
+    if (args.empty()) {
         return line;
     }
-    if (args[0] == "--version") {
+    if (args[0] == "--help" || args[0] == "-h") {
+        line.mode = CommandLine::Mode::help;
+    } else if (args[0] == "--version") {
         line.mode = CommandLine::Mode::version;
     } else if (args[0] == "--python") {
         line.mode = CommandLine::Mode::python;

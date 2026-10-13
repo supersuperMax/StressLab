@@ -73,11 +73,17 @@ Subscription bind_catalogs(extension::ExtensionManager& manager, l10n::Localizat
         [&localization](const std::string& id) { localization.remove_owner(id); });
 }
 
-Subscription bind_language(settings::Settings& settings, l10n::Localization& localization) {
-    return follow_setting(settings, settings::keys::language, [&settings, &localization] {
-        const std::string language = settings.get<std::string>(settings::keys::language);
-        localization.set_language(language.empty() ? l10n::system_language() : language);
-    });
+Subscription bind_language(settings::Settings& settings, l10n::Localization& localization,
+                           std::string system_language) {
+    if (system_language.empty()) {
+        system_language = l10n::system_language();
+    }
+    return follow_setting(settings, settings::keys::language,
+                          [&settings, &localization, system = std::move(system_language)] {
+                              const std::string language =
+                                  settings.get<std::string>(settings::keys::language);
+                              localization.set_language(language.empty() ? system : language);
+                          });
 }
 
 Subscription bind_undo_limit(settings::Settings& settings, command::CommandBus& bus) {

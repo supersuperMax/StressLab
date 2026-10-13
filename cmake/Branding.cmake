@@ -13,6 +13,8 @@ set(FEM_BRANDING_ICON_MACOS "${FEM_BRANDING_DIR}/icons/macos/StressLab.icns")
 # symbolic), the desktop entry into share/applications/; it refers to the icon as Icon=stresslab.
 set(FEM_BRANDING_ICON_LINUX_HICOLOR_DIR "${FEM_BRANDING_DIR}/icons/linux/hicolor")
 set(FEM_BRANDING_DESKTOP_FILE "${FEM_BRANDING_DIR}/icons/linux/stresslab.desktop")
+# The application icon as a drawing: the window icon above 32 px on every OS.
+set(FEM_BRANDING_ICON_SVG "${FEM_BRANDING_ICON_LINUX_HICOLOR_DIR}/scalable/apps/stresslab.svg")
 
 # Logo for the About dialog: "color" on a light theme, "reversed" on a dark one.
 set(FEM_BRANDING_LOGO_COLOR "${FEM_BRANDING_DIR}/logo/svg/stresslab-horizontal-color.svg")
@@ -24,7 +26,7 @@ set(FEM_BRANDING_SYMBOL_SMALL "${FEM_BRANDING_DIR}/logo/svg/stresslab-symbol-sma
 set(_fem_branding_files
     "${FEM_BRANDING_ICON_WINDOWS}"
     "${FEM_BRANDING_ICON_MACOS}"
-    "${FEM_BRANDING_ICON_LINUX_HICOLOR_DIR}/scalable/apps/stresslab.svg"
+    "${FEM_BRANDING_ICON_SVG}"
     "${FEM_BRANDING_DESKTOP_FILE}"
     "${FEM_BRANDING_LOGO_COLOR}"
     "${FEM_BRANDING_LOGO_REVERSED}"

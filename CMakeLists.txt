@@ -43,11 +43,12 @@ find_package(Python 3.12 EXACT REQUIRED COMPONENTS Interpreter Development.Modul
 add_subdirectory(core)
 add_subdirectory(storage)
 add_subdirectory(python)
-add_subdirectory(app)
-add_subdirectory(extensions)
+# The shell before the application, which opens its window.
 if(FEM_BUILD_GUI)
     add_subdirectory(shell)
 endif()
+add_subdirectory(app)
+add_subdirectory(extensions)
 
 if(FEM_BUILD_TESTS)
     enable_testing()

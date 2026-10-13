@@ -1,0 +1,2 @@
+// Resources of stresslab.exe; the icon comes from the brand kit (cmake/Branding.cmake).
+IDI_ICON1 ICON "@FEM_BRANDING_ICON_WINDOWS@"

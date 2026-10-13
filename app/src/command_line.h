@@ -32,13 +32,14 @@ struct HeadlessOptions {
 
 struct CommandLine {
     enum class Mode : std::uint8_t {
+        window,    ///< No arguments: the window (a build without the GUI prints the usage)
         help,      ///< --help, -h
         version,   ///< --version
         python,    ///< --python [arguments of python]
         headless,  ///< --headless [options] run-script <file> [arguments]
     };
 
-    Mode mode = Mode::help;
+    Mode mode = Mode::window;
     /// For `python`: the arguments after --python.
     std::vector<std::string> python_args;
     /// For `headless`.
