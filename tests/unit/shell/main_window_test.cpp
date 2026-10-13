@@ -377,7 +377,10 @@ title = "Go"
     app_.manager.activate("test.crashy");
     ASSERT_TRUE(app_.runtime->hosts.contains("test.crashy"));
     app_.runtime->hosts["test.crashy"]->report_crash(
-        {.reason = fem::extension::CrashReason::crashed, .restarted = true});
+        {.reason = fem::extension::CrashReason::crashed,
+         .restarted = true,
+         .count = 1,
+         .details = "exit code 3"});
     ASSERT_EQ(window_->problems().count(), 1);
     const QString message = window_->problems().messages().front();
     EXPECT_TRUE(message.contains(QStringLiteral("Module test.crashy"))) << message.toStdString();
