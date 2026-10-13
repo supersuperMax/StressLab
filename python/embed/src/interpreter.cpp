@@ -1,14 +1,19 @@
 // Python.h comes first, through nanobind.
 #include "fem/python/interpreter.h"
 
+#include "fem/core/log/log.h"
 #include "fem/python/session.h"
 
 #include <nanobind/nanobind.h>
 
 #include <algorithm>
 #include <cstdlib>
+#include <deque>
+#include <exception>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -150,6 +155,94 @@ std::vector<std::string> with_program(std::vector<std::string> args) {
     return args;
 }
 
+/// Work for the thread of Python (`Interpreter::call_soon`). One Python per process, so one queue;
+/// never destroyed, as Python may still run pending calls while the process exits.
+struct PendingWork {
+    std::mutex mutex;
+    std::deque<std::function<void()>> queue;
+    bool open = false;
+    /// A pending call of Python is scheduled to run the queue.
+    bool scheduled = false;
+};
+
+PendingWork& pending_work() {
+    static auto* instance = new PendingWork();
+    return *instance;
+}
+
+/// The pending call: runs the work queued so far. Python calls it on its main thread with the
+/// GIL held.
+int run_pending_work(void* /*unused*/) {
+    PendingWork& pending = pending_work();
+    std::deque<std::function<void()>> work;
+    {
+        const std::lock_guard lock(pending.mutex);
+        work.swap(pending.queue);
+        pending.scheduled = false;
+    }
+    for (std::function<void()>& item : work) {
+        try {
+            item();
+        } catch (const std::exception& error) {
+            fem::log::logger("python")->error("work for the Python thread failed: {}",
+                                              error.what());
+        } catch (...) {
+            fem::log::logger("python")->error("work for the Python thread failed");
+        }
+    }
+    return 0;
+}
+
+/// Schedules `run_pending_work` unless it is scheduled. Python keeps a few pending calls only;
+/// if its list is full, the next `call_soon` tries again. Called with the queue locked.
+void schedule_pending_work(PendingWork& pending) {
+    if (!pending.scheduled && Py_AddPendingCall(&run_pending_work, nullptr) == 0) {
+        pending.scheduled = true;
+    }
+}
+
+nb::str to_str(const std::filesystem::path& path) {
+    const std::u8string text = path.u8string();
+    return nb::str(reinterpret_cast<const char*>(text.data()), text.size());
+}
+
+/// The exit code of `python file` that ended with `error`, printing what Python prints then.
+int exit_code(const nb::python_error& error) {
+    const nb::module_ sys = nb::module_::import_("sys");
+    if (error.matches(PyExc_SystemExit)) {
+        const nb::object code = error.value().attr("code");
+        if (code.is_none()) {
+            return 0;
+        }
+        if (PyLong_Check(code.ptr())) {
+            int overflow = 0;
+            const long value = PyLong_AsLongAndOverflow(code.ptr(), &overflow);
+            if (overflow == 0 && !(value == -1 && PyErr_Occurred() != nullptr)) {
+                return static_cast<int>(value);
+            }
+            PyErr_Clear();
+            return 1;
+        }
+        sys.attr("stderr").attr("write")(nb::str(code) + nb::str("\n"));
+        return 1;
+    }
+    sys.attr("excepthook")(error.type(), error.value(), error.traceback());
+    return 1;
+}
+
+/// Flushes `sys.stdout` and `sys.stderr`; errors (a closed stream) are ignored.
+void flush_streams() {
+    for (const char* name : {"stdout", "stderr"}) {
+        try {
+            const nb::object stream = nb::module_::import_("sys").attr(name);
+            if (!stream.is_none()) {
+                stream.attr("flush")();
+            }
+        } catch (nb::python_error&) {
+        }
+    }
+}
+
 /// Runs `call` with the GIL; a Python exception becomes PythonError, SystemExit(0) is success.
 template <class Call>
 void run_python(Call&& call) {
@@ -171,12 +264,25 @@ void run_python(Call&& call) {
 
 Interpreter::Interpreter(const std::vector<std::string>& argv) {
     start(with_program(argv), false);
+    {
+        PendingWork& pending = pending_work();
+        const std::lock_guard lock(pending.mutex);
+        pending.open = true;
+    }
     // Other threads (listeners of tasks) take the GIL when they need it.
     main_thread_ = PyEval_SaveThread();
 }
 
 Interpreter::~Interpreter() {
     PyEval_RestoreThread(static_cast<PyThreadState*>(main_thread_));
+    std::deque<std::function<void()>> dropped;
+    {
+        PendingWork& pending = pending_work();
+        const std::lock_guard lock(pending.mutex);
+        pending.open = false;
+        dropped.swap(pending.queue);
+    }
+    dropped.clear();
     Session::instance().detach();
     // The module's atexit hook releases what Python keeps in the core before Python stops.
     Py_FinalizeEx();
@@ -194,9 +300,8 @@ void Interpreter::detach() {
 
 void Interpreter::run_file(const std::filesystem::path& file) {
     run_python([&] {
-        const std::u8string text = file.u8string();
-        const nb::str path(reinterpret_cast<const char*>(text.data()), text.size());
-        nb::module_::import_("runpy").attr("run_path")(path, nb::arg("run_name") = "__main__");
+        nb::module_::import_("runpy").attr("run_path")(to_str(file),
+                                                       nb::arg("run_name") = "__main__");
     });
 }
 
@@ -207,6 +312,64 @@ void Interpreter::run_string(std::string_view code) {
         globals["__builtins__"] = nb::module_::import_("builtins");
         nb::module_::import_("builtins").attr("exec")(nb::str(code.data(), code.size()), globals);
     });
+}
+
+int Interpreter::run_script(const std::filesystem::path& file,
+                            const std::vector<std::string>& args) {
+    const nb::gil_scoped_acquire gil;
+    int code = 0;
+    try {
+        const nb::str path = to_str(file);
+        const nb::module_ sys = nb::module_::import_("sys");
+        nb::list argv;
+        argv.append(path);
+        for (const std::string& arg : args) {
+            argv.append(nb::str(arg.data(), arg.size()));
+        }
+        sys.attr("argv") = argv;
+        std::error_code error;
+        const std::filesystem::path absolute = std::filesystem::absolute(file, error);
+        sys.attr("path").attr("insert")(0, to_str((error ? file : absolute).parent_path()));
+
+        // The real `__main__`, as `python file` has it: pickle and multiprocessing look there.
+        const nb::dict globals =
+            nb::borrow<nb::dict>(nb::module_::import_("__main__").attr("__dict__"));
+        globals["__file__"] = path;
+        globals["__cached__"] = nb::none();
+        // Bytes, so that `compile` honours a coding declaration; no frames of runpy in tracebacks.
+        const nb::object stream = nb::module_::import_("io").attr("open_code")(path);
+        nb::object source;
+        try {
+            source = stream.attr("read")();
+        } catch (nb::python_error&) {
+            stream.attr("close")();
+            throw;
+        }
+        stream.attr("close")();
+        const nb::module_ builtins = nb::module_::import_("builtins");
+        const nb::object compiled = builtins.attr("compile")(source, path, "exec", 0, true);
+        builtins.attr("exec")(compiled, globals);
+    } catch (nb::python_error& error) {
+        try {
+            code = exit_code(error);
+        } catch (nb::python_error& failure) {
+            failure.discard_as_unraisable("printing the error of a script");
+            code = 1;
+        }
+    }
+    flush_streams();
+    return code;
+}
+
+bool Interpreter::call_soon(std::function<void()> work) {
+    PendingWork& pending = pending_work();
+    const std::lock_guard lock(pending.mutex);
+    if (!pending.open) {
+        return false;
+    }
+    pending.queue.push_back(std::move(work));
+    schedule_pending_work(pending);
+    return true;
 }
 
 int Interpreter::run_main(const std::vector<std::string>& args, command::CommandBus& bus,

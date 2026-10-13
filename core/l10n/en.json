@@ -2,8 +2,16 @@
   "format": "stresslab.l10n",
   "formatVersion": 1,
   "strings": {
+    "app.badLogLevel": "Unknown log level “{level}”: trace, debug, info, warning, error, critical or off.",
+    "app.fileNotFound": "File “{file}” does not exist.",
+    "app.folderNotFound": "Folder “{folder}” does not exist.",
+    "app.missingRunScript": "--headless needs a command: run-script <file.py>.",
+    "app.missingScript": "run-script needs the file of a script.",
+    "app.missingValue": "Option “{option}” needs a value.",
+    "app.scriptNotFound": "Script “{file}” does not exist.",
+    "app.unknownCommand": "Unknown command “{command}”: --headless knows run-script.",
     "app.unknownOption": "Unknown option “{option}”.",
-    "app.usage": "Usage:\n  {program} --python [arguments of python]   runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --version                          prints the version",
+    "app.usage": "Usage:\n  {program} --python [arguments of python]\n      runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --headless [options] run-script <file.py> [arguments of the script]\n      runs a script without the window: loads the modules, runs the script on a new document, writes the log to the standard output\n      --extensions <folder>   installs the modules in the subfolders of the folder; may repeat\n      --profile <file>        enables the modules of the profile; without it all installed modules are enabled\n      --journal <file.slpy>   writes the journal of the session\n      --log-level <level>     trace, debug, info, warning, error, critical or off; without it the setting log.level\n      --log-file <file>       also writes the log to the file\n      exit code: 0 success, n after sys.exit(n), 1 an error in the script, 2 a wrong command line\n  {program} --version\n      prints the version",
     "extension.crashed": "Module “{module}” stopped working and was restarted. The model is intact: the command it was running is cancelled.",
     "extension.gaveUp": {
       "one": "Module “{module}” stopped working {count} time in a row and is not restarted any more. The model is intact. Disable and enable the module to try again.",

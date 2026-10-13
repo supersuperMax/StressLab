@@ -4,6 +4,7 @@
 #include "fem/core/context/context_keys.h"
 
 #include <filesystem>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -48,6 +49,20 @@ public:
     void run_file(const std::filesystem::path& file);
     /// Runs Python source in a new module namespace named `__main__`.
     void run_string(std::string_view code);
+
+    /// Runs a script as `python file args...` would and returns the exit code: `sys.argv` is
+    /// `[file, *args]`, the folder of the script comes first on `sys.path`, the script runs as the
+    /// module `__main__`. `sys.exit(n)` gives n (None: 0; anything else is printed to standard
+    /// error and gives 1); an exception that escapes the script is printed by `sys.excepthook`
+    /// and gives 1. The standard streams of Python are flushed before it returns.
+    int run_script(const std::filesystem::path& file, const std::vector<std::string>& args = {});
+
+    /// Asks Python to run `work` soon on the thread that started it: between two instructions of
+    /// the Python code running there, the way Python handles signals, or while `Task.wait` waits
+    /// there. Work runs in the order asked, with the GIL; what it throws is logged (category
+    /// "python"). Any thread may call this. Work that has not run when the interpreter is
+    /// destroyed is dropped. Returns false once the interpreter is being destroyed.
+    bool call_soon(std::function<void()> work);
 
     /// Runs Python as the `python` command would with these arguments (`-m pytest`, `-c code`,
     /// a script, or the interactive prompt) and returns the exit code; `bus` and `keys` are

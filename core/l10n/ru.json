@@ -2,8 +2,16 @@
   "format": "stresslab.l10n",
   "formatVersion": 1,
   "strings": {
+    "app.badLogLevel": "Неизвестный уровень лога «{level}»: trace, debug, info, warning, error, critical или off.",
+    "app.fileNotFound": "Файл «{file}» не существует.",
+    "app.folderNotFound": "Папка «{folder}» не существует.",
+    "app.missingRunScript": "После --headless нужна команда: run-script <файл.py>.",
+    "app.missingScript": "Для run-script нужен файл скрипта.",
+    "app.missingValue": "Для параметра «{option}» нужно значение.",
+    "app.scriptNotFound": "Скрипт «{file}» не существует.",
+    "app.unknownCommand": "Неизвестная команда «{command}»: --headless знает run-script.",
     "app.unknownOption": "Неизвестный параметр «{option}».",
-    "app.usage": "Использование:\n  {program} --python [аргументы python]   запускает встроенный Python с модулем stresslab, подключённым к новому документу: -m модуль, -c код, скрипт или интерактивный режим\n  {program} --version                     выводит версию",
+    "app.usage": "Использование:\n  {program} --python [аргументы python]\n      запускает встроенный Python с модулем stresslab, подключённым к новому документу: -m модуль, -c код, скрипт или интерактивный режим\n  {program} --headless [параметры] run-script <файл.py> [аргументы скрипта]\n      выполняет скрипт без окна: загружает модули, выполняет скрипт на новом документе, пишет лог в стандартный вывод\n      --extensions <папка>    ставит модули из подпапок папки; можно несколько раз\n      --profile <файл>        включает модули профиля; без него включаются все установленные модули\n      --journal <файл.slpy>   пишет журнал сессии\n      --log-level <уровень>   trace, debug, info, warning, error, critical или off; без него — настройка log.level\n      --log-file <файл>       пишет лог ещё и в файл\n      код возврата: 0 — успех, n — после sys.exit(n), 1 — ошибка в скрипте, 2 — неверная командная строка\n  {program} --version\n      выводит версию",
     "extension.crashed": "Модуль «{module}» аварийно завершился и перезапущен. Модель не пострадала: выполнявшаяся команда отменена.",
     "extension.gaveUp": {
       "few": "Модуль «{module}» аварийно завершился {count} раза подряд и больше не перезапускается. Модель не пострадала. Чтобы попробовать снова, выключите и включите модуль.",

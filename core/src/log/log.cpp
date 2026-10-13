@@ -22,7 +22,10 @@ struct Logging::Sinks {
     Level level = Level::info;
 
     [[nodiscard]] std::vector<std::shared_ptr<spdlog::sinks::sink>> all() const {
-        std::vector<std::shared_ptr<spdlog::sinks::sink>> sinks{file};
+        std::vector<std::shared_ptr<spdlog::sinks::sink>> sinks;
+        if (file) {
+            sinks.push_back(file);
+        }
         if (console) {
             sinks.push_back(console);
         }
@@ -32,7 +35,8 @@ struct Logging::Sinks {
 
 namespace {
 
-constexpr const char* pattern = "%Y-%m-%d %H:%M:%S.%e [%l] [%n] [%t] %v";
+constexpr const char* file_pattern = "%Y-%m-%d %H:%M:%S.%e [%l] [%n] [%t] %v";
+constexpr const char* console_pattern = "%Y-%m-%d %H:%M:%S.%e [%l] [%n] %v";
 
 /// The loggers and the sinks they share. Loggers are kept at the lowest level of the open
 /// `Logging` objects (off without any), so a message nobody would see is not even formatted.
@@ -132,18 +136,30 @@ std::shared_ptr<spdlog::logger> logger(std::string_view category) {
 }
 
 Logging::Logging(LogOptions options) : sinks_(std::make_unique<Sinks>()) {
-    const std::string name = options.file_name.empty() ? default_file_name() : options.file_name;
-    file_ = options.folder / std::filesystem::path(std::u8string(name.begin(), name.end()));
-    sinks_->file = std::make_shared<detail::RotatingFileSink>(
-        file_, options.max_file_size, options.max_files, options.rotate_on_open);
-    if (options.console) {
-        sinks_->console = std::make_shared<spdlog::sinks::stderr_sink_mt>();
+    if (!options.folder.empty()) {
+        const std::string name =
+            options.file_name.empty() ? default_file_name() : options.file_name;
+        file_ = options.folder / std::filesystem::path(std::u8string(name.begin(), name.end()));
+        sinks_->file = std::make_shared<detail::RotatingFileSink>(
+            file_, options.max_file_size, options.max_files, options.rotate_on_open);
+    }
+    // The console sinks of spdlog flush every line themselves.
+    switch (options.console) {
+        case Console::none:
+            break;
+        case Console::standard_output:
+            sinks_->console = std::make_shared<spdlog::sinks::stdout_sink_mt>();
+            break;
+        case Console::standard_error:
+            sinks_->console = std::make_shared<spdlog::sinks::stderr_sink_mt>();
+            break;
     }
     sinks_->level = options.level;
     for (const auto& sink : sinks_->all()) {
         // '\n' on every OS: spdlog ends lines with "\r\n" on Windows by default.
         sink->set_formatter(std::make_unique<spdlog::pattern_formatter>(
-            pattern, spdlog::pattern_time_type::local, "\n"));
+            sink == sinks_->file ? file_pattern : console_pattern, spdlog::pattern_time_type::local,
+            "\n"));
         sink->set_level(options.level);
     }
     registry().add(sinks_.get());
@@ -151,7 +167,7 @@ Logging::Logging(LogOptions options) : sinks_(std::make_unique<Sinks>()) {
 
 Logging::~Logging() {
     registry().remove(sinks_.get());
-    sinks_->file->flush();
+    flush();
 }
 
 Level Logging::level() const noexcept {
@@ -163,7 +179,9 @@ void Logging::set_level(Level level) {
 }
 
 void Logging::flush() {
-    sinks_->file->flush();
+    for (const auto& sink : sinks_->all()) {
+        sink->flush();
+    }
 }
 
 }  // namespace fem::log

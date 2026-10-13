@@ -67,7 +67,8 @@ gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
 # pytest suite run both by the embedded interpreter and by plain Python.
-add_executable(fem_python_tests unit/python/journal_script_test.cpp)
+add_executable(fem_python_tests unit/python/interpreter_test.cpp unit/python/journal_script_test.cpp
+                                unit/python/python_test_support.cpp)
 target_link_libraries(fem_python_tests PRIVATE fem_python_embed GTest::gtest_main)
 target_compile_definitions(fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 fem_copy_runtime_dlls(fem_python_tests)
@@ -86,9 +87,23 @@ else()
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
     add_test(NAME Python.Pytest.Plain COMMAND "${Python_EXECUTABLE}" ${fem_pytest_args}
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-    set_tests_properties(Python.Pytest.Plain PROPERTIES ENVIRONMENT
-                                                        "STRESSLAB_PYTHON_SITE=${FEM_PYTHON_SITE_DIR}")
+    # The headless tests (task 1.10) start the executable themselves, in the plain run.
+    set_tests_properties(
+        Python.Pytest.Plain
+        PROPERTIES ENVIRONMENT
+                   "STRESSLAB_PYTHON_SITE=${FEM_PYTHON_SITE_DIR};STRESSLAB_EXECUTABLE=$<TARGET_FILE:stresslab>")
 endif()
+
+# The executable (task 1.10): its command line. The headless runs themselves are tested by
+# pytest (python/tests/test_headless.py) with the real executable.
+add_executable(stresslab_app_tests unit/app/command_line_test.cpp)
+target_link_libraries(stresslab_app_tests PRIVATE stresslab_app GTest::gtest_main)
+# A folder of its own: fem_python_tests copies the same DLLs (python312.dll) next to itself after
+# linking, and two copies of one file at once fail on Windows.
+set_target_properties(stresslab_app_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                     ${CMAKE_CURRENT_BINARY_DIR}/app)
+fem_copy_runtime_dlls(stresslab_app_tests)
+gtest_discover_tests(stresslab_app_tests DISCOVERY_MODE PRE_TEST)
 
 # Native test modules (task 1.5), built like modules made outside the platform: plain C, only the
 # C ABI header, nothing of the core linked. `hello_bad_abi` claims an ABI version the platform does
