@@ -19,7 +19,7 @@
 | NumPy | 2.3.5 (тесты; во время работы — любая с протоколом буфера) | BSD-3-Clause | pip; модуль `stresslab` импортирует numpy, только когда отдаёт или принимает массивы | массивы сетки `stresslab.Mesh` и наборов (с задачи 1.8) |
 | Qt 6 (qtbase: Core, Gui, Widgets) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`; в дистрибутиве только динамическая линковка | `shell/`, окно в `app/` (с задачи 1.11) |
 | Qt SVG (qtsvg) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`; как qtbase | логотипы и иконки бренд-кита в SVG: `shell/src/brand.cpp` (с задачи 1.11) |
-| Qt Test (qtbase, фича `testlib`) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`, только тесты | `tests/unit/shell/` (с задачи 1.11) |
+| Qt Test (qtbase, фича `testlib`) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`, только тесты | `tests/unit/shell/` (с задачи 1.11; клики и клавиши `QTest` — с 1.12) |
 | D-Bus (libdbus) | 1.16.2 | AFL-2.1 OR GPL-2.0-or-later (используем AFL-2.1) | vcpkg, через фичу `dbus` qtbase, только Linux | Qt узнаёт светлую или тёмную тему системы через xdg-desktop-portal (с задачи 1.11) |
 | Qt Advanced Docking System | 4.5.0 | LGPL-2.1-only | vcpkg (порт `qt-advanced-docking-system`), фича `gui` | `shell/` (окно с задачи 1.11) |
 

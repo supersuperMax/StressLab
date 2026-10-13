@@ -3,6 +3,7 @@
 #include "fem/core/bindings.h"
 #include "fem/core/extension/error.h"
 #include "fem/core/extension/profile.h"
+#include "fem/core/job/local_executor.h"
 #include "fem/core/settings/error.h"
 
 #include <exception>
@@ -59,6 +60,7 @@ Application::Application(const Environment& environment, std::string log_categor
     runtime_ = std::make_shared<extension::HostRuntime>(bus_, runtime_options);
     manager_.set_runtime(extension::ExtensionKind::python, runtime_);
     manager_.set_runtime(extension::ExtensionKind::process, runtime_);
+    jobs_.add_executor(std::make_shared<job::LocalExecutor>());
     events_ = manager_.on_event([this](const ExtensionEvent& event) {
         const auto log = log::logger(log_category_);
         switch (event.kind) {

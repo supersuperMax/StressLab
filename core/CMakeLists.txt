@@ -44,6 +44,7 @@ target_sources(
             src/extension/semver.cpp
             src/extension/shared_library.cpp
             src/job/error.cpp
+            src/job/job_keys.cpp
             src/job/job_manager.cpp
             src/job/job_spec.cpp
             src/job/local_executor.cpp

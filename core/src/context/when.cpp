@@ -122,6 +122,63 @@ void append_node(std::string& out, const WhenNode& node) {
     }
 }
 
+std::string node_text(const WhenNode& node) {
+    std::string out;
+    append_node(out, node);
+    return out;
+}
+
+void collect_unmet(const WhenNode& node, const WhenExpression::Lookup& lookup,
+                   std::vector<UnmetCondition>& out) {
+    if (evaluate_node(node, lookup)) {
+        return;
+    }
+    using Kind = UnmetCondition::Kind;
+    switch (node.op) {
+        case Op::all:
+            for (const WhenNode& operand : node.operands) {
+                collect_unmet(operand, lookup, out);
+            }
+            return;
+        case Op::key:
+            out.push_back({.kind = Kind::key, .key = node.key, .text = node_text(node)});
+            return;
+        case Op::equals:
+        case Op::not_equals:
+            out.push_back({.kind = node.op == Op::equals ? Kind::equals : Kind::not_equals,
+                           .key = node.key,
+                           .literal = node.literal,
+                           .text = node_text(node)});
+            return;
+        case Op::negate: {
+            const WhenNode& operand = node.operands.front();
+            switch (operand.op) {
+                case Op::negate:
+                    collect_unmet(operand.operands.front(), lookup, out);
+                    return;
+                case Op::key:
+                    out.push_back(
+                        {.kind = Kind::not_key, .key = operand.key, .text = node_text(node)});
+                    return;
+                case Op::equals:
+                case Op::not_equals:
+                    out.push_back(
+                        {.kind = operand.op == Op::equals ? Kind::not_equals : Kind::equals,
+                         .key = operand.key,
+                         .literal = operand.literal,
+                         .text = node_text(node)});
+                    return;
+                default:
+                    break;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    out.push_back({.kind = Kind::other, .text = node_text(node)});
+}
+
 }  // namespace
 
 bool is_valid_key(std::string_view name) noexcept {
@@ -150,10 +207,14 @@ bool WhenExpression::evaluate(const Lookup& lookup) const {
     return evaluate_node(*root_, lookup);
 }
 
-std::string WhenExpression::to_string() const {
-    std::string out;
-    append_node(out, *root_);
+std::vector<UnmetCondition> WhenExpression::unmet(const Lookup& lookup) const {
+    std::vector<UnmetCondition> out;
+    collect_unmet(*root_, lookup, out);
     return out;
+}
+
+std::string WhenExpression::to_string() const {
+    return node_text(*root_);
 }
 
 }  // namespace fem::context

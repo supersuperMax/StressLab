@@ -4,11 +4,14 @@
 #include "fem/core/product.h"
 #include "fem/shell/about_dialog.h"
 #include "fem/shell/brand.h"
+#include "fem/shell/command_palette.h"
 #include "fem/shell/keys.h"
+#include "fem/shell/problems.h"
 #include "fem/shell/strings.h"
 #include "fem/shell/theme.h"
 #include "fem/shell/workspaces.h"
 
+#include "shell_test_support.h"
 #include <DockAreaWidget.h>
 #include <DockManager.h>
 #include <DockSplitter.h>
@@ -52,8 +55,7 @@ class ShellWindow : public ::testing::Test {
 protected:
     void SetUp() override {
         fem::shell::apply_theme(*qApp, Qt::ColorScheme::Light);
-        fem::shell::add_shell_catalogs(localization_);
-        window_ = std::make_unique<MainWindow>(localization_, workspaces_);
+        window_ = std::make_unique<MainWindow>(app_.workbench());
         window_->show();
         QApplication::processEvents();
     }
@@ -63,8 +65,9 @@ protected:
         return qobject_cast<ads::CDockWidget*>(window_->zone_widget(id));
     }
 
-    fem::l10n::Localization localization_;
-    fem::shell::WorkspaceStore workspaces_;
+    fem::shell::testing::Application app_;
+    fem::l10n::Localization& localization_ = app_.localization;
+    fem::shell::WorkspaceStore& workspaces_ = app_.workspaces;
     std::unique_ptr<MainWindow> window_;
 };
 
@@ -130,7 +133,7 @@ TEST_F(ShellWindow, PanelsUseTheColoursOfTheTheme) {
     // theme, unreadable inactive tabs on the dark one.
     for (const Qt::ColorScheme scheme : {Qt::ColorScheme::Light, Qt::ColorScheme::Dark}) {
         fem::shell::apply_theme(*qApp, scheme);
-        MainWindow window(localization_, workspaces_);
+        MainWindow window(app_.workbench());
         window.show();
         QApplication::processEvents();
         const QPalette palette = fem::shell::theme_palette(scheme);
@@ -168,11 +171,19 @@ TEST_F(ShellWindow, PanelsAndBarsCanBeMoved) {
     }
 }
 
-TEST_F(ShellWindow, HasNoButtonsOfItsOwnOnlyTheShellMenus) {
-    // Stages and activities come from modules (task 1.12): the shell adds none.
-    for (const std::string_view id : {zone::stage_bar, zone::activity_bar}) {
-        EXPECT_TRUE(qobject_cast<QToolBar*>(window_->zone_widget(id))->actions().isEmpty()) << id;
+TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
+    // Activities and commands come from modules: the shell adds none (CLAUDE.md, rule 4).
+    EXPECT_TRUE(
+        qobject_cast<QToolBar*>(window_->zone_widget(zone::activity_bar))->actions().isEmpty());
+    EXPECT_FALSE(window_->context_toolbar()->isVisibleTo(window_.get()));
+    // The stage bar has the standard stages, in their order.
+    QStringList stages;
+    for (QAction* action :
+         qobject_cast<QToolBar*>(window_->zone_widget(zone::stage_bar))->actions()) {
+        stages.push_back(action->objectName());
     }
+    EXPECT_EQ(stages, QStringList({"stage.geometry", "stage.mesh", "stage.materials", "stage.steps",
+                                   "stage.solve", "stage.results"}));
     std::set<QString> named;
     for (QAction* top : window_->menuBar()->actions()) {
         ASSERT_NE(top->menu(), nullptr);
@@ -183,8 +194,9 @@ TEST_F(ShellWindow, HasNoButtonsOfItsOwnOnlyTheShellMenus) {
             }
         }
     }
-    std::set<QString> expected{"menu.file",       "app.quit",  "menu.view",
-                               "view.fullScreen", "menu.help", "app.about"};
+    std::set<QString> expected{"menu.file", "app.quit",  "menu.edit",       "app.undo",
+                               "app.redo",  "menu.view", "view.fullScreen", "view.commandPalette",
+                               "menu.help", "app.about"};
     for (const std::string_view id : all_zones) {
         if (id != zone::viewport) {
             expected.insert("view." + q(id));
@@ -279,7 +291,7 @@ TEST_F(ShellWindow, ReopensWithTheLayoutItWasClosedWith) {
     window_->close();
     ASSERT_TRUE(workspaces_.session());
 
-    MainWindow reopened(localization_, workspaces_);
+    MainWindow reopened(app_.workbench());
     reopened.show();
     QApplication::processEvents();
     EXPECT_FALSE(reopened.is_zone_shown(zone::properties));
@@ -327,6 +339,67 @@ TEST_F(ShellWindow, AboutOpensOverTheWindow) {
     EXPECT_EQ(about->logo_file(), fem::shell::brand::logo_reversed_file);
     fem::shell::apply_theme(*qApp, Qt::ColorScheme::Light);
     about->close();
+}
+
+TEST_F(ShellWindow, EditUndoesAndRedoesStepsOfTheCommandBus) {
+    auto* undo = window_->findChild<QAction*>(QStringLiteral("app.undo"));
+    auto* redo = window_->findChild<QAction*>(QStringLiteral("app.redo"));
+    ASSERT_NE(undo, nullptr);
+    ASSERT_NE(redo, nullptr);
+    EXPECT_FALSE(undo->isEnabled());
+    EXPECT_FALSE(redo->isEnabled());
+    EXPECT_EQ(undo->text(), QStringLiteral("Undo"));
+    EXPECT_EQ(undo->shortcuts(), QKeySequence::keyBindings(QKeySequence::Undo));
+
+    // Objects of a disabled module cannot be undone: the module is there.
+    app_.add("test.model", "");
+    (void)app_.bus.execute("model.create", {{"type", "item"}, {"owner", "test.model"}});
+    EXPECT_TRUE(undo->isEnabled());
+    EXPECT_EQ(undo->text(), QStringLiteral("Undo model.create"));
+
+    undo->trigger();
+    EXPECT_FALSE(app_.bus.can_undo());
+    EXPECT_FALSE(undo->isEnabled());
+    EXPECT_TRUE(redo->isEnabled());
+    EXPECT_EQ(redo->text(), QStringLiteral("Redo model.create"));
+    redo->trigger();
+    EXPECT_TRUE(app_.bus.can_undo());
+    EXPECT_FALSE(redo->isEnabled());
+}
+
+TEST_F(ShellWindow, ACrashedModuleShowsInProblems) {
+    app_.add("test.crashy", R"(
+[[contributes.commands]]
+id = "crashy.go"
+title = "Go"
+)");
+    EXPECT_EQ(dock(zone::problems)->windowTitle(), QStringLiteral("Problems"));
+    app_.manager.activate("test.crashy");
+    ASSERT_TRUE(app_.runtime->hosts.contains("test.crashy"));
+    app_.runtime->hosts["test.crashy"]->report_crash(
+        {.reason = fem::extension::CrashReason::crashed, .restarted = true});
+    ASSERT_EQ(window_->problems().count(), 1);
+    const QString message = window_->problems().messages().front();
+    EXPECT_TRUE(message.contains(QStringLiteral("Module test.crashy"))) << message.toStdString();
+    EXPECT_EQ(window_->prompt(), message);
+    EXPECT_EQ(dock(zone::problems)->windowTitle(), QStringLiteral("Problems (1)"));
+}
+
+TEST_F(ShellWindow, AModuleThatCannotStartShowsInProblems) {
+    app_.runtime->broken.insert("test.broken");
+    app_.add("test.broken", R"(
+[[contributes.commands]]
+id = "broken.go"
+title = "Go"
+)");
+    window_->palette().reload();
+    window_->palette().activate(window_->palette().row(QStringLiteral("broken.go")));
+    ASSERT_EQ(window_->problems().count(), 1);
+    EXPECT_EQ(window_->problems().messages().front(),
+              QStringLiteral("The module “Module test.broken” could not start: broken on purpose"));
+    // The prompt line says that the command failed.
+    EXPECT_TRUE(window_->prompt().startsWith(QStringLiteral("“Go” failed: ")))
+        << window_->prompt().toStdString();
 }
 
 }  // namespace

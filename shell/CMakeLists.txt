@@ -1,5 +1,5 @@
 # Qt shell (task 1.11, ADR 0012): the window with its zones, themes, workspaces and the brand.
-# What fills the zones comes from the registry of contributions (task 1.12).
+# What fills the zones comes from the registry of contributions (task 1.12, ADR 0013).
 find_package(Qt6 REQUIRED COMPONENTS Widgets Svg)
 find_package(qtadvanceddocking-qt6 CONFIG REQUIRED)
 
@@ -10,14 +10,24 @@ target_sources(
     femshell
     PRIVATE src/about_dialog.cpp
             src/brand.cpp
+            src/command_palette.cpp
+            src/commands.cpp
+            src/contribution_ui.cpp
+            src/icons.cpp
             src/keys.cpp
             src/main_window.cpp
+            src/menu_order.cpp
+            src/problems.cpp
+            src/stages.cpp
             src/strings.cpp
             src/theme.cpp
             src/toolkit_info.cpp
             src/workspaces.cpp
             include/fem/shell/about_dialog.h
-            include/fem/shell/main_window.h)
+            include/fem/shell/command_palette.h
+            include/fem/shell/contribution_ui.h
+            include/fem/shell/main_window.h
+            include/fem/shell/problems.h)
 set_target_properties(femshell PROPERTIES AUTOMOC ON)
 target_include_directories(femshell PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(femshell PUBLIC fem::core Qt6::Widgets Qt6::Svg ads::qtadvanceddocking-qt6)

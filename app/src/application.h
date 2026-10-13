@@ -5,6 +5,7 @@
 #include "fem/core/context/core_keys.h"
 #include "fem/core/extension/host_runtime.h"
 #include "fem/core/extension/manager.h"
+#include "fem/core/job/job_manager.h"
 #include "fem/core/l10n/localization.h"
 #include "fem/core/log/log.h"
 #include "fem/core/model/document.h"
@@ -35,9 +36,10 @@ struct Environment {
 
 /// The parts of the application that the window and the headless run share (ADR 0011,
 /// "Consequences"; ADR 0012): the document with its Command Bus and context keys, the settings of
-/// the user, the localization, and the Extension Manager whose python and process modules run in
-/// processes of their own. Settings and catalogs follow the enabled modules; the language and the
-/// undo limit follow the settings. Messages go to the logger of `log_category`.
+/// the user, the localization, the Extension Manager whose python and process modules run in
+/// processes of their own, and the Job Manager with the executor of this computer. Settings and
+/// catalogs follow the enabled modules; the language and the undo limit follow the settings.
+/// Messages go to the logger of `log_category`.
 ///
 /// Lives on the thread of the model; what modules ask outside their commands waits for
 /// `runtime().poll()`, which the owner calls from its loop.
@@ -57,6 +59,9 @@ public:
     [[nodiscard]] l10n::Localization& localization() noexcept { return localization_; }
     [[nodiscard]] extension::ExtensionManager& extensions() noexcept { return manager_; }
     [[nodiscard]] extension::HostRuntime& runtime() noexcept { return *runtime_; }
+    /// Jobs of solvers and other programs. The keys `job.*` follow it where the owner of the loop
+    /// of the thread of the model sets up `job::JobKeys`.
+    [[nodiscard]] job::JobManager& jobs() noexcept { return jobs_; }
 
     /// The level of `logging` follows the setting "log.level" from now on.
     void follow_log_level(log::Logging& logging);
@@ -80,6 +85,7 @@ private:
     l10n::Localization localization_;
     extension::ExtensionManager manager_;
     std::shared_ptr<extension::HostRuntime> runtime_;
+    job::JobManager jobs_;
     std::vector<Subscription> bindings_;
     Subscription events_;
 };
