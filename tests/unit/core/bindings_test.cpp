@@ -151,6 +151,16 @@ TEST_F(BindingsTest, TheLanguageFollowsTheSetting) {
     EXPECT_THROW(settings.set(Level::project, "general.language", "ru"), SettingsError);
 }
 
+TEST_F(BindingsTest, TheWindowMayNameTheLanguageOfTheSystem) {
+    const fem::Subscription binding = fem::bind_language(settings, l10n, "ru-RU");
+    EXPECT_EQ(l10n.language(), "ru-RU");
+    EXPECT_EQ(l10n.text("fem.core", "settings.type.number"), "числом");
+    settings.set(Level::user, "general.language", "en");
+    EXPECT_EQ(l10n.language(), "en");
+    settings.set(Level::user, "general.language", "");
+    EXPECT_EQ(l10n.language(), "ru-RU");
+}
+
 TEST_F(BindingsTest, TheUndoLimitFollowsTheSetting) {
     const fem::Subscription binding = fem::bind_undo_limit(settings, bus);
     EXPECT_EQ(bus.undo_limit(), 100U);

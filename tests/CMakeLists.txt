@@ -148,7 +148,42 @@ add_test(NAME ModelBenchmark.MillionNodeMesh COMMAND fem_model_benchmark)
 set_tests_properties(ModelBenchmark.MillionNodeMesh PROPERTIES LABELS benchmark)
 
 if(FEM_BUILD_GUI)
-    add_executable(fem_shell_tests unit/shell/toolkit_info_test.cpp)
-    target_link_libraries(fem_shell_tests PRIVATE fem::shell GTest::gtest_main)
+    # The shell (task 1.11): the window, its zones, themes, workspaces and the brand. The tests run
+    # on the platform of Qt without a screen (shell_test_main.cpp); with STRESSLAB_SCREENSHOT_DIR
+    # set they also save pictures of the window there.
+    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    add_executable(
+        fem_shell_tests
+        unit/shell/shell_test_main.cpp
+        unit/shell/brand_test.cpp
+        unit/shell/keys_test.cpp
+        unit/shell/main_window_test.cpp
+        unit/shell/screenshot_test.cpp
+        unit/shell/strings_test.cpp
+        unit/shell/theme_test.cpp
+        unit/shell/toolkit_info_test.cpp
+        unit/shell/workspaces_test.cpp)
+    target_link_libraries(fem_shell_tests PRIVATE fem::shell GTest::gtest)
+    target_compile_definitions(
+        fem_shell_tests
+        PRIVATE FEM_SHELL_L10N_DIR="${PROJECT_SOURCE_DIR}/shell/l10n"
+                FEM_BRANDING_SYMBOL_SMALL="${FEM_BRANDING_SYMBOL_SMALL}"
+                FEM_BRANDING_ICON_SVG="${FEM_BRANDING_ICON_SVG}"
+                FEM_BRANDING_LOGO_COLOR="${FEM_BRANDING_LOGO_COLOR}"
+                FEM_BRANDING_LOGO_REVERSED="${FEM_BRANDING_LOGO_REVERSED}")
+    # A static Qt (Linux and macOS in vcpkg) links in only the plugins named.
+    qt_import_plugins(fem_shell_tests INCLUDE Qt6::QOffscreenIntegrationPlugin)
+    set_target_properties(fem_shell_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                     ${CMAKE_CURRENT_BINARY_DIR}/shell)
+    fem_copy_runtime_dlls(fem_shell_tests)
+    fem_write_qt_conf(fem_shell_tests)
     gtest_discover_tests(fem_shell_tests DISCOVERY_MODE PRE_TEST)
+
+    # The window part of the executable: log files of several windows.
+    add_executable(stresslab_window_tests unit/app/log_slot_test.cpp)
+    target_link_libraries(stresslab_window_tests PRIVATE stresslab_window GTest::gtest_main)
+    set_target_properties(stresslab_window_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                            ${CMAKE_CURRENT_BINARY_DIR}/window)
+    fem_copy_runtime_dlls(stresslab_window_tests)
+    gtest_discover_tests(stresslab_window_tests DISCOVERY_MODE PRE_TEST)
 endif()
