@@ -2,10 +2,13 @@
 
 #include "fem/core/l10n/localization.h"
 #include "fem/core/signal.h"
+#include "fem/shell/workbench.h"
 #include "fem/shell/workspaces.h"
 
 #include <QMainWindow>
+#include <QPoint>
 #include <QString>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -24,6 +27,10 @@ class CDockWidget;
 namespace fem::shell {
 
 class AboutDialog;
+class CommandPalette;
+class Commands;
+class ContributionUi;
+class ProblemsPanel;
 
 /// Ids of the zones of the window (docs/interface-design.md §4): the object names of their
 /// widgets. Saved layouts refer to the zones by them, so they never change.
@@ -42,7 +49,8 @@ inline constexpr std::string_view problems = "problems";
 }  // namespace zone
 
 /// The window of the application (task 1.11): the frame of zones that modules fill through the
-/// registry of contributions (task 1.12). Nothing in it knows of finite elements.
+/// registry of contributions (task 1.12, `ContributionUi`). Nothing in it knows of finite
+/// elements.
 ///
 ///   menu (the system menu bar on macOS)
 ///   stage bar
@@ -56,13 +64,16 @@ inline constexpr std::string_view problems = "problems";
 /// status bar it is only hidden). Layouts are saved as named workspaces in a `WorkspaceStore`;
 /// the window reopens with the layout it had when it was closed. Texts follow the language of the
 /// localization.
+///
+/// Besides the zones the shell has its own few items: "Edit" with undo and redo of the Command
+/// Bus, the command palette (Ctrl/Cmd+Shift+P) in "View", the context toolbar at the top of the 3D
+/// view, and the "Problems" tab that lists modules whose code crashed or could not start.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    /// The localization (with the shell catalogs added) and the store outlive the window.
-    MainWindow(l10n::Localization& localization, WorkspaceStore& workspaces,
-               QWidget* parent = nullptr);
+    /// Everything in `workbench` outlives the window.
+    explicit MainWindow(Workbench workbench, QWidget* parent = nullptr);
     ~MainWindow() override;
 
     /// The widget of a zone (`zone::...`): a tool bar, the 3D view or a dock panel.
@@ -99,6 +110,20 @@ public:
     /// Opens "About" over the window, without blocking it; the dialog deletes itself when closed.
     AboutDialog* show_about();
 
+    /// What modules contribute to the window.
+    [[nodiscard]] ContributionUi& contributions() const noexcept { return *contributions_; }
+    /// The command palette (hidden until opened).
+    [[nodiscard]] CommandPalette& palette() const noexcept { return *palette_; }
+    /// Opens the command palette.
+    void show_palette();
+    /// The list of the "Problems" tab.
+    [[nodiscard]] ProblemsPanel& problems() const noexcept { return *problems_; }
+    /// The context toolbar at the top of the 3D view.
+    [[nodiscard]] QToolBar* context_toolbar() const noexcept { return context_toolbar_; }
+    /// Opens the context menu of a location ("tree", "viewport") of modules at a point of a
+    /// widget; nullptr if no item shows there now. The menu deletes itself when closed.
+    QMenu* show_context_menu(std::string_view location, QWidget* widget, const QPoint& position);
+
 protected:
     void closeEvent(QCloseEvent* event) override;
 
@@ -115,12 +140,16 @@ private:
     void build_zones();
     void apply_default_sizes();
     void build_menus();
+    void build_contributions();
+    void update_history();
+    void on_extension_event(const extension::ExtensionEvent& event);
     void rebuild_workspace_menu();
     void ask_workspace_name();
     void retranslate();
     [[nodiscard]] const Zone* find_zone(std::string_view id) const;
     [[nodiscard]] QString text(std::string_view key, const l10n::Args& args = {}) const;
 
+    Workbench workbench_;
     l10n::Localization& localization_;
     WorkspaceStore& workspaces_;
     ads::CDockManager* docks_ = nullptr;
@@ -130,15 +159,28 @@ private:
     Layout default_layout_;
 
     QMenu* file_menu_ = nullptr;
+    QMenu* edit_menu_ = nullptr;
     QMenu* view_menu_ = nullptr;
     QMenu* workspace_menu_ = nullptr;
     QMenu* help_menu_ = nullptr;
     QAction* quit_ = nullptr;
+    QAction* undo_ = nullptr;
+    QAction* redo_ = nullptr;
+    QAction* palette_action_ = nullptr;
     QAction* full_screen_ = nullptr;
     QAction* about_ = nullptr;
     QActionGroup* workspace_group_ = nullptr;
 
+    QToolBar* context_toolbar_ = nullptr;
+    ProblemsPanel* problems_ = nullptr;
+    std::unique_ptr<Commands> commands_;
+    std::unique_ptr<ContributionUi> contributions_;
+    CommandPalette* palette_ = nullptr;
+
     Subscription language_;
+    Subscription extension_events_;
+    Subscription model_changed_;
+    std::vector<Subscription> history_watches_;
 };
 
 }  // namespace fem::shell

@@ -90,6 +90,11 @@ bool is_menu_location(std::string_view location) {
     return is_segmented(location, '/', 1, unlimited, is_letter, is_id_char);
 }
 
+/// One part of a menu location: the id of a submenu.
+bool is_menu_id(std::string_view id) {
+    return is_segmented(id, '/', 1, 1, is_letter, is_id_char);
+}
+
 /// "ru", "en", "pt-BR": a language of two or three lowercase letters and optional subtags.
 bool is_language(std::string_view language) {
     const std::size_t dash = language.find('-');
@@ -387,7 +392,8 @@ private:
     std::string id(Fields& fields, std::string_view key, bool (*valid)(std::string_view),
                    std::string_view rule, bool required = true);
     std::string path(Fields& fields, std::string_view key, bool required);
-    std::optional<context::WhenExpression> when(Fields& fields);
+    /// A `when` clause (or another field written like one, such as `enablement`).
+    std::optional<context::WhenExpression> when(Fields& fields, std::string_view key = "when");
     void unique(Seen& seen, const std::string& value, const toml::node* node,
                 std::string_view what);
     std::optional<command::Value> to_value(const toml::node& node);
@@ -730,20 +736,21 @@ std::string Parser::path(Fields& fields, std::string_view key, bool required) {
     return id(fields, key, is_relative_path, path_rule, required);
 }
 
-std::optional<context::WhenExpression> Parser::when(Fields& fields) {
-    const toml::node* node = fields.get("when");
+std::optional<context::WhenExpression> Parser::when(Fields& fields, std::string_view key) {
+    const toml::node* node = fields.get(key);
     if (node == nullptr) {
         return std::nullopt;
     }
     const auto* value = node->as_string();
     if (value == nullptr) {
-        wrong_type(*node, "when", fields.where(), "text");
+        wrong_type(*node, key, fields.where(), "text");
         return std::nullopt;
     }
     try {
         return context::WhenExpression::parse(value->get());
     } catch (const context::WhenSyntaxError& e) {
-        error(node->source(), "invalid 'when' in " + fields.where() + ": " + e.what());
+        error(node->source(),
+              "invalid '" + std::string(key) + "' in " + fields.where() + ": " + e.what());
         return std::nullopt;
     }
 }
@@ -1062,6 +1069,7 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
         command.title = text(fields, "title", true);
         command.category = text(fields, "category", false);
         command.icon = path(fields, "icon", false);
+        command.enablement = when(fields, "enablement");
         if (const toml::node* args = fields.get("args")) {
             command.args = parse_args(*args, command.id);
         }
@@ -1127,6 +1135,20 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
     };
     each_table(contributes, "menus", read_menu(out.menus));
     each_table(contributes, "contextMenus", read_menu(out.context_menus));
+
+    Seen submenu_ids;
+    each_table(contributes, "submenus", [&](const toml::table& entry, const std::string& where) {
+        Fields fields(*this, entry, where);
+        SubmenuContribution submenu;
+        submenu.owner = owner;
+        submenu.id = id(fields, "id", is_menu_id,
+                        "expected ASCII letters, digits, '_' and '-', starting with a letter: one "
+                        "part of a menu location, like 'optimize'");
+        unique(submenu_ids, submenu.id, entry.get("id"), "submenu id");
+        submenu.title = text(fields, "title", true);
+        fields.finish();
+        out.submenus.push_back(std::move(submenu));
+    });
 
     each_table(
         contributes, "contextToolbar", [&](const toml::table& entry, const std::string& where) {
@@ -1273,7 +1295,7 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
         item.owner = owner;
         item.id = id(fields, "id", is_contribution_id, contribution_id_rule);
         item.title = text(fields, "title", true);
-        item.icon = path(fields, "icon", true);
+        item.icon = path(fields, "icon", false);
         fields.finish();
         out.activity_bar.push_back(std::move(item));
     });

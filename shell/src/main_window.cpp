@@ -1,9 +1,15 @@
 #include "fem/shell/main_window.h"
 
+#include "fem/core/context/when.h"
+#include "fem/core/log/log.h"
 #include "fem/core/product.h"
 #include "fem/shell/about_dialog.h"
 #include "fem/shell/brand.h"
+#include "fem/shell/command_palette.h"
+#include "fem/shell/commands.h"
+#include "fem/shell/contribution_ui.h"
 #include "fem/shell/keys.h"
+#include "fem/shell/problems.h"
 #include "fem/shell/strings.h"
 
 #include <DockAreaWidget.h>
@@ -20,7 +26,10 @@
 #include <QMenuBar>
 #include <QRegularExpression>
 #include <QToolBar>
+#include <QVBoxLayout>
 #include <algorithm>
+#include <cstdint>
+#include <exception>
 #include <string>
 
 namespace fem::shell {
@@ -51,9 +60,11 @@ QLabel* make_placeholder(QWidget* parent) {
 
 }  // namespace
 
-MainWindow::MainWindow(l10n::Localization& localization, WorkspaceStore& workspaces,
-                       QWidget* parent)
-    : QMainWindow(parent), localization_(localization), workspaces_(workspaces) {
+MainWindow::MainWindow(Workbench workbench, QWidget* parent)
+    : QMainWindow(parent),
+      workbench_(workbench),
+      localization_(workbench.localization),
+      workspaces_(workbench.workspaces) {
     setObjectName(QStringLiteral("mainWindow"));
     setWindowTitle(to_qstring(kProductName));
     setWindowIcon(brand::application_icon());
@@ -61,6 +72,7 @@ MainWindow::MainWindow(l10n::Localization& localization, WorkspaceStore& workspa
 
     build_zones();
     build_menus();
+    build_contributions();
     retranslate();
     apply_default_sizes();
     default_layout_ = layout();
@@ -71,7 +83,13 @@ MainWindow::MainWindow(l10n::Localization& localization, WorkspaceStore& workspa
     language_ = localization_.on_language_changed([this](const std::string&) { retranslate(); });
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    // What modules contribute goes before the widgets it is in.
+    history_watches_.clear();
+    model_changed_.reset();
+    extension_events_.reset();
+    contributions_.reset();
+}
 
 void MainWindow::build_zones() {
     // Before the dock manager exists: the flags are read when it is created.
@@ -114,12 +132,21 @@ void MainWindow::build_zones() {
         return dock;
     };
 
-    // The 3D view: the central area, always there. A stub until the viewport module (task 3.7).
-    QLabel* viewport_stub = make_placeholder(nullptr);
+    // The 3D view: the central area, always there. A stub until the viewport module (task 3.7),
+    // under the context toolbar with the commands of the current context.
+    auto* viewport_content = new QWidget;
+    auto* viewport_layout = new QVBoxLayout(viewport_content);
+    viewport_layout->setContentsMargins(0, 0, 0, 0);
+    viewport_layout->setSpacing(0);
+    context_toolbar_ = new QToolBar(viewport_content);
+    context_toolbar_->setObjectName(QStringLiteral("contextToolbar"));
+    viewport_layout->addWidget(context_toolbar_);
+    QLabel* viewport_stub = make_placeholder(viewport_content);
     QFont font = viewport_stub->font();
     font.setPointSizeF(font.pointSizeF() * 1.6);
     viewport_stub->setFont(font);
-    ads::CDockWidget* viewport = add_dock(zone::viewport, "zone.viewport", viewport_stub);
+    viewport_layout->addWidget(viewport_stub, 1);
+    ads::CDockWidget* viewport = add_dock(zone::viewport, "zone.viewport", viewport_content);
     zones_.back().placeholder = viewport_stub;
     viewport->setFeature(ads::CDockWidget::NoTab, true);
     ads::CDockAreaWidget* central = docks_->setCentralWidget(viewport);
@@ -146,10 +173,12 @@ void MainWindow::build_zones() {
     ads::CDockWidget* journal = add_empty_dock(zone::journal, "zone.journal");
     ads::CDockAreaWidget* bottom = docks_->addDockWidget(ads::BottomDockWidgetArea, journal);
     for (const auto& [id, key] :
-         {std::pair{zone::python_console, "zone.console"}, std::pair{zone::jobs, "zone.jobs"},
-          std::pair{zone::problems, "zone.problems"}}) {
+         {std::pair{zone::python_console, "zone.console"}, std::pair{zone::jobs, "zone.jobs"}}) {
         docks_->addDockWidgetTabToArea(add_empty_dock(id, key), bottom);
     }
+    problems_ = new ProblemsPanel;
+    docks_->addDockWidgetTabToArea(add_dock(zone::problems, "zone.problems", problems_), bottom);
+    connect(problems_, &ProblemsPanel::changed, this, &MainWindow::retranslate);
     bottom->setCurrentDockWidget(journal);
 
     // The style sheet of ADS draws splitters, side bar lines and the labels of inactive tabs in
@@ -189,8 +218,31 @@ void MainWindow::build_menus() {
     quit_->setMenuRole(QAction::QuitRole);
     quit_->setShortcut(key_sequence("Mod+Q"));
 
+    // Undo and redo of the Command Bus; available by the keys of the core.
+    edit_menu_ = menuBar()->addMenu(QString());
+    edit_menu_->setObjectName(QStringLiteral("menu.edit"));
+    const auto history_step = [this](bool undo) {
+        try {
+            (void)(undo ? workbench_.bus.undo() : workbench_.bus.redo());
+        } catch (const std::exception& error) {
+            log::logger("shell")->warn("{} failed: {}", undo ? "undo" : "redo", error.what());
+            set_prompt(to_qstring(error.what()));
+        }
+        update_history();
+    };
+    undo_ = edit_menu_->addAction(QString(), this, [history_step] { history_step(true); });
+    undo_->setObjectName(QStringLiteral("app.undo"));
+    undo_->setShortcuts(QKeySequence::Undo);
+    redo_ = edit_menu_->addAction(QString(), this, [history_step] { history_step(false); });
+    redo_->setObjectName(QStringLiteral("app.redo"));
+    redo_->setShortcuts(QKeySequence::Redo);
+
     view_menu_ = menuBar()->addMenu(QString());
     view_menu_->setObjectName(QStringLiteral("menu.view"));
+    palette_action_ = view_menu_->addAction(QString(), this, &MainWindow::show_palette);
+    palette_action_->setObjectName(QStringLiteral("view.commandPalette"));
+    palette_action_->setShortcut(key_sequence("Mod+Shift+P"));
+    view_menu_->addSeparator();
     for (const Zone& zone : zones_) {
         QAction* toggle = zone.dock  ? zone.dock->toggleViewAction()
                           : zone.bar ? zone.bar->toggleViewAction()
@@ -218,6 +270,109 @@ void MainWindow::build_menus() {
     about_ = help_menu_->addAction(QString(), this, [this] { (void)show_about(); });
     about_->setObjectName(QStringLiteral("app.about"));
     about_->setMenuRole(QAction::AboutRole);
+}
+
+void MainWindow::build_contributions() {
+    commands_ = std::make_unique<Commands>(workbench_);
+    commands_->set_report([this](const QString& message) { set_prompt(message); });
+
+    const auto dock = [this](std::string_view id) { return find_zone(id)->dock; };
+    ContributionHosts hosts{
+        .window = this,
+        .menu_bar = menuBar(),
+        .shell_menus = {{"file", file_menu_},
+                        {"edit", edit_menu_},
+                        {"view", view_menu_},
+                        {"help", help_menu_}},
+        .stage_bar = find_zone(zone::stage_bar)->bar,
+        .activity_bar = find_zone(zone::activity_bar)->bar,
+        .context_toolbar = context_toolbar_,
+        .docks = docks_,
+        .side_panel = dock(zone::model_tree),
+        .bottom_panel = dock(zone::journal),
+    };
+    contributions_ = std::make_unique<ContributionUi>(workbench_, *commands_, std::move(hosts));
+
+    // Context menus of modules on the model tree and the 3D view.
+    for (const auto& place : {std::pair{zone::model_tree, std::string_view("tree")},
+                              std::pair{zone::viewport, std::string_view("viewport")}}) {
+        QWidget* target = find_zone(place.first)->placeholder;
+        target->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(target, &QWidget::customContextMenuRequested, this,
+                [this, target, location = place.second](const QPoint& position) {
+                    (void)show_context_menu(location, target, position);
+                });
+    }
+
+    QList<QAction*> shell_actions{undo_, redo_, quit_, full_screen_, about_};
+    for (const Zone& zone : zones_) {
+        if (QAction* toggle = zone_action(zone.id)) {
+            shell_actions.push_back(toggle);
+        }
+    }
+    palette_ = new CommandPalette(workbench_, *commands_, shell_actions, this);
+    connect(contributions_.get(), &ContributionUi::rebuilt, this, [this] {
+        if (palette_->isVisible()) {
+            palette_->reload();
+        }
+    });
+
+    for (const std::string_view key : {"history.canUndo", "history.canRedo"}) {
+        history_watches_.push_back(workbench_.keys.watch(context::WhenExpression::parse(key),
+                                                         [this](bool) { update_history(); }));
+    }
+    model_changed_ =
+        workbench_.bus.on_model_changed([this](const command::ModelChange&) { update_history(); });
+    extension_events_ = workbench_.extensions.on_event(
+        [this](const extension::ExtensionEvent& event) { on_extension_event(event); });
+}
+
+void MainWindow::update_history() {
+    const command::CommandBus& bus = workbench_.bus;
+    const auto label = [this](std::string_view step) {
+        return commands_->title(step).toStdString();
+    };
+    undo_->setEnabled(bus.can_undo());
+    undo_->setText(bus.can_undo() ? text("action.undoStep", {{"step", label(bus.undo_label())}})
+                                  : text("action.undo"));
+    redo_->setEnabled(bus.can_redo());
+    redo_->setText(bus.can_redo() ? text("action.redoStep", {{"step", label(bus.redo_label())}})
+                                  : text("action.redo"));
+}
+
+void MainWindow::on_extension_event(const extension::ExtensionEvent& event) {
+    using Kind = extension::ExtensionEvent::Kind;
+    const extension::ExtensionInfo* info = workbench_.extensions.find(event.id);
+    if (info == nullptr) {
+        return;
+    }
+    QString message;
+    if (event.kind == Kind::crashed && event.crash) {
+        message = to_qstring(extension::crash_message(*info, *event.crash, localization_));
+    } else if (event.kind == Kind::activation_failed) {
+        message = text("problem.activationFailed",
+                       {{"module", localization_.manifest_text(info->id(), info->manifest->name)},
+                        {"message", event.message}});
+    } else {
+        return;
+    }
+    problems_->add(message);
+    set_prompt(message);
+}
+
+void MainWindow::show_palette() {
+    palette_->open_palette();
+}
+
+QMenu* MainWindow::show_context_menu(std::string_view location, QWidget* widget,
+                                     const QPoint& position) {
+    QMenu* menu = contributions_->context_menu(location, this);
+    if (menu == nullptr) {
+        return nullptr;
+    }
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->popup(widget->mapToGlobal(position));
+    return menu;
 }
 
 void MainWindow::rebuild_workspace_menu() {
@@ -277,20 +432,26 @@ void MainWindow::ask_workspace_name() {
 
 void MainWindow::retranslate() {
     for (const Zone& zone : zones_) {
-        const QString title = text(zone.title_key);
+        QString title = text(zone.title_key);
+        if (zone.id == zone::problems && problems_->count() > 0) {
+            title = text("zone.problemsCount", {{"count", std::int64_t{problems_->count()}}});
+        }
         zone.widget->setWindowTitle(title);
         if (zone.placeholder != nullptr) {
             zone.placeholder->setText(zone.id == zone::viewport ? title : text("zone.empty"));
         }
     }
     file_menu_->setTitle(text("menu.file"));
+    edit_menu_->setTitle(text("menu.edit"));
     view_menu_->setTitle(text("menu.view"));
+    palette_action_->setText(text("action.commandPalette"));
     workspace_menu_->setTitle(text("menu.workspaces"));
     help_menu_->setTitle(text("menu.help"));
     quit_->setText(text("action.quit"));
     full_screen_->setText(text("action.fullScreen"));
     about_->setText(text("action.about", {{"product", std::string(kProductName)}}));
     rebuild_workspace_menu();
+    update_history();
     set_prompt(prompt_text_);
 }
 
@@ -336,6 +497,8 @@ bool MainWindow::restore_layout(const Layout& layout) {
         return false;
     }
     (void)restoreState(layout.bars, layout_version);
+    // A layout saved with other modules enabled closes the tabs it does not know.
+    contributions_->apply_tab_conditions();
     return true;
 }
 

@@ -49,6 +49,9 @@ title = "B1"
 [[contributes.menus]]
 location = "tools"
 command = "b.first"
+[[contributes.submenus]]
+id = "b-menu"
+title = "B"
 )"));
     registry.add(contributions("test.a", R"(
 [[contributes.commands]]
@@ -66,6 +69,7 @@ slot = "after:results"
     }
     EXPECT_EQ(ids, (std::vector<std::string>{"a.only", "b.second", "b.first"}));
     EXPECT_EQ(owners(registry.menus()), std::vector<std::string>{"test.b"});
+    EXPECT_EQ(owners(registry.submenus()), std::vector<std::string>{"test.b"});
     EXPECT_EQ(owners(registry.stages()), std::vector<std::string>{"test.a"});
     EXPECT_TRUE(registry.solvers().empty());
     ASSERT_NE(registry.find_command("b.first"), nullptr);
@@ -78,6 +82,7 @@ slot = "after:results"
     EXPECT_FALSE(registry.remove_owner("test.b"));
     EXPECT_FALSE(registry.contains("test.b"));
     EXPECT_TRUE(registry.menus().empty());
+    EXPECT_TRUE(registry.submenus().empty());
     EXPECT_EQ(registry.commands().size(), 1U);
     EXPECT_EQ(registry.find_command("b.first"), nullptr);
 }
@@ -98,6 +103,7 @@ TEST(ContributionRegistry, ApplicationWideIdsAreUniqueAcrossModules) {
         {"activity bar entry",
          "[[contributes.activityBar]]\nid = \"x\"\ntitle = \"T\"\nicon = \"x.svg\"\n"},
         {"bottom panel tab", "[[contributes.bottomPanelTabs]]\nid = \"x\"\ntitle = \"T\"\n"},
+        {"submenu", "[[contributes.submenus]]\nid = \"x\"\ntitle = \"T\"\n"},
         {"viewport layer", "[[contributes.viewportLayers]]\nid = \"x\"\ntitle = \"T\"\n"},
         {"result filter", "[[contributes.resultFilters]]\nid = \"x\"\ntitle = \"T\"\n"},
         {"icon", "[[contributes.icons]]\nid = \"x\"\npath = \"x.svg\"\n"},

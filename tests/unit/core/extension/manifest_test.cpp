@@ -106,6 +106,8 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(c.commands[0].title, utf8(u8"Запустить расчёт"));
     EXPECT_EQ(c.commands[0].category, utf8(u8"Решение"));
     EXPECT_EQ(c.commands[0].icon, "icons/run.svg");
+    ASSERT_TRUE(c.commands[0].enablement.has_value());
+    EXPECT_EQ(c.commands[0].enablement->to_string(), "model.hasMesh");
     const auto& args = c.commands[0].args;
     ASSERT_EQ(args.size(), 6U);
     EXPECT_EQ(args[0].name, "job");
@@ -126,6 +128,7 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(args[5].type, ArgType::any);
     EXPECT_EQ(c.commands[1].id, "full.stop");
     EXPECT_TRUE(c.commands[1].args.empty());
+    EXPECT_FALSE(c.commands[1].enablement.has_value());
 
     ASSERT_EQ(c.stages.size(), 2U);
     EXPECT_EQ(c.stages[0].id, "full.optimize");
@@ -149,6 +152,9 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     ASSERT_EQ(c.context_menus.size(), 1U);
     EXPECT_EQ(c.context_menus[0].location, "tree");
     EXPECT_EQ(c.context_menus[0].when->keys(), std::vector<std::string>{"tree.selectedNodeType"});
+    ASSERT_EQ(c.submenus.size(), 1U);
+    EXPECT_EQ(c.submenus[0].id, "optimize");
+    EXPECT_EQ(c.submenus[0].title, utf8(u8"Оптимизация"));
     ASSERT_EQ(c.context_toolbar.size(), 1U);
     EXPECT_EQ(c.context_toolbar[0].command, "full.run");
 
@@ -218,13 +224,22 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     // Every record knows its module.
     for (const auto* owner :
          {&c.stages[0].owner, &c.tree_node_types[0].owner, &c.menus[0].owner,
-          &c.context_menus[0].owner, &c.context_toolbar[0].owner, &c.property_schemas[0].owner,
-          &c.file_formats[0].owner, &c.solvers[0].owner, &c.meshers[0].owner,
-          &c.activity_bar[0].owner, &c.bottom_panel_tabs[0].owner, &c.viewport_layers[0].owner,
-          &c.result_filters[0].owner, &c.settings[0].owner, &c.keybindings[0].owner,
-          &c.icons[0].owner, &c.localization[0].owner, &c.context_keys[0].owner}) {
+          &c.context_menus[0].owner, &c.submenus[0].owner, &c.context_toolbar[0].owner,
+          &c.property_schemas[0].owner, &c.file_formats[0].owner, &c.solvers[0].owner,
+          &c.meshers[0].owner, &c.activity_bar[0].owner, &c.bottom_panel_tabs[0].owner,
+          &c.viewport_layers[0].owner, &c.result_filters[0].owner, &c.settings[0].owner,
+          &c.keybindings[0].owner, &c.icons[0].owner, &c.localization[0].owner,
+          &c.context_keys[0].owner}) {
         EXPECT_EQ(*owner, "test.full");
     }
+}
+
+TEST(Manifest, AnActivityMayGoWithoutAnIcon) {
+    // The shell then draws the default module icon.
+    const Manifest manifest = parse_manifest(
+        with_header("[[contributes.activityBar]]\nid = \"case.a\"\ntitle = \"A\"\n"), engine);
+    ASSERT_EQ(manifest.contributes.activity_bar.size(), 1U);
+    EXPECT_EQ(manifest.contributes.activity_bar[0].icon, "");
 }
 
 TEST(Manifest, ModuleWithoutCodeHasNoKind) {
@@ -408,6 +423,17 @@ TEST(Manifest, ReportsErrorsWithTheirPosition) {
          with_header("[[contributes.menus]]\nlocation = \"tools\"\ncommand = \"case.run\"\n"
                      "when = \"a &&\"\n"),
          11, 8, "invalid 'when' in [[contributes.menus]]: column 5:"},
+        {"bad enablement",
+         with_header("[[contributes.commands]]\nid = \"case.run\"\ntitle = \"R\"\n"
+                     "enablement = \"!\"\n"),
+         11, 14, "invalid 'enablement' in [[contributes.commands]]: column 2:"},
+        {"submenu id with a slash",
+         with_header("[[contributes.submenus]]\nid = \"a/b\"\ntitle = \"A\"\n"), 9, 6,
+         "one part of a menu location"},
+        {"submenu id twice",
+         with_header("[[contributes.submenus]]\nid = \"a\"\ntitle = \"A\"\n"
+                     "[[contributes.submenus]]\nid = \"a\"\ntitle = \"B\"\n"),
+         12, 6, "duplicate submenu id 'a' (first at line 9)"},
         {"bad stage slot",
          with_header("[[contributes.stages]]\nid = \"case.stage\"\ntitle = \"S\"\n"
                      "slot = \"inside:mesh\"\n"),

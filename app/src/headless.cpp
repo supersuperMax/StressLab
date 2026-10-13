@@ -2,6 +2,7 @@
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/command/journal.h"
+#include "fem/core/job/job_keys.h"
 #include "fem/core/l10n/localization.h"
 #include "fem/core/log/log.h"
 #include "fem/core/product.h"
@@ -106,6 +107,9 @@ int run(const HeadlessOptions& options, const Environment& environment) {
     ModulePump pump(application.runtime(), bus, [&python](std::function<void()> work) {
         (void)python.call_soon(std::move(work));
     });
+    const job::JobKeys job_keys(
+        application.jobs(), application.keys(),
+        [&python](std::function<void()> work) { (void)python.call_soon(std::move(work)); });
 
     application.extensions().startup();
     int code = python.run_script(options.script, options.script_args);

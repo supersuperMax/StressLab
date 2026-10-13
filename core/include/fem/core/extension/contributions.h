@@ -30,6 +30,10 @@ struct CommandContribution {
     std::string title;
     std::string category;  ///< Group in the command palette; may be empty.
     std::string icon;      ///< Path of the icon; empty if none.
+    /// When the command can run (`enablement`): where it shows, it is unavailable while this is
+    /// false. Not in the table of docs/architecture.md §4.2; see
+    /// docs/adr/0013-shell-contributions.md.
+    std::optional<context::WhenExpression> enablement;
     /// Keyword arguments: the Python signature of the command (docs/architecture.md §4.7).
     std::vector<command::ArgSpec> args;
 };
@@ -62,6 +66,15 @@ struct MenuContribution {
     std::string command;   ///< Any command, also of another module.
     std::optional<context::WhenExpression> when;
     std::string group;  ///< Group and order within the menu; may be empty.
+};
+
+/// `submenus`: the title of a menu id that `menus` locations use, e.g. "optimize" in
+/// "optimize/run". Not in the table of docs/architecture.md §4.2; see
+/// docs/adr/0013-shell-contributions.md.
+struct SubmenuContribution {
+    std::string owner;
+    std::string id;  ///< One part of a menu location: ASCII letters, digits, '_' and '-'.
+    std::string title;
 };
 
 /// `contextToolbar`: a command on the context toolbar, and when it shows.
@@ -124,7 +137,7 @@ struct ActivityBarContribution {
     std::string owner;
     std::string id;
     std::string title;
-    std::string icon;
+    std::string icon;  ///< Empty: the shell draws the default module icon.
 };
 
 /// `bottomPanelTabs`: a tab of the bottom panel.
@@ -222,6 +235,7 @@ struct Contributions {
     std::vector<TreeNodeTypeContribution> tree_node_types;
     std::vector<MenuContribution> menus;
     std::vector<MenuContribution> context_menus;
+    std::vector<SubmenuContribution> submenus;
     std::vector<ContextToolbarContribution> context_toolbar;
     std::vector<PropertySchemaContribution> property_schemas;
     std::vector<FileFormatContribution> file_formats;

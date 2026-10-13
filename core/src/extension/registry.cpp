@@ -26,6 +26,7 @@ std::vector<GlobalId> global_ids(const Contributions& c) {
     add("mesher", c.meshers, &MesherContribution::id);
     add("activity bar entry", c.activity_bar, &ActivityBarContribution::id);
     add("bottom panel tab", c.bottom_panel_tabs, &BottomPanelTabContribution::id);
+    add("submenu", c.submenus, &SubmenuContribution::id);
     add("viewport layer", c.viewport_layers, &ViewportLayerContribution::id);
     add("result filter", c.result_filters, &ResultFilterContribution::id);
     add("icon", c.icons, &IconContribution::id);
@@ -123,6 +124,10 @@ std::vector<const MenuContribution*> ContributionRegistry::menus() const {
 
 std::vector<const MenuContribution*> ContributionRegistry::context_menus() const {
     return collect(&Contributions::context_menus);
+}
+
+std::vector<const SubmenuContribution*> ContributionRegistry::submenus() const {
+    return collect(&Contributions::submenus);
 }
 
 std::vector<const ContextToolbarContribution*> ContributionRegistry::context_toolbar() const {

@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include "fem/core/job/job_keys.h"
 #include "fem/core/log/log.h"
 #include "fem/core/product.h"
 #include "fem/core/user_folders.h"
@@ -75,9 +76,12 @@ int run_window(Environment environment) {
     application.install_modules();
     application.enable_all_modules();
     // What modules ask outside their commands is done in the event loop, between two events.
-    ModulePump pump(application.runtime(), application.bus(), [&qt](std::function<void()> work) {
+    const auto call_soon = [&qt](std::function<void()> work) {
         QMetaObject::invokeMethod(&qt, std::move(work), Qt::QueuedConnection);
-    });
+    };
+    ModulePump pump(application.runtime(), application.bus(), call_soon);
+    // Jobs change on their threads; their keys change in the event loop.
+    const job::JobKeys job_keys(application.jobs(), application.keys(), call_soon);
 
     std::filesystem::path workspace_file;
     try {
@@ -87,7 +91,11 @@ int run_window(Environment environment) {
     }
     shell::WorkspaceStore workspaces =
         workspace_file.empty() ? shell::WorkspaceStore() : shell::WorkspaceStore(workspace_file);
-    shell::MainWindow window(application.localization(), workspaces);
+    shell::MainWindow window(shell::Workbench{.localization = application.localization(),
+                                              .workspaces = workspaces,
+                                              .extensions = application.extensions(),
+                                              .bus = application.bus(),
+                                              .keys = application.keys()});
     window.show();
 
     application.extensions().startup();

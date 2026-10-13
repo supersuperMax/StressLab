@@ -17,6 +17,7 @@ id = "full.run"
 title = "Запустить расчёт"
 category = "Решение"
 icon = "icons/run.svg"
+enablement = "model.hasMesh"
 args = [
     { name = "job", type = "string" },
     { name = "threads", type = "integer", default = 0 },
@@ -52,6 +53,10 @@ location = "solve/run"
 command = "full.run"
 when = "model.hasMesh && solver.full-solver.available"
 group = "1_run@1"
+
+[[contributes.submenus]]
+id = "optimize"
+title = "Оптимизация"
 
 [[contributes.contextMenus]]
 location = "tree"

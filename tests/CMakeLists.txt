@@ -21,6 +21,7 @@ add_executable(
     unit/core/context/watch_test.cpp
     unit/core/context/when_evaluate_test.cpp
     unit/core/context/when_grammar_test.cpp
+    unit/core/context/when_unmet_test.cpp
     unit/core/extension/activation_test.cpp
     unit/core/extension/host_runtime_test.cpp
     unit/core/extension/manager_test.cpp
@@ -29,6 +30,7 @@ add_executable(
     unit/core/extension/profile_test.cpp
     unit/core/extension/registry_test.cpp
     unit/core/extension/semver_test.cpp
+    unit/core/job/job_keys_test.cpp
     unit/core/job/job_manager_test.cpp
     unit/core/job/local_executor_test.cpp
     unit/core/ipc/json_rpc_test.cpp
@@ -148,22 +150,27 @@ add_test(NAME ModelBenchmark.MillionNodeMesh COMMAND fem_model_benchmark)
 set_tests_properties(ModelBenchmark.MillionNodeMesh PROPERTIES LABELS benchmark)
 
 if(FEM_BUILD_GUI)
-    # The shell (task 1.11): the window, its zones, themes, workspaces and the brand. The tests run
-    # on the platform of Qt without a screen (shell_test_main.cpp); with STRESSLAB_SCREENSHOT_DIR
-    # set they also save pictures of the window there.
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+    # The shell (tasks 1.11 and 1.12): the window, its zones, themes, workspaces, the brand, and
+    # what modules contribute to it. The tests run on the platform of Qt without a screen
+    # (shell_test_main.cpp) and use Qt Test for clicks and keys; with STRESSLAB_SCREENSHOT_DIR set
+    # they also save pictures of the window there.
+    find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
     add_executable(
         fem_shell_tests
         unit/shell/shell_test_main.cpp
         unit/shell/brand_test.cpp
+        unit/shell/command_palette_test.cpp
+        unit/shell/contribution_ui_test.cpp
+        unit/shell/icons_test.cpp
         unit/shell/keys_test.cpp
         unit/shell/main_window_test.cpp
+        unit/shell/order_test.cpp
         unit/shell/screenshot_test.cpp
         unit/shell/strings_test.cpp
         unit/shell/theme_test.cpp
         unit/shell/toolkit_info_test.cpp
         unit/shell/workspaces_test.cpp)
-    target_link_libraries(fem_shell_tests PRIVATE fem::shell GTest::gtest)
+    target_link_libraries(fem_shell_tests PRIVATE fem::shell Qt6::Test GTest::gtest)
     target_compile_definitions(
         fem_shell_tests
         PRIVATE FEM_SHELL_L10N_DIR="${PROJECT_SOURCE_DIR}/shell/l10n"

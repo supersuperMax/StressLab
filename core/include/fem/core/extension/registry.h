@@ -18,7 +18,8 @@ namespace fem::extension {
 /// Records are listed by owner id, then in the order of the manifest, so the order does not depend
 /// on the order modules were enabled in. Ids that name something application-wide are unique
 /// across modules: commands, stages, solvers, meshers, file formats, activity bar entries, bottom
-/// panel tabs, viewport layers, result filters, icons, settings and context keys. Object types
+/// panel tabs, submenus, viewport layers, result filters, icons, settings and context keys. Object
+/// types
 /// (`treeNodeTypes`, `propertySchemas`) belong to their owner and may repeat in other modules.
 ///
 /// The registry is a value: copies share the contributions, so the Extension Manager can try adding
@@ -42,6 +43,7 @@ public:
     [[nodiscard]] std::vector<const TreeNodeTypeContribution*> tree_node_types() const;
     [[nodiscard]] std::vector<const MenuContribution*> menus() const;
     [[nodiscard]] std::vector<const MenuContribution*> context_menus() const;
+    [[nodiscard]] std::vector<const SubmenuContribution*> submenus() const;
     [[nodiscard]] std::vector<const ContextToolbarContribution*> context_toolbar() const;
     [[nodiscard]] std::vector<const PropertySchemaContribution*> property_schemas() const;
     [[nodiscard]] std::vector<const FileFormatContribution*> file_formats() const;
