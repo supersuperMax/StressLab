@@ -162,3 +162,25 @@ void WorkspaceStore::set_session(const Layout& layout, const QByteArray& geometr
 }
 
 }  // namespace fem::shell
+
+namespace fem::shell {
+
+nlohmann::json layout_to_json(const Layout& layout) {
+    return {{"bars", layout.bars.toBase64().toStdString()}, {"docks", layout.docks.toStdString()}};
+}
+
+std::optional<Layout> layout_from_json(const nlohmann::json& json) {
+    if (!json.is_object()) {
+        return std::nullopt;
+    }
+    const auto bars = json.find("bars");
+    const auto docks = json.find("docks");
+    if (bars == json.end() || docks == json.end() || !bars->is_string() || !docks->is_string()) {
+        return std::nullopt;
+    }
+    return Layout{
+        .docks = QByteArray::fromStdString(docks->get<std::string>()),
+        .bars = QByteArray::fromBase64(QByteArray::fromStdString(bars->get<std::string>()))};
+}
+
+}  // namespace fem::shell

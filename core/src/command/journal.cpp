@@ -4,6 +4,7 @@
 #include "fem/core/command/error.h"
 #include "fem/core/product.h"
 
+#include "../io/files.h"
 #include "python_reader.h"
 
 #include <exception>
@@ -212,6 +213,34 @@ void FileJournal::write(std::string_view entry) noexcept {
     out_.write(entry.data(), static_cast<std::streamsize>(entry.size()));
     out_.put('\n');
     out_.flush();
+}
+
+// --- SessionJournal ------------------------------------------------------------------------------
+
+SessionJournal::SessionJournal(CommandBus& bus)
+    : journal_(bus.on_journal([this](std::string_view entry) {
+          entries_.emplace_back(entry);
+          added_.emit(entries_.back());
+      })) {}
+
+std::string SessionJournal::text() const {
+    std::string text = journal_header();
+    for (const std::string& entry : entries_) {
+        text += entry;
+        text += '\n';
+    }
+    return text;
+}
+
+void SessionJournal::save(const std::filesystem::path& file) const {
+    if (!io::write_file(file, text())) {
+        throw CommandError(CommandErrc::journal_io,
+                           "cannot write the journal " + io::display(file));
+    }
+}
+
+Subscription SessionJournal::on_entry(std::function<void(std::string_view entry)> listener) {
+    return added_.subscribe(std::move(listener));
 }
 
 // --- Reading and replay --------------------------------------------------------------------------

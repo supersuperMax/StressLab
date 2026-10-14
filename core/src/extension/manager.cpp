@@ -67,6 +67,12 @@ std::string_view to_string(ExtensionState state) noexcept {
 
 std::string_view to_string(ExtensionEvent::Kind kind) noexcept {
     switch (kind) {
+        case ExtensionEvent::Kind::installed:
+            return "extension.installed";
+        case ExtensionEvent::Kind::uninstalled:
+            return "extension.uninstalled";
+        case ExtensionEvent::Kind::updated:
+            return "extension.updated";
         case ExtensionEvent::Kind::enabled:
             return "extension.enabled";
         case ExtensionEvent::Kind::activated:
@@ -252,19 +258,101 @@ const ExtensionInfo& ExtensionManager::install(Manifest manifest,
                                  detail::display(existing->info.folder) + "'");
     }
     auto record = std::make_unique<Record>();
-    record->info.manifest = std::make_shared<const Manifest>(std::move(manifest));
-    record->contributions = std::shared_ptr<const Contributions>(
-        record->info.manifest, &record->info.manifest->contributes);
+    set_manifest(*record, std::move(manifest));
     record->info.folder = absolute;
     record->info.source = source;
-    const Manifest& installed = *record->info.manifest;
+    const std::string id = record->info.id();
+    const ExtensionInfo& info = records_.emplace(id, std::move(record)).first->second->info;
+    emit(ExtensionEvent::Kind::installed, id);
+    return info;
+}
+
+void ExtensionManager::set_manifest(Record& record, Manifest manifest) const {
+    record.info.manifest = std::make_shared<const Manifest>(std::move(manifest));
+    record.contributions = std::shared_ptr<const Contributions>(record.info.manifest,
+                                                                &record.info.manifest->contributes);
+    const Manifest& installed = *record.info.manifest;
+    record.info.incompatibility.clear();
     if (!installed.engine.contains(options_.engine)) {
-        record->info.incompatibility = "it needs " + std::string(kProductName) + " " +
-                                       installed.engine.to_string() + ", this is " +
-                                       options_.engine.to_string();
+        record.info.incompatibility = "it needs " + std::string(kProductName) + " " +
+                                      installed.engine.to_string() + ", this is " +
+                                      options_.engine.to_string();
     }
-    const std::string id = installed.id;
-    return records_.emplace(id, std::move(record)).first->second->info;
+}
+
+void ExtensionManager::uninstall(std::string_view id) {
+    const Record& record = get_record(id);
+    if (record.info.source == ExtensionSource::builtin) {
+        throw ExtensionError(ExtensionErrc::invalid_state,
+                             "module '" + std::string(id) +
+                                 "' is shipped with the application and cannot be uninstalled");
+    }
+    (void)disable(id);
+    const std::string removed(id);
+    records_.erase(records_.find(id));
+    emit(ExtensionEvent::Kind::uninstalled, removed);
+}
+
+ReloadReport ExtensionManager::reload(std::string_view id) {
+    Record& record = get_record(id);
+    Manifest manifest = load_manifest(record.info.folder / manifest_file_name, options_.engine);
+    if (manifest.id != record.info.id()) {
+        throw ExtensionError(ExtensionErrc::conflict, "the folder '" +
+                                                          detail::display(record.info.folder) +
+                                                          "' of module '" + record.info.id() +
+                                                          "' has module '" + manifest.id + "' now");
+    }
+    // Disabled in this order (the modules that need it first), enabled again the other way.
+    std::vector<std::string> disabled = disable(id);
+    set_manifest(record, std::move(manifest));
+    emit(ExtensionEvent::Kind::updated, record.info.id());
+    ReloadReport report;
+    for (auto it = disabled.rbegin(); it != disabled.rend(); ++it) {
+        const Record* module = find_record(*it);
+        if (module == nullptr || module->info.enabled()) {
+            continue;
+        }
+        try {
+            for (std::string& enabled : enable(*it)) {
+                report.enabled.push_back(std::move(enabled));
+            }
+        } catch (const ExtensionError& e) {
+            report.failed.push_back({*it, e.what()});
+        }
+    }
+    return report;
+}
+
+std::vector<ExtensionUpdate> ExtensionManager::updates() const {
+    std::vector<ExtensionUpdate> result;
+    for (const auto& [id, record] : records_) {
+        if (record->info.source == ExtensionSource::builtin) {
+            continue;
+        }
+        try {
+            const Manifest manifest =
+                load_manifest(record->info.folder / manifest_file_name, options_.engine);
+            if (manifest.id == id && manifest.version != record->info.manifest->version) {
+                result.push_back({id, record->info.manifest->version, manifest.version});
+            }
+        } catch (const std::exception&) {
+            // Unreadable now: nothing to offer.
+        }
+    }
+    return result;
+}
+
+std::vector<NeededModule> ExtensionManager::needed_modules() const {
+    std::vector<NeededModule> result;
+    for (const std::string& owner : document_.owners()) {
+        if (owner == model::core_owner || document_.is_owner_enabled(owner)) {
+            continue;
+        }
+        result.push_back({.id = owner,
+                          .objects = document_.find_by_owner(owner).size(),
+                          .extension = find(owner)});
+    }
+    return result;
 }
 
 std::vector<const ExtensionInfo*> ExtensionManager::extensions() const {
@@ -637,6 +725,32 @@ Profile ExtensionManager::profile(std::string name, nlohmann::json layout) const
         }
     }
     return result;
+}
+
+ProfilePlan ExtensionManager::plan_profile(const Profile& profile) const {
+    std::set<std::string, std::less<>> keep;
+    for (const ProfileEntry& entry : profile.extensions) {
+        if (find_record(entry.id) == nullptr) {
+            continue;
+        }
+        try {
+            for (std::string& module : resolve(entry.id, false)) {
+                keep.insert(std::move(module));
+            }
+        } catch (const ExtensionError&) {
+            // Cannot be enabled: apply_profile reports it.
+        }
+    }
+    ProfilePlan plan;
+    for (const auto& [id, record] : records_) {
+        const bool kept = keep.contains(id);
+        if (kept && !record->info.enabled()) {
+            plan.enable.push_back(id);
+        } else if (!kept && record->info.enabled()) {
+            plan.disable.push_back(id);
+        }
+    }
+    return plan;
 }
 
 ProfileReport ExtensionManager::apply_profile(const Profile& profile) {

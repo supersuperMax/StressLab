@@ -34,6 +34,9 @@ public:
     [[nodiscard]] FormWidget& form() const noexcept { return *form_; }
     /// The form as it is drawn: sections titled with the names of the modules.
     [[nodiscard]] const form::FormSpec& spec() const noexcept { return spec_; }
+    /// Scrolls to the section of an owner (a module, or the core) and puts the focus on its first
+    /// field; false if it has no section (task 1.14: "Configure" in the module manager).
+    bool show_section(std::string_view owner);
 
 private:
     class Source;

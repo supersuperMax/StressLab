@@ -45,6 +45,7 @@ target_sources(
             src/form/form.cpp
             src/form/status.cpp
             src/extension/shared_library.cpp
+            src/extension/user_modules.cpp
             src/job/error.cpp
             src/job/job_keys.cpp
             src/job/job_manager.cpp

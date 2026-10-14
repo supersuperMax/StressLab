@@ -31,6 +31,8 @@ add_executable(
     unit/core/extension/profile_test.cpp
     unit/core/extension/registry_test.cpp
     unit/core/extension/semver_test.cpp
+    unit/core/extension/uninstall_test.cpp
+    unit/core/extension/user_modules_test.cpp
     unit/core/form/form_test.cpp
     unit/core/form/status_test.cpp
     unit/core/job/job_keys_test.cpp
@@ -73,7 +75,8 @@ gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
 # pytest suite run both by the embedded interpreter and by plain Python.
-add_executable(fem_python_tests unit/python/interpreter_test.cpp unit/python/journal_script_test.cpp
+add_executable(fem_python_tests unit/python/console_test.cpp unit/python/interpreter_test.cpp
+                                unit/python/journal_script_test.cpp
                                 unit/python/python_test_support.cpp)
 target_link_libraries(fem_python_tests PRIVATE fem_python_embed GTest::gtest_main)
 target_compile_definitions(fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
@@ -100,9 +103,10 @@ else()
                    "STRESSLAB_PYTHON_SITE=${FEM_PYTHON_SITE_DIR};STRESSLAB_EXECUTABLE=$<TARGET_FILE:stresslab>")
 endif()
 
-# The executable (task 1.10): its command line. The headless runs themselves are tested by
-# pytest (python/tests/test_headless.py) with the real executable.
-add_executable(stresslab_app_tests unit/app/command_line_test.cpp)
+# The executable (task 1.10): its command line and (task 1.14) the modules of the user it
+# enables. The headless runs themselves are tested by pytest (python/tests/test_headless.py) with
+# the real executable.
+add_executable(stresslab_app_tests unit/app/application_test.cpp unit/app/command_line_test.cpp)
 target_link_libraries(stresslab_app_tests PRIVATE stresslab_app GTest::gtest_main)
 # A folder of its own: fem_python_tests copies the same DLLs (python312.dll) next to itself after
 # linking, and two copies of one file at once fail on Windows.
@@ -154,8 +158,9 @@ add_test(NAME ModelBenchmark.MillionNodeMesh COMMAND fem_model_benchmark)
 set_tests_properties(ModelBenchmark.MillionNodeMesh PROPERTIES LABELS benchmark)
 
 if(FEM_BUILD_GUI)
-    # The shell (tasks 1.11-1.13): the window, its zones, themes, workspaces, the brand, what
-    # modules contribute to it, the model tree and the forms of properties and settings. The tests run on the platform of Qt without a screen
+    # The shell (tasks 1.11-1.14): the window, its zones, themes, workspaces, the brand, what
+    # modules contribute to it, the model tree, the forms of properties and settings, the console,
+    # the journal and the module manager. The tests run on the platform of Qt without a screen
     # (shell_test_main.cpp) and use Qt Test for clicks and keys; with STRESSLAB_SCREENSHOT_DIR set
     # they also save pictures of the window there.
     find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
@@ -164,7 +169,9 @@ if(FEM_BUILD_GUI)
         unit/shell/shell_test_main.cpp
         unit/shell/brand_test.cpp
         unit/shell/command_palette_test.cpp
+        unit/shell/console_journal_test.cpp
         unit/shell/contribution_ui_test.cpp
+        unit/shell/extensions_panel_test.cpp
         unit/shell/form_widget_test.cpp
         unit/shell/icons_test.cpp
         unit/shell/keys_test.cpp
@@ -182,6 +189,7 @@ if(FEM_BUILD_GUI)
         fem_shell_tests
         PRIVATE FEM_SHELL_L10N_DIR="${PROJECT_SOURCE_DIR}/shell/l10n"
                 FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+                FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
                 FEM_BRANDING_SYMBOL_SMALL="${FEM_BRANDING_SYMBOL_SMALL}"
                 FEM_BRANDING_ICON_SVG="${FEM_BRANDING_ICON_SVG}"
                 FEM_BRANDING_LOGO_COLOR="${FEM_BRANDING_LOGO_COLOR}"

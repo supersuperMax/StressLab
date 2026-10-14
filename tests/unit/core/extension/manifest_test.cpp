@@ -79,6 +79,7 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(manifest.id, "test.full");
     EXPECT_EQ(manifest.name, utf8(u8"Полный модуль"));
     EXPECT_EQ(manifest.description, "Uses every contribution point");
+    EXPECT_EQ(manifest.author, utf8(u8"Лаборатория прочности"));
     EXPECT_EQ(manifest.version.to_string(), "1.2.0-rc.1+build.7");
     EXPECT_EQ(manifest.engine.to_string(), "^1.0");
     ASSERT_TRUE(manifest.has_code());
@@ -296,7 +297,7 @@ TEST(Manifest, ReportsTheLineOfAnUnknownKey) {
 }
 
 TEST(Manifest, ReportsAllProblemsInTheOrderOfTheFile) {
-    const std::string text = with_header("author = \"me\"\n");
+    const std::string text = with_header("homepage = \"me\"\n");
     std::string broken = text;
     broken.replace(broken.find("name = \"Case\""), 13, "name = 5");
     try {
@@ -306,7 +307,7 @@ TEST(Manifest, ReportsAllProblemsInTheOrderOfTheFile) {
         EXPECT_EQ(std::string(error.what()),
                   "module/stresslab-extension.toml:3:8: 'name' in [extension] must be text, not "
                   "an integer\n"
-                  "module/stresslab-extension.toml:8:1: unknown key 'author' in [extension]");
+                  "module/stresslab-extension.toml:8:1: unknown key 'homepage' in [extension]");
     }
 }
 
@@ -337,8 +338,8 @@ TEST(Manifest, ReportsErrorsWithTheirPosition) {
         {"toml syntax", "[extension]\nid = \"test.case\n", 2, 0, "TOML syntax"},
         {"no [extension]", "[contributes]\n", 0, 0, "missing the [extension] table"},
         {"[extension] not a table", "extension = 5\n", 1, 13, "must be a table"},
-        {"unknown key", with_header("author = \"me\"\n"), 8, 1,
-         "unknown key 'author' in [extension]"},
+        {"unknown key", with_header("homepage = \"me\"\n"), 8, 1,
+         "unknown key 'homepage' in [extension]"},
         {"missing id", replace(header, "id = \"test.case\"\n", ""), 1, 1,
          "missing 'id' in [extension]"},
         {"uppercase id", replace(header, "test.case", "Test.Case"), 2, 6,

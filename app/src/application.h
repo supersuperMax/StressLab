@@ -5,6 +5,7 @@
 #include "fem/core/context/core_keys.h"
 #include "fem/core/extension/host_runtime.h"
 #include "fem/core/extension/manager.h"
+#include "fem/core/extension/user_modules.h"
 #include "fem/core/job/job_manager.h"
 #include "fem/core/l10n/localization.h"
 #include "fem/core/log/log.h"
@@ -69,8 +70,13 @@ public:
     /// Installs the built-in modules and then the modules in the subfolders of `folders`, in this
     /// order; modules that cannot be installed are logged.
     void install_modules(const std::vector<std::filesystem::path>& folders = {});
-    /// Enables every installed module that this platform can run; failures are logged.
-    void enable_all_modules();
+    /// Enables every installed module that this platform can run, but those of `except`;
+    /// failures are logged.
+    void enable_all_modules(const std::vector<std::string>& except = {});
+    /// What the user changed in the module manager (task 1.14): installs the modules of the
+    /// folders the user installed them from, then enables every module but those the user
+    /// disabled. Folders that cannot be installed are logged.
+    void enable_user_modules(const extension::UserModules& modules);
     /// Enables the modules of a profile; false (and logged) if the profile cannot be read.
     bool enable_profile(const std::filesystem::path& file);
 

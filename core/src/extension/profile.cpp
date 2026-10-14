@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <set>
+#include <system_error>
 #include <utility>
 
 namespace fem::extension {
@@ -127,6 +128,127 @@ Profile load_profile(const std::filesystem::path& file) {
 
 void save_profile(const std::filesystem::path& file, const Profile& profile) {
     detail::write_file(file, to_json(profile));
+}
+
+// --- ProfileLibrary ------------------------------------------------------------------------------
+
+namespace {
+
+std::filesystem::path utf8_path(std::string_view text) {
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
+
+}  // namespace
+
+ProfileLibrary::ProfileLibrary(std::filesystem::path folder) : folder_(std::move(folder)) {}
+
+std::vector<std::pair<std::filesystem::path, Profile>> ProfileLibrary::read_all() const {
+    std::vector<std::filesystem::path> files;
+    std::error_code error;
+    for (std::filesystem::directory_iterator it(folder_, error), end; !error && it != end;
+         it.increment(error)) {
+        std::error_code ignored;
+        if (it->is_regular_file(ignored) && it->path().extension() == ".json") {
+            files.push_back(it->path());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    std::vector<std::pair<std::filesystem::path, Profile>> profiles;
+    for (const std::filesystem::path& file : files) {
+        try {
+            profiles.emplace_back(file, load_profile(file));
+        } catch (const ExtensionError&) {
+            // Not a profile.
+        }
+    }
+    return profiles;
+}
+
+std::vector<std::string> ProfileLibrary::names() const {
+    std::set<std::string> names;
+    for (const auto& [file, profile] : read_all()) {
+        names.insert(profile.name);
+    }
+    return {names.begin(), names.end()};
+}
+
+std::optional<Profile> ProfileLibrary::find(std::string_view name) const {
+    for (auto& [file, profile] : read_all()) {
+        if (profile.name == name) {
+            return std::move(profile);
+        }
+    }
+    return std::nullopt;
+}
+
+std::filesystem::path ProfileLibrary::file_of(std::string_view name) const {
+    for (const auto& [file, profile] : read_all()) {
+        if (profile.name == name) {
+            return file;
+        }
+    }
+    return {};
+}
+
+std::filesystem::path ProfileLibrary::save(const Profile& profile) {
+    std::filesystem::path file = file_of(profile.name);
+    if (file.empty()) {
+        std::error_code error;
+        std::filesystem::create_directories(folder_, error);
+        if (error) {
+            throw ExtensionError(ExtensionErrc::io,
+                                 "cannot create '" + detail::display(folder_) + "'");
+        }
+        // Another file may have the name already (a profile of a similar name, not a profile).
+        file = folder_ / utf8_path(file_name(profile.name));
+        for (int n = 2; std::filesystem::exists(file, error); ++n) {
+            file = folder_ / utf8_path(file_name(profile.name + " (" + std::to_string(n) + ")"));
+        }
+    }
+    save_profile(file, profile);
+    return file;
+}
+
+bool ProfileLibrary::remove(std::string_view name) {
+    const std::filesystem::path file = file_of(name);
+    if (file.empty()) {
+        return false;
+    }
+    std::error_code error;
+    if (!std::filesystem::remove(file, error) || error) {
+        throw ExtensionError(ExtensionErrc::io, "cannot delete '" + detail::display(file) + "'");
+    }
+    return true;
+}
+
+std::string ProfileLibrary::file_name(std::string_view name) {
+    std::string result;
+    for (const char c : name) {
+        const auto byte = static_cast<unsigned char>(c);
+        constexpr std::string_view forbidden = "<>:\"/\\|?*";
+        result += byte < 0x20 || forbidden.find(c) != std::string_view::npos ? '_' : c;
+    }
+    // Windows drops dots and spaces at the end of a name; spaces at the start are easy to miss.
+    while (!result.empty() && (result.back() == '.' || result.back() == ' ')) {
+        result.pop_back();
+    }
+    result.erase(0, result.find_first_not_of(' '));
+    if (result.empty()) {
+        result = "profile";
+    }
+    // Names of devices on Windows, also with an extension ("con.txt").
+    std::string base = result.substr(0, result.find('.'));
+    std::transform(base.begin(), base.end(), base.begin(), [](char c) {
+        return c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
+    });
+    constexpr std::array<std::string_view, 4> devices = {"CON", "PRN", "AUX", "NUL"};
+    const bool numbered = base.size() == 4 &&
+                          (base.starts_with("COM") || base.starts_with("LPT")) && base[3] >= '1' &&
+                          base[3] <= '9';
+    if (numbered || std::find(devices.begin(), devices.end(), base) != devices.end()) {
+        result.insert(result.begin(), '_');
+    }
+    return result + ".json";
 }
 
 }  // namespace fem::extension

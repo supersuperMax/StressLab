@@ -202,7 +202,9 @@ TEST_F(ShellContributions, EnablingAModuleAddsItsItemsAndDisablingRemovesThem) {
               QStringList({"geometry", "mesh", "materials", "steps", "solve", "results"}));
     EXPECT_TRUE(toolbar().isEmpty());
     EXPECT_FALSE(window_->context_toolbar()->isVisibleTo(window_.get()));
-    EXPECT_TRUE(bar(zone::activity_bar)->actions().isEmpty());
+    // Only the activities of the shell are left, without the separator before those of modules.
+    EXPECT_EQ(bar(zone::activity_bar)->actions().size(), 3);
+    EXPECT_EQ(find_action(bar(zone::activity_bar), QStringLiteral("activity.separator")), nullptr);
     EXPECT_EQ(panel(QStringLiteral("activity:opt.history")), nullptr);
     EXPECT_EQ(panel(QStringLiteral("tab:opt.log")), nullptr);
     EXPECT_EQ(find_action(window_.get(), QStringLiteral("key.Ctrl+Shift+O")), nullptr);

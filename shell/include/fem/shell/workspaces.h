@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <QByteArray>
 #include <QMap>
 #include <QString>
@@ -18,6 +20,12 @@ struct Layout {
 
     friend bool operator==(const Layout&, const Layout&) = default;
 };
+
+/// A layout as JSON for a profile of modules (task 1.14): {"bars": "<base64>", "docks": "<xml>"},
+/// as workspaces keep it.
+[[nodiscard]] nlohmann::json layout_to_json(const Layout& layout);
+/// The layout of `layout_to_json`; nothing if `json` is not one.
+[[nodiscard]] std::optional<Layout> layout_from_json(const nlohmann::json& json);
 
 /// Workspaces: named layouts of the window, like the workspaces of Blender
 /// (docs/interface-design.md §4), plus the layout and geometry the window had when it was closed.

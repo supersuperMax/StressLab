@@ -13,14 +13,19 @@ target_sources(
             src/command_palette.cpp
             src/commands.cpp
             src/contribution_ui.cpp
+            src/extensions_panel.cpp
+            src/file_dialogs.cpp
             src/form_widget.cpp
             src/icons.cpp
+            src/journal_panel.cpp
             src/keys.cpp
             src/main_window.cpp
             src/menu_order.cpp
             src/model_tree.cpp
             src/problems.cpp
             src/property_panel.cpp
+            src/python_console.cpp
+            src/required_modules_bar.cpp
             src/settings_panel.cpp
             src/stages.cpp
             src/strings.cpp
@@ -30,11 +35,15 @@ target_sources(
             include/fem/shell/about_dialog.h
             include/fem/shell/command_palette.h
             include/fem/shell/contribution_ui.h
+            include/fem/shell/extensions_panel.h
             include/fem/shell/form_widget.h
+            include/fem/shell/journal_panel.h
             include/fem/shell/main_window.h
             include/fem/shell/model_tree.h
             include/fem/shell/problems.h
             include/fem/shell/property_panel.h
+            include/fem/shell/python_console.h
+            include/fem/shell/required_modules_bar.h
             include/fem/shell/settings_panel.h)
 set_target_properties(femshell PROPERTIES AUTOMOC ON)
 target_include_directories(femshell PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -56,6 +65,10 @@ while(fem_brand_files)
     list(APPEND fem_brand_sources "${file}")
 endwhile()
 qt_add_resources(femshell "stresslab_brand" PREFIX "/stresslab/brand" FILES ${fem_brand_sources})
+
+# Icons of the activities of the shell: monochrome, tinted to the theme like icons of modules.
+qt_add_resources(femshell "stresslab_shell_icons" PREFIX "/stresslab/icons" BASE icons
+                 FILES icons/extensions.svg icons/model.svg icons/settings.svg)
 
 # Strings of the shell (owner "fem.shell"), as catalogs of the localization of the core.
 qt_add_resources(femshell "stresslab_shell_l10n" PREFIX "/stresslab/l10n" BASE l10n

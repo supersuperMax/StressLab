@@ -173,9 +173,15 @@ TEST_F(ShellWindow, PanelsAndBarsCanBeMoved) {
 }
 
 TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
-    // Activities and commands come from modules: the shell adds none (CLAUDE.md, rule 4).
-    EXPECT_TRUE(
-        qobject_cast<QToolBar*>(window_->zone_widget(zone::activity_bar))->actions().isEmpty());
+    // Commands come from modules: the shell adds none (CLAUDE.md, rule 4). The activity bar has
+    // only the activities of the shell: Model, Modules, Settings (docs/interface-design.md §4).
+    QStringList activities;
+    for (QAction* action :
+         qobject_cast<QToolBar*>(window_->zone_widget(zone::activity_bar))->actions()) {
+        activities.push_back(action->objectName());
+        EXPECT_FALSE(action->icon().isNull()) << action->objectName().toStdString();
+    }
+    EXPECT_EQ(activities, QStringList({"view.modelTree", "view.extensions", "view.settings"}));
     EXPECT_FALSE(window_->context_toolbar()->isVisibleTo(window_.get()));
     // The stage bar has the standard stages, in their order.
     QStringList stages;
@@ -195,10 +201,10 @@ TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
             }
         }
     }
-    std::set<QString> expected{"menu.file",     "app.settings",    "app.quit",
-                               "menu.edit",     "app.undo",        "app.redo",
-                               "menu.view",     "view.fullScreen", "view.commandPalette",
-                               "view.settings", "menu.help",       "app.about"};
+    std::set<QString> expected{
+        "menu.file", "app.settings", "app.quit",        "menu.edit",           "app.undo",
+        "app.redo",  "menu.view",    "view.fullScreen", "view.commandPalette", "view.settings",
+        "menu.help", "app.about",    "view.extensions", "journal.saveAsScript"};
     for (const std::string_view id : all_zones) {
         if (id != zone::viewport) {
             expected.insert("view." + q(id));

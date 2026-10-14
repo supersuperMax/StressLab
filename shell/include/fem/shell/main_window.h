@@ -9,6 +9,7 @@
 #include <QPoint>
 #include <QString>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -30,9 +31,13 @@ class AboutDialog;
 class CommandPalette;
 class Commands;
 class ContributionUi;
+class ExtensionsPanel;
+class JournalPanel;
 class ModelTreePanel;
 class ProblemsPanel;
 class PropertyPanel;
+class PythonConsolePanel;
+class RequiredModulesBar;
 class SettingsPanel;
 
 /// Ids of the zones of the window (docs/interface-design.md §4): the object names of their
@@ -46,6 +51,8 @@ inline constexpr std::string_view properties = "properties";
 /// The settings of the application and of modules: a tab next to the properties, closed until
 /// opened from the menu.
 inline constexpr std::string_view settings = "settings";
+/// The module manager: a tab next to the model tree, opened by the activity "Modules".
+inline constexpr std::string_view extensions = "extensions";
 inline constexpr std::string_view prompt_line = "promptLine";
 // The bottom panel: one tab each.
 inline constexpr std::string_view journal = "journal";
@@ -78,6 +85,10 @@ inline constexpr std::string_view problems = "problems";
 ///
 /// The model tree and the properties are the panels of task 1.13 (docs/adr/0014-tree-and-forms.md):
 /// selecting an object in the tree shows its form in the properties.
+///
+/// Task 1.14 (docs/adr/0015-console-journal-extensions.md) adds the "Journal" and "Python Console"
+/// tabs, the module manager and the bar "The model needs the modules…" over the 3D view. The
+/// activity bar starts with the activities of the shell: Model, Modules and Settings.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -136,6 +147,21 @@ public:
     [[nodiscard]] SettingsPanel& settings() const noexcept { return *settings_; }
     /// Opens the settings and brings them to the front.
     void show_settings();
+    /// Opens the settings at the section of an owner (a module).
+    void show_settings_of(const std::string& owner);
+    /// The tabs of the bottom panel and the module manager of task 1.14.
+    [[nodiscard]] JournalPanel& journal() const noexcept { return *journal_; }
+    [[nodiscard]] PythonConsolePanel& console() const noexcept { return *console_; }
+    [[nodiscard]] ExtensionsPanel& extensions() const noexcept { return *extensions_; }
+    /// Opens the module manager and brings it to the front.
+    void show_extensions();
+    /// The bar "The model needs the modules…".
+    [[nodiscard]] RequiredModulesBar& required_modules() const noexcept { return *required_; }
+    /// Shows the bar if the model needs modules that are not enabled: called when a model is
+    /// opened (at the start of the window for now; projects come with task 2.1).
+    void check_required_modules();
+    /// The action "Save journal as script…" of the "File" menu.
+    [[nodiscard]] QAction* save_journal_action() const noexcept;
     /// The commands of modules as the window runs them.
     [[nodiscard]] Commands& commands() const noexcept { return *commands_; }
     /// Opens the context menu of a location ("tree", "viewport") of modules at a point of a
@@ -195,6 +221,10 @@ private:
     ModelTreePanel* tree_ = nullptr;
     PropertyPanel* properties_ = nullptr;
     SettingsPanel* settings_ = nullptr;
+    JournalPanel* journal_ = nullptr;
+    PythonConsolePanel* console_ = nullptr;
+    ExtensionsPanel* extensions_ = nullptr;
+    RequiredModulesBar* required_ = nullptr;
     std::unique_ptr<Commands> commands_;
     std::unique_ptr<ContributionUi> contributions_;
     CommandPalette* palette_ = nullptr;

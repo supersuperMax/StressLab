@@ -9,6 +9,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include <exception>
+#include <functional>
 #include <vector>
 
 namespace fem::shell {
@@ -134,6 +135,42 @@ void SettingsPanel::rebuild() {
         }
     }
     form_->set_form(&spec_, source_.get(), "settings");
+}
+
+bool SettingsPanel::show_section(std::string_view owner) {
+    const auto section =
+        std::find_if(spec_.fields.begin(), spec_.fields.end(),
+                     [owner](const form::Field& field) { return field.key == owner; });
+    if (section == spec_.fields.end()) {
+        return false;
+    }
+    // The first field of the section that has an editor, also inside groups.
+    const std::function<QWidget*(const form::Field&)> first_editor =
+        [&](const form::Field& field) -> QWidget* {
+        if (QWidget* editor = form_->editor(field.pointer)) {
+            return editor;
+        }
+        for (const form::Field& inner : field.fields) {
+            if (QWidget* editor = first_editor(inner)) {
+                return editor;
+            }
+        }
+        return nullptr;
+    };
+    QWidget* editor = nullptr;
+    for (const form::Field& field : section->fields) {
+        if ((editor = first_editor(field)) != nullptr) {
+            break;
+        }
+    }
+    if (editor == nullptr) {
+        return false;
+    }
+    if (auto* scroll = findChild<QScrollArea*>()) {
+        scroll->ensureWidgetVisible(editor);
+    }
+    editor->setFocus(Qt::OtherFocusReason);
+    return true;
 }
 
 }  // namespace fem::shell

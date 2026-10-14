@@ -521,6 +521,7 @@ bool Parser::parse_extension(const toml::table& table, Manifest& manifest) {
     }
     manifest.name = text(fields, "name", true);
     manifest.description = text(fields, "description", false);
+    manifest.author = text(fields, "author", false);
     if (const auto version = fields.text("version", true)) {
         try {
             manifest.version = Version::parse(*version);
