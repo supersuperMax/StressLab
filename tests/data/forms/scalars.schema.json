@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "enabled": {"type": "boolean", "title": "Enabled", "default": false},
+    "count": {"type": "integer", "title": "Count", "minimum": 1, "maximum": 100, "default": 4},
+    "name": {"type": "string", "title": "Name"},
+    "file": {"type": "string", "format": "path", "title": "File"},
+    "size": {"type": "number", "title": "Size", "x-quantity": "length", "readOnly": true},
+    "limit": {"type": "number", "minimum": 0, "exclusiveMinimum": true, "maximum": 1, "exclusiveMaximum": false}
+  }
+}

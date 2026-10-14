@@ -1,0 +1,36 @@
+{
+  "errors": [],
+  "form": {
+    "fields": [
+      {
+        "key": "either",
+        "kind": "raw",
+        "pointer": "either",
+        "title": "Number or text"
+      },
+      {
+        "key": "free",
+        "kind": "raw",
+        "pointer": "free",
+        "title": "Anything"
+      },
+      {
+        "key": "linked",
+        "kind": "raw",
+        "pointer": "linked"
+      },
+      {
+        "key": "nullable",
+        "kind": "raw",
+        "pointer": "nullable",
+        "title": "Optional number"
+      },
+      {
+        "key": "vector",
+        "kind": "raw",
+        "pointer": "vector",
+        "title": "Direction"
+      }
+    ]
+  }
+}

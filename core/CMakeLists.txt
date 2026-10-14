@@ -42,6 +42,8 @@ target_sources(
             src/extension/profile.cpp
             src/extension/registry.cpp
             src/extension/semver.cpp
+            src/form/form.cpp
+            src/form/status.cpp
             src/extension/shared_library.cpp
             src/job/error.cpp
             src/job/job_keys.cpp
@@ -64,6 +66,7 @@ target_sources(
             src/model/error.cpp
             src/model/mesh.cpp
             src/model/object.cpp
+            src/model/quantity.cpp
             src/model/units.cpp
             src/model/utf8.cpp
             src/settings/error.cpp

@@ -13,11 +13,15 @@ target_sources(
             src/command_palette.cpp
             src/commands.cpp
             src/contribution_ui.cpp
+            src/form_widget.cpp
             src/icons.cpp
             src/keys.cpp
             src/main_window.cpp
             src/menu_order.cpp
+            src/model_tree.cpp
             src/problems.cpp
+            src/property_panel.cpp
+            src/settings_panel.cpp
             src/stages.cpp
             src/strings.cpp
             src/theme.cpp
@@ -26,8 +30,12 @@ target_sources(
             include/fem/shell/about_dialog.h
             include/fem/shell/command_palette.h
             include/fem/shell/contribution_ui.h
+            include/fem/shell/form_widget.h
             include/fem/shell/main_window.h
-            include/fem/shell/problems.h)
+            include/fem/shell/model_tree.h
+            include/fem/shell/problems.h
+            include/fem/shell/property_panel.h
+            include/fem/shell/settings_panel.h)
 set_target_properties(femshell PROPERTIES AUTOMOC ON)
 target_include_directories(femshell PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(femshell PUBLIC fem::core Qt6::Widgets Qt6::Svg ads::qtadvanceddocking-qt6)

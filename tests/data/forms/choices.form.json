@@ -1,0 +1,55 @@
+{
+  "errors": [],
+  "form": {
+    "fields": [
+      {
+        "choices": [
+          {
+            "title": "%solver.method.direct%",
+            "value": "direct"
+          },
+          {
+            "title": "%solver.method.iterative%",
+            "value": "iterative"
+          }
+        ],
+        "key": "method",
+        "kind": "choice",
+        "pointer": "method",
+        "required": true,
+        "title": "%solver.method%"
+      },
+      {
+        "choices": [
+          {
+            "value": "auto"
+          },
+          {
+            "value": 0
+          },
+          {
+            "value": true
+          }
+        ],
+        "key": "mixed",
+        "kind": "choice",
+        "pointer": "mixed"
+      },
+      {
+        "choices": [
+          {
+            "value": 1
+          },
+          {
+            "value": 2
+          }
+        ],
+        "default": 2,
+        "key": "order",
+        "kind": "choice",
+        "pointer": "order",
+        "title": "Element order"
+      }
+    ]
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "errors": [
+    {
+      "message": "'required' must be an array of property names",
+      "pointer": ""
+    },
+    {
+      "message": "'x-order' must be an integer, not 1.5",
+      "pointer": "E"
+    },
+    {
+      "message": "unknown quantity \"stiffness\" in 'x-quantity'; see fem/core/model/quantity.h",
+      "pointer": "E"
+    },
+    {
+      "message": "the schema of a property must be an object, not 7",
+      "pointer": "broken"
+    },
+    {
+      "message": "'enum' must be a non-empty array of allowed values",
+      "pointer": "empty"
+    },
+    {
+      "message": "'x-advanced' must be true or false, not \"yes\"",
+      "pointer": "flag"
+    },
+    {
+      "message": "'x-enumTitles' must be an array with a title for each value of 'enum'",
+      "pointer": "kind"
+    },
+    {
+      "message": "'minimum' must be a number, not \"zero\"",
+      "pointer": "low"
+    },
+    {
+      "message": "'title' must be text, not 5",
+      "pointer": "name"
+    },
+    {
+      "message": "'x-quantity' is only for properties of type number or integer",
+      "pointer": "name"
+    }
+  ],
+  "form": {
+    "fields": [
+      {
+        "key": "E",
+        "kind": "number",
+        "pointer": "E"
+      },
+      {
+        "key": "broken",
+        "kind": "raw",
+        "pointer": "broken"
+      },
+      {
+        "key": "empty",
+        "kind": "raw",
+        "pointer": "empty"
+      },
+      {
+        "key": "flag",
+        "kind": "boolean",
+        "pointer": "flag"
+      },
+      {
+        "choices": [
+          {
+            "value": "a"
+          },
+          {
+            "value": "b"
+          }
+        ],
+        "key": "kind",
+        "kind": "choice",
+        "pointer": "kind"
+      },
+      {
+        "key": "low",
+        "kind": "number",
+        "pointer": "low"
+      },
+      {
+        "key": "name",
+        "kind": "string",
+        "pointer": "name"
+      }
+    ]
+  }
+}

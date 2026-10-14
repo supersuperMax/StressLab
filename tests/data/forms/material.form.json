@@ -1,0 +1,55 @@
+{
+  "errors": [],
+  "form": {
+    "fields": [
+      {
+        "description": "%material.E.description%",
+        "exclusiveMinimum": true,
+        "key": "E",
+        "kind": "number",
+        "minimum": 0.0,
+        "order": 1,
+        "pointer": "E",
+        "quantity": "pressure",
+        "required": true,
+        "title": "%material.E%"
+      },
+      {
+        "default": 0.3,
+        "exclusiveMaximum": true,
+        "key": "nu",
+        "kind": "number",
+        "maximum": 0.5,
+        "minimum": 0.0,
+        "order": 2,
+        "pointer": "nu",
+        "required": true,
+        "title": "Poisson's ratio"
+      },
+      {
+        "key": "density",
+        "kind": "number",
+        "minimum": 0.0,
+        "order": 3,
+        "pointer": "density",
+        "quantity": "density",
+        "title": "Density"
+      },
+      {
+        "advanced": true,
+        "key": "reference",
+        "kind": "number",
+        "order": 4,
+        "pointer": "reference",
+        "quantity": "temperature",
+        "title": "Reference temperature"
+      },
+      {
+        "key": "comment",
+        "kind": "string",
+        "pointer": "comment",
+        "title": "Comment"
+      }
+    ]
+  }
+}

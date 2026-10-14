@@ -15,6 +15,7 @@
 #include "fem/core/extension/semver.h"
 #include "fem/core/l10n/localization.h"
 #include "fem/core/model/document.h"
+#include "fem/core/settings/settings.h"
 #include "fem/core/signal.h"
 #include "fem/shell/strings.h"
 #include "fem/shell/workbench.h"
@@ -101,13 +102,19 @@ struct Application {
     extension::ExtensionManager manager{document, bus, keys, {.engine = engine}};
     std::shared_ptr<FakeRuntime> runtime = std::make_shared<FakeRuntime>();
     Subscription catalogs = bind_catalogs(manager, localization);
+    settings::Settings settings;
+    Subscription settings_schemas = bind_settings(manager, settings);
+    /// How many times the window saved the settings of the user.
+    int settings_saved = 0;
 
     [[nodiscard]] Workbench workbench() {
         return {.localization = localization,
                 .workspaces = workspaces,
                 .extensions = manager,
                 .bus = bus,
-                .keys = keys};
+                .keys = keys,
+                .settings = settings,
+                .save_settings = [this] { ++settings_saved; }};
     }
 
     /// Installs a python module written in a test: "[extension]" with this id, the name "Module

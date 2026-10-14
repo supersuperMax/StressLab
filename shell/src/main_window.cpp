@@ -9,7 +9,10 @@
 #include "fem/shell/commands.h"
 #include "fem/shell/contribution_ui.h"
 #include "fem/shell/keys.h"
+#include "fem/shell/model_tree.h"
 #include "fem/shell/problems.h"
+#include "fem/shell/property_panel.h"
+#include "fem/shell/settings_panel.h"
 #include "fem/shell/strings.h"
 
 #include <DockAreaWidget.h>
@@ -70,6 +73,8 @@ MainWindow::MainWindow(Workbench workbench, QWidget* parent)
     setWindowIcon(brand::application_icon());
     resize(default_size);
 
+    commands_ = std::make_unique<Commands>(workbench_);
+    commands_->set_report([this](const QString& message) { set_prompt(message); });
     build_zones();
     build_menus();
     build_contributions();
@@ -151,10 +156,22 @@ void MainWindow::build_zones() {
     viewport->setFeature(ads::CDockWidget::NoTab, true);
     ads::CDockAreaWidget* central = docks_->setCentralWidget(viewport);
 
+    // The model tree and the properties of what is selected in it; the settings as a tab next to
+    // the properties, closed until opened.
+    tree_ = new ModelTreePanel(workbench_, *commands_);
     docks_->addDockWidget(ads::LeftDockWidgetArea,
-                          add_empty_dock(zone::model_tree, "zone.modelTree"), central);
-    docks_->addDockWidget(ads::RightDockWidgetArea,
-                          add_empty_dock(zone::properties, "zone.properties"), central);
+                          add_dock(zone::model_tree, "zone.modelTree", tree_), central);
+    properties_ = new PropertyPanel(workbench_);
+    ads::CDockWidget* properties = add_dock(zone::properties, "zone.properties", properties_);
+    ads::CDockAreaWidget* side =
+        docks_->addDockWidget(ads::RightDockWidgetArea, properties, central);
+    settings_ = new SettingsPanel(workbench_);
+    ads::CDockWidget* settings = add_dock(zone::settings, "zone.settings", settings_);
+    docks_->addDockWidgetTabToArea(settings, side);
+    settings->toggleView(false);
+    side->setCurrentDockWidget(properties);
+    connect(tree_, &ModelTreePanel::selection_changed, this,
+            [this] { properties_->show_object(tree_->selected()); });
 
     // The prompt line, under the tree, the view and the properties, over the bottom panel.
     auto* prompt_line = new QWidget;
@@ -212,6 +229,12 @@ void MainWindow::apply_default_sizes() {
 void MainWindow::build_menus() {
     file_menu_ = menuBar()->addMenu(QString());
     file_menu_->setObjectName(QStringLiteral("menu.file"));
+    settings_action_ = file_menu_->addAction(QString(), this, &MainWindow::show_settings);
+    settings_action_->setObjectName(QStringLiteral("app.settings"));
+    // On macOS the item goes to the application menu, as Cmd+,.
+    settings_action_->setMenuRole(QAction::PreferencesRole);
+    settings_action_->setShortcut(key_sequence("Mod+,"));
+    file_menu_->addSeparator();
     quit_ = file_menu_->addAction(QString(), this, &QWidget::close);
     quit_->setObjectName(QStringLiteral("app.quit"));
     // On macOS the item goes to the application menu, as Cmd+Q.
@@ -273,9 +296,6 @@ void MainWindow::build_menus() {
 }
 
 void MainWindow::build_contributions() {
-    commands_ = std::make_unique<Commands>(workbench_);
-    commands_->set_report([this](const QString& message) { set_prompt(message); });
-
     const auto dock = [this](std::string_view id) { return find_zone(id)->dock; };
     ContributionHosts hosts{
         .window = this,
@@ -293,18 +313,19 @@ void MainWindow::build_contributions() {
     };
     contributions_ = std::make_unique<ContributionUi>(workbench_, *commands_, std::move(hosts));
 
-    // Context menus of modules on the model tree and the 3D view.
-    for (const auto& place : {std::pair{zone::model_tree, std::string_view("tree")},
-                              std::pair{zone::viewport, std::string_view("viewport")}}) {
-        QWidget* target = find_zone(place.first)->placeholder;
-        target->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(target, &QWidget::customContextMenuRequested, this,
-                [this, target, location = place.second](const QPoint& position) {
-                    (void)show_context_menu(location, target, position);
-                });
-    }
+    // Context menus of modules: the model tree adds its own items to them; the 3D view.
+    tree_->set_module_menu(
+        [this](QWidget* parent) { return contributions_->context_menu("tree", parent); });
+    // Commands that take the selected object become available or not with it.
+    tree_->set_on_selection([this] { contributions_->refresh(); });
+    QWidget* viewport = find_zone(zone::viewport)->placeholder;
+    viewport->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(viewport, &QWidget::customContextMenuRequested, this,
+            [this, viewport](const QPoint& position) {
+                (void)show_context_menu("viewport", viewport, position);
+            });
 
-    QList<QAction*> shell_actions{undo_, redo_, quit_, full_screen_, about_};
+    QList<QAction*> shell_actions{undo_, redo_, quit_, settings_action_, full_screen_, about_};
     for (const Zone& zone : zones_) {
         if (QAction* toggle = zone_action(zone.id)) {
             shell_actions.push_back(toggle);
@@ -362,6 +383,13 @@ void MainWindow::on_extension_event(const extension::ExtensionEvent& event) {
 
 void MainWindow::show_palette() {
     palette_->open_palette();
+}
+
+void MainWindow::show_settings() {
+    ads::CDockWidget* settings = find_zone(zone::settings)->dock;
+    settings->toggleView(true);
+    settings->setAsCurrentTab();
+    settings->raise();
 }
 
 QMenu* MainWindow::show_context_menu(std::string_view location, QWidget* widget,
@@ -445,6 +473,7 @@ void MainWindow::retranslate() {
     edit_menu_->setTitle(text("menu.edit"));
     view_menu_->setTitle(text("menu.view"));
     palette_action_->setText(text("action.commandPalette"));
+    settings_action_->setText(text("action.settings"));
     workspace_menu_->setTitle(text("menu.workspaces"));
     help_menu_->setTitle(text("menu.help"));
     quit_->setText(text("action.quit"));

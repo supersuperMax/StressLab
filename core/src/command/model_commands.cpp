@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace fem::command::detail {
 
@@ -23,7 +24,7 @@ namespace {
                        "argument '" + std::string(name) + "': " + problem);
 }
 
-model::Properties to_properties(const Value& value) {
+model::Properties to_properties(const Value& value, std::string_view name = "properties") {
     switch (value.kind()) {
         case Value::Kind::none:
             return nullptr;
@@ -36,23 +37,70 @@ model::Properties to_properties(const Value& value) {
         case Value::Kind::string:
             return value.as_string();
         case Value::Kind::path:
-            throw_argument("properties", "properties hold JSON; pass the path as text");
+            throw_argument(name, "properties hold JSON; pass the path as text");
         case Value::Kind::list: {
             model::Properties list = model::Properties::array();
             for (const Value& item : value.as_list()) {
-                list.push_back(to_properties(item));
+                list.push_back(to_properties(item, name));
             }
             return list;
         }
         case Value::Kind::dict: {
             model::Properties dict = model::Properties::object();
             for (const auto& [key, item] : value.as_dict()) {
-                dict[key] = to_properties(item);
+                dict[key] = to_properties(item, name);
             }
             return dict;
         }
     }
     return nullptr;
+}
+
+/// The names of a key of `model.set_property`: "solver/tolerance" → solver, tolerance.
+std::vector<std::string> key_path(const std::string& key) {
+    std::vector<std::string> names(1);
+    for (std::size_t i = 0; i < key.size(); ++i) {
+        const char c = key[i];
+        if (c == '/') {
+            names.emplace_back();
+        } else if (c != '~') {
+            names.back() += c;
+        } else if (i + 1 < key.size() && (key[i + 1] == '0' || key[i + 1] == '1')) {
+            names.back() += key[++i] == '0' ? '~' : '/';
+        } else {
+            throw_argument("key", "'~' must be followed by 0 or 1, as in a JSON Pointer");
+        }
+    }
+    for (const std::string& name : names) {
+        if (name.empty()) {
+            throw_argument("key", "'" + key + "' has an empty name");
+        }
+    }
+    return names;
+}
+
+/// Sets or, for None, removes the property at `key` of `properties`.
+void set_property(model::Properties& properties, const std::string& key, const Value& value) {
+    const std::vector<std::string> names = key_path(key);
+    model::Properties* parent = &properties;
+    for (std::size_t i = 0; i + 1 < names.size(); ++i) {
+        const auto found = parent->find(names[i]);
+        if (found == parent->end()) {
+            if (value.is_none()) {
+                return;  // Nothing to remove.
+            }
+            parent = &((*parent)[names[i]] = model::Properties::object());
+        } else if (found->is_object()) {
+            parent = &*found;
+        } else {
+            throw_argument("key", "'" + names[i] + "' in '" + key + "' is not an object");
+        }
+    }
+    if (value.is_none()) {
+        parent->erase(names.back());
+    } else {
+        (*parent)[names.back()] = to_properties(value, "value");
+    }
 }
 
 std::string describe(const model::Document& doc,
@@ -144,6 +192,18 @@ void register_model_commands(CommandBus& bus) {
                                             to_properties(context.args().at("properties")));
             return CommandResult{};
         });
+
+    bus.register_command(spec(model_commands::set_property,
+                              {required("object", ArgType::object),
+                               required("key", ArgType::string), required("value", ArgType::any)}),
+                         [](CommandContext& context) {
+                             const Arguments& args = context.args();
+                             const model::ObjectId id = args.object("object");
+                             model::Properties properties = context.document().get(id).properties();
+                             set_property(properties, args.string("key"), args.at("value"));
+                             context.editor().set_properties(id, std::move(properties));
+                             return CommandResult{};
+                         });
 
     bus.register_command(spec(model_commands::remove, {required("object", ArgType::object)}),
                          [](CommandContext& context) {

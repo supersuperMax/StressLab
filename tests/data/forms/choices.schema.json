@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "required": ["method"],
+  "properties": {
+    "method": {
+      "type": "string",
+      "title": "%solver.method%",
+      "enum": ["direct", "iterative"],
+      "x-enumTitles": ["%solver.method.direct%", "%solver.method.iterative%"]
+    },
+    "order": {"type": "integer", "title": "Element order", "enum": [1, 2], "default": 2},
+    "mixed": {"enum": ["auto", 0, true]}
+  }
+}

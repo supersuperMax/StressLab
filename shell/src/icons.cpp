@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -22,10 +23,24 @@ namespace {
 /// The share of the size of the default icon left free on each side around the tile.
 constexpr qreal default_icon_margin = 0.12;
 
-/// An SVG drawn as a mask in a colour of the palette of the application.
+/// The colours of the status marks: amber for warnings, the coral of the brand for errors.
+const QColor warning_color(0xE0, 0x9B, 0x10);
+
+// Shapes of the status marks on a 16x16 grid; the sign is cut out of the shape (even-odd).
+constexpr const char* warning_svg =
+    R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">)"
+    R"(<path fill-rule="evenodd" d="M8 1.2 15.3 14.6H.7Z M7.1 5.4h1.8v4.9H7.1Z )"
+    R"(M7.1 11.4h1.8v1.8H7.1Z"/></svg>)";
+constexpr const char* error_svg =
+    R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">)"
+    R"(<path fill-rule="evenodd" d="M1 8a7 7 0 1 0 14 0A7 7 0 1 0 1 8Z M4.6 5.9 5.9 4.6 8 6.7 )"
+    R"(10.1 4.6 11.4 5.9 9.3 8 11.4 10.1 10.1 11.4 8 9.3 5.9 11.4 4.6 10.1 6.7 8Z"/></svg>)";
+
+/// An SVG drawn as a mask in a colour of the palette of the application, or in a fixed colour.
 class TintedSvgEngine final : public QIconEngine {
 public:
-    explicit TintedSvgEngine(QByteArray svg) : svg_(std::move(svg)) {}
+    explicit TintedSvgEngine(QByteArray svg, std::optional<QColor> color = std::nullopt)
+        : svg_(std::move(svg)), color_(color) {}
 
     void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode,
                QIcon::State state) override {
@@ -48,7 +63,7 @@ public:
         return pixmap;
     }
 
-    [[nodiscard]] QIconEngine* clone() const override { return new TintedSvgEngine(svg_); }
+    [[nodiscard]] QIconEngine* clone() const override { return new TintedSvgEngine(svg_, color_); }
     [[nodiscard]] QString key() const override { return QStringLiteral("StressLabTintedSvg"); }
     bool isNull() override { return false; }
 
@@ -68,14 +83,18 @@ private:
         QPainter painter(&image);
         painter.setRenderHint(QPainter::Antialiasing);
         renderer.render(&painter, target);
-        // Only the shape stays: every pixel takes the colour, keeping its coverage.
+        // Only the shape stays: every pixel takes the colour, keeping its coverage. A fixed colour
+        // gives way to the text of a selection, which may be of the same colour.
         painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-        painter.fillRect(image.rect(), icon_color(QGuiApplication::palette(), mode, state));
+        painter.fillRect(image.rect(), color_ && mode != QIcon::Selected
+                                           ? *color_
+                                           : icon_color(QGuiApplication::palette(), mode, state));
         painter.end();
         return image;
     }
 
     QByteArray svg_;
+    std::optional<QColor> color_;
 };
 
 QString to_qstring(const std::filesystem::path& path) {
@@ -149,6 +168,18 @@ QByteArray default_module_icon_svg() {
 
 QIcon default_module_icon() {
     return tinted_svg_icon(default_module_icon_svg());
+}
+
+QIcon status_icon(form::Severity severity) {
+    switch (severity) {
+        case form::Severity::warning:
+            return QIcon(new TintedSvgEngine(warning_svg, warning_color));
+        case form::Severity::error:
+            return QIcon(new TintedSvgEngine(error_svg, brand::coral));
+        case form::Severity::ok:
+            break;
+    }
+    return {};
 }
 
 QIcon module_icon(const extension::ExtensionManager& extensions, std::string_view owner,

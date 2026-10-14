@@ -37,6 +37,7 @@ namespace {
 namespace zone = fem::shell::zone;
 using fem::shell::MainWindow;
 
+// The zones shown when the window opens; the settings are closed until opened.
 const std::vector<std::string_view> all_zones{
     zone::stage_bar,   zone::activity_bar, zone::viewport,       zone::model_tree, zone::properties,
     zone::prompt_line, zone::journal,      zone::python_console, zone::jobs,       zone::problems};
@@ -194,15 +195,28 @@ TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
             }
         }
     }
-    std::set<QString> expected{"menu.file", "app.quit",  "menu.edit",       "app.undo",
-                               "app.redo",  "menu.view", "view.fullScreen", "view.commandPalette",
-                               "menu.help", "app.about"};
+    std::set<QString> expected{"menu.file",     "app.settings",    "app.quit",
+                               "menu.edit",     "app.undo",        "app.redo",
+                               "menu.view",     "view.fullScreen", "view.commandPalette",
+                               "view.settings", "menu.help",       "app.about"};
     for (const std::string_view id : all_zones) {
         if (id != zone::viewport) {
             expected.insert("view." + q(id));
         }
     }
     EXPECT_EQ(named, expected);
+}
+
+TEST_F(ShellWindow, SettingsOpenFromTheMenuAsATabNextToTheProperties) {
+    ads::CDockWidget* settings = dock(zone::settings);
+    ASSERT_NE(settings, nullptr);
+    EXPECT_FALSE(window_->is_zone_shown(zone::settings));
+    EXPECT_EQ(settings->dockAreaWidget(), dock(zone::properties)->dockAreaWidget());
+    window_->findChild<QAction*>(QStringLiteral("app.settings"))->trigger();
+    EXPECT_TRUE(window_->is_zone_shown(zone::settings));
+    EXPECT_EQ(settings->dockAreaWidget()->currentDockWidget(), settings);
+    EXPECT_TRUE(window_->zone_action(zone::settings)->isChecked());
+    EXPECT_EQ(settings->windowTitle(), QStringLiteral("Settings"));
 }
 
 TEST_F(ShellWindow, ApplicationItemsUseTheRolesAndKeysOfTheOs) {
@@ -212,6 +226,10 @@ TEST_F(ShellWindow, ApplicationItemsUseTheRolesAndKeysOfTheOs) {
     ASSERT_NE(about, nullptr);
     EXPECT_EQ(quit->menuRole(), QAction::QuitRole);
     EXPECT_EQ(about->menuRole(), QAction::AboutRole);
+    auto* settings = window_->findChild<QAction*>(QStringLiteral("app.settings"));
+    ASSERT_NE(settings, nullptr);
+    EXPECT_EQ(settings->menuRole(), QAction::PreferencesRole);
+    EXPECT_EQ(settings->shortcut(), fem::shell::key_sequence("Mod+,"));
     EXPECT_EQ(quit->shortcut(), fem::shell::key_sequence("Mod+Q"));
     EXPECT_EQ(window_->findChild<QAction*>(QStringLiteral("view.fullScreen"))->shortcut(),
               QKeySequence(QKeySequence::FullScreen));
