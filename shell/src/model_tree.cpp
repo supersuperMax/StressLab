@@ -478,6 +478,11 @@ ModelTreePanel::ModelTreePanel(Workbench& workbench, Commands& commands, QWidget
 }
 
 ModelTreePanel::~ModelTreePanel() {
+    // The view and the model are deleted after the members of this class: what they report then
+    // (the current row going away) must not reach it.
+    for (QObject* child : findChildren<QObject*>()) {
+        QObject::disconnect(child, nullptr, this, nullptr);
+    }
     // The selection goes with the panel: nothing selected is left in the keys and commands.
     commands_.set_selected_object({});
 }

@@ -288,6 +288,17 @@ TEST_F(FormWidgetTest, WhatDoesNotFitIsNotWritten) {
     EXPECT_EQ(source_.writes.size(), 1U);
 }
 
+TEST_F(FormWidgetTest, ItIsDestroyedWithAFieldBeingEdited) {
+    show("scalars");
+    auto* edit = editor<QLineEdit>("name");
+    edit->setFocus();
+    QTest::keyClicks(edit, QStringLiteral("typed"));
+    // Destroying the form takes the focus from the field, which reports the end of editing: on
+    // Linux this used to reach the form after its members were gone. Nothing is written.
+    widget_.reset();
+    EXPECT_TRUE(source_.writes.empty());
+}
+
 TEST_F(FormWidgetTest, ADecimalCommaIsReadAsAPoint) {
     show("material");
     type("nu", QStringLiteral("0,25"));

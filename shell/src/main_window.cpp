@@ -89,6 +89,9 @@ MainWindow::MainWindow(Workbench workbench, QWidget* parent)
 }
 
 MainWindow::~MainWindow() {
+    // The tree refreshes what modules contribute when its selection changes: not any more.
+    tree_->set_on_selection({});
+    tree_->set_module_menu({});
     // What modules contribute goes before the widgets it is in.
     history_watches_.clear();
     model_changed_.reset();

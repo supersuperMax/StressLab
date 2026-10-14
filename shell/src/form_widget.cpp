@@ -52,7 +52,14 @@ FormWidget::FormWidget(const l10n::Localization& localization, QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
 }
 
-FormWidget::~FormWidget() = default;
+FormWidget::~FormWidget() {
+    // The editors outlive the members of this class: QWidget deletes its children after them. A
+    // text field that has the focus then reports the end of editing (closing the window takes the
+    // focus on Linux): nothing of a child may reach this object any more.
+    for (QObject* child : findChildren<QObject*>()) {
+        QObject::disconnect(child, nullptr, this, nullptr);
+    }
+}
 
 void FormWidget::set_form(const form::FormSpec* form, FormSource* source, std::string context) {
     form_ = form;
