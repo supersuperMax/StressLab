@@ -80,7 +80,8 @@ struct ActivationEvent {
 ///     version = "1.2.0"             # required, Semantic Versioning
 ///     engine = "^1.0"               # required, versions of the platform the module runs on
 ///     description = "..."
-///     kind = "python"               # native | python | process; with `entry`, or neither
+///     author = "..."                # who made it, for the module manager
+///     kind = "python"              # native | python | process; with `entry`, or neither
 ///     entry = "example:activate"    # native: library path without extension;
 ///                                   # python: package.module:function; process: executable path
 ///     requires = ["fem.other>=1.0"] # modules it needs, with optional version ranges
@@ -96,6 +97,8 @@ struct Manifest {
     std::string id;
     std::string name;
     std::string description;
+    /// Who made the module, as the module manager shows it; may be empty.
+    std::string author;
     Version version;
     VersionRange engine;
     std::optional<ExtensionKind> kind;  ///< None for a module without code.

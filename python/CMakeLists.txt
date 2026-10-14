@@ -78,6 +78,7 @@ endif()
 set(fem_python_package_files
     stresslab/__init__.py
     stresslab/_commands.py
+    stresslab/_console.py
     stresslab/py.typed
     stresslab_host/__init__.py
     stresslab_host/__main__.py
@@ -122,7 +123,7 @@ endif()
 list(JOIN fem_python_site_packages "${fem_path_separator}" fem_python_site_packages)
 
 # The native module is built in; its pure Python part is imported from the site folder.
-add_library(fem_python_embed STATIC embed/src/interpreter.cpp bindings/module.cpp)
+add_library(fem_python_embed STATIC embed/src/console.cpp embed/src/interpreter.cpp bindings/module.cpp)
 target_include_directories(fem_python_embed PUBLIC embed/include)
 target_link_libraries(fem_python_embed PUBLIC fem_python_bindings Python::Python)
 target_compile_definitions(

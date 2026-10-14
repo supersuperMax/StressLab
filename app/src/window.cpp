@@ -1,16 +1,21 @@
 #include "window.h"
 
+#include "fem/core/command/journal.h"
+#include "fem/core/extension/profile.h"
+#include "fem/core/extension/user_modules.h"
 #include "fem/core/job/job_keys.h"
 #include "fem/core/log/log.h"
 #include "fem/core/product.h"
 #include "fem/core/user_folders.h"
 #include "fem/core/version.h"
+#include "fem/python/interpreter.h"
 #include "fem/shell/brand.h"
 #include "fem/shell/main_window.h"
 #include "fem/shell/strings.h"
 #include "fem/shell/theme.h"
 #include "fem/shell/workspaces.h"
 
+#include "console_engine.h"
 #include "log_slot.h"
 #include "module_pump.h"
 
@@ -18,9 +23,12 @@
 #include <QLocale>
 #include <QMetaObject>
 #include <exception>
+#include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <utility>
 
 namespace fem::app {
@@ -73,8 +81,26 @@ int run_window(Environment environment) {
     application.follow_log_level(logging);
     shell::add_shell_catalogs(application.localization());
 
+    // What the user installed from folders and disabled in the module manager.
+    std::filesystem::path modules_file;
+    std::filesystem::path profiles_folder;
+    try {
+        modules_file = user_folders().config / "modules.json";
+        profiles_folder = user_folders().config / "profiles";
+    } catch (const std::exception&) {
+        // No home folder: the changes live as long as the window.
+    }
+    extension::UserModules user_state;
+    std::error_code missing;
+    if (!modules_file.empty() && std::filesystem::exists(modules_file, missing)) {
+        try {
+            user_state = extension::load_user_modules(modules_file);
+        } catch (const std::exception& error) {
+            log->warn("the state of the modules is not used: {}", error.what());
+        }
+    }
     application.install_modules();
-    application.enable_all_modules();
+    application.enable_user_modules(user_state);
     // What modules ask outside their commands is done in the event loop, between two events.
     const auto call_soon = [&qt](std::function<void()> work) {
         QMetaObject::invokeMethod(&qt, std::move(work), Qt::QueuedConnection);
@@ -98,19 +124,63 @@ int run_window(Environment environment) {
             application.settings().save_file(settings::Level::user, file);
         };
     }
-    shell::MainWindow window(shell::Workbench{.localization = application.localization(),
-                                              .workspaces = workspaces,
-                                              .extensions = application.extensions(),
-                                              .bus = application.bus(),
-                                              .keys = application.keys(),
-                                              .settings = application.settings(),
-                                              .save_settings = std::move(save_settings)});
-    window.show();
+    // So does the module manager.
+    std::function<void()> save_modules;
+    if (!modules_file.empty()) {
+        save_modules = [&application, &log, file = modules_file] {
+            try {
+                extension::save_user_modules(file,
+                                             extension::user_modules(application.extensions()));
+            } catch (const std::exception& error) {
+                log->error("the state of the modules cannot be saved: {}", error.what());
+            }
+        };
+    }
+    std::optional<extension::ProfileLibrary> profiles;
+    if (!profiles_folder.empty()) {
+        profiles.emplace(profiles_folder);
+    }
 
-    application.extensions().startup();
-    const int code = QApplication::exec();
-    pump.drain();
+    // The journal of the session and the Python console, on the document of the window.
+    command::SessionJournal journal(application.bus());
+    std::optional<python::Interpreter> python;
+    std::unique_ptr<PythonConsoleEngine> console;
+    std::string console_unavailable;
+    try {
+        python.emplace();
+        python->attach(application.bus(), application.keys());
+        console = std::make_unique<PythonConsoleEngine>();
+    } catch (const std::exception& error) {
+        log->error("the Python console is not available: {}", error.what());
+        console_unavailable = error.what();
+    }
+
+    int code = 0;
+    {
+        shell::MainWindow window(shell::Workbench{.localization = application.localization(),
+                                                  .workspaces = workspaces,
+                                                  .extensions = application.extensions(),
+                                                  .bus = application.bus(),
+                                                  .keys = application.keys(),
+                                                  .settings = application.settings(),
+                                                  .save_settings = std::move(save_settings),
+                                                  .console = console.get(),
+                                                  .console_unavailable = console_unavailable,
+                                                  .journal = &journal,
+                                                  .profiles = profiles ? &*profiles : nullptr,
+                                                  .save_modules = std::move(save_modules)});
+        window.show();
+
+        application.extensions().startup();
+        window.check_required_modules();
+        code = QApplication::exec();
+        pump.drain();
+    }
     log->info("the window closed");
+    console.reset();
+    if (python) {
+        python->detach();
+    }
     return code;
 }
 

@@ -5,6 +5,7 @@
 id = "test.full"
 name = "Полный модуль"
 description = "Uses every contribution point"
+author = "Лаборатория прочности"
 version = "1.2.0-rc.1+build.7"
 engine = "^1.0"
 kind = "python"

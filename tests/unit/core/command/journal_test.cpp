@@ -14,6 +14,7 @@
 #include "journal_test_support.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -130,6 +131,50 @@ TEST(Journal, FileJournalThatCannotBeCreatedThrows) {
     const TempDir dir(fs::path(u8"журнал без каталога"));
     EXPECT_COMMAND_ERROR((void)FileJournal(dir.path() / "missing" / "x.slpy"),
                          CommandErrc::journal_io);
+}
+
+TEST(Journal, SessionJournalKeepsTheEntriesAndSavesTheScript) {
+    JournalSession session;
+    SessionJournal journal(session.bus);
+    EXPECT_TRUE(journal.entries().empty());
+    EXPECT_EQ(journal.text(), journal_header());
+    std::vector<std::string> announced;
+    const fem::Subscription subscription =
+        journal.on_entry([&](std::string_view entry) { announced.emplace_back(entry); });
+
+    run_golden_session(session.bus);
+    EXPECT_EQ(journal.entries(), session.journal.entries());
+    EXPECT_EQ(announced, session.journal.entries());
+    // A transaction is one entry of several lines.
+    EXPECT_TRUE(std::any_of(
+        journal.entries().begin(), journal.entries().end(),
+        [](const std::string& entry) { return entry.starts_with("with stresslab.transaction("); }));
+    const std::string golden = read_file(golden_path());
+    EXPECT_EQ(journal.text(), golden);
+
+    const TempDir dir(fs::path(u8"журнал сессии StressLab"));
+    const fs::path file = dir.path() / fs::path(u8"мой сценарий.slpy");
+    journal.save(file);
+    EXPECT_EQ(read_file(file), golden);
+    // Saving again replaces the file.
+    session.bus.execute(
+        fem::command::model_commands::rename,
+        {{"object", session.doc.find_by_owner(test_owner).front()}, {"name", "renamed"}});
+    journal.save(file);
+    EXPECT_EQ(read_file(file), journal.text());
+    EXPECT_FALSE(fs::exists(fs::path(file).concat(".tmp")));
+
+    // The saved script rebuilds the same document.
+    JournalSession replayed;
+    replay_journal(read_file(file), replayed.bus);
+    EXPECT_EQ(dump(replayed.doc), dump(session.doc));
+}
+
+TEST(Journal, SessionJournalThatCannotBeSavedThrows) {
+    JournalSession session;
+    const SessionJournal journal(session.bus);
+    const TempDir dir(fs::path(u8"журнал без каталога"));
+    EXPECT_COMMAND_ERROR(journal.save(dir.path() / "missing" / "x.slpy"), CommandErrc::journal_io);
 }
 
 TEST(Journal, ParserReadsStatementsAndSkipsCommentsAndHeader) {

@@ -6,6 +6,7 @@
 #include "fem/core/job/local_executor.h"
 #include "fem/core/settings/error.h"
 
+#include <algorithm>
 #include <exception>
 #include <system_error>
 #include <utility>
@@ -64,6 +65,15 @@ Application::Application(const Environment& environment, std::string log_categor
     events_ = manager_.on_event([this](const ExtensionEvent& event) {
         const auto log = log::logger(log_category_);
         switch (event.kind) {
+            case ExtensionEvent::Kind::installed:
+                log->debug("module '{}' installed", event.id);
+                break;
+            case ExtensionEvent::Kind::uninstalled:
+                log->info("module '{}' uninstalled", event.id);
+                break;
+            case ExtensionEvent::Kind::updated:
+                log->info("module '{}' updated", event.id);
+                break;
             case ExtensionEvent::Kind::enabled:
                 log->info("module '{}' enabled", event.id);
                 break;
@@ -106,10 +116,11 @@ void Application::install_modules(const std::vector<fs::path>& folders) {
     }
 }
 
-void Application::enable_all_modules() {
+void Application::enable_all_modules(const std::vector<std::string>& except) {
     const auto log = log::logger(log_category_);
     for (const extension::ExtensionInfo* info : manager_.extensions()) {
-        if (info->enabled()) {
+        if (info->enabled() ||
+            std::find(except.begin(), except.end(), info->id()) != except.end()) {
             continue;
         }
         if (!info->compatible()) {
@@ -122,6 +133,18 @@ void Application::enable_all_modules() {
             log->error("module '{}' cannot be enabled: {}", info->id(), error.what());
         }
     }
+}
+
+void Application::enable_user_modules(const extension::UserModules& modules) {
+    const auto log = log::logger(log_category_);
+    for (const fs::path& folder : modules.local) {
+        try {
+            (void)manager_.install(folder, extension::ExtensionSource::local);
+        } catch (const std::exception& error) {
+            log->error("the module in '{}' cannot be installed: {}", display(folder), error.what());
+        }
+    }
+    enable_all_modules(modules.disabled);
 }
 
 bool Application::enable_profile(const fs::path& file) {

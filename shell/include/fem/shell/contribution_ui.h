@@ -7,6 +7,7 @@
 #include "fem/shell/workbench.h"
 
 #include <QKeySequence>
+#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -44,6 +45,9 @@ struct ContributionHosts {
     std::map<std::string, QMenu*, std::less<>> shell_menus;
     QToolBar* stage_bar = nullptr;
     QToolBar* activity_bar = nullptr;
+    /// The activities of the shell itself (Model, Modules, Settings): first on the activity bar,
+    /// before those of modules, kept across rebuilds. They belong to the window.
+    QList<QAction*> shell_activities;
     /// The context toolbar, at the top of the 3D view.
     QToolBar* context_toolbar = nullptr;
     ads::CDockManager* docks = nullptr;

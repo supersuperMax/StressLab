@@ -73,6 +73,13 @@ struct ExtensionInfo {
 /// Sent by the Extension Manager to the shell and other listeners.
 struct ExtensionEvent {
     enum class Kind : std::uint8_t {
+        installed,  ///< It was added to the index (`install`, `scan`); it is disabled.
+        /// It was removed from the index (`uninstall`), after it was disabled. Pointers to its
+        /// `ExtensionInfo` and contributions are no longer valid.
+        uninstalled,
+        /// Its manifest was read again (`reload`); pointers to its contributions taken before are
+        /// no longer valid. Sent while it is disabled, before it is enabled again.
+        updated,
         enabled,            ///< Its contributions were added to the registry.
         activated,          ///< Its code was loaded and activated.
         activation_failed,  ///< Its code could not be activated; `message` says why.
@@ -89,8 +96,9 @@ struct ExtensionEvent {
     std::optional<CrashReport> crash;
 };
 
-/// "extension.enabled", "extension.activated", "extension.activationFailed",
-/// "extension.deactivated", "extension.crashed".
+/// "extension.installed", "extension.uninstalled", "extension.updated", "extension.enabled",
+/// "extension.activated", "extension.activationFailed", "extension.deactivated",
+/// "extension.crashed".
 [[nodiscard]] std::string_view to_string(ExtensionEvent::Kind kind) noexcept;
 
 /// The message the user sees when the code of a module stopped, in the language of
@@ -126,6 +134,14 @@ struct ProfileIssue {
     std::string message;
 };
 
+/// What `ExtensionManager::apply_profile` would do now, by id.
+struct ProfilePlan {
+    /// Modules it would enable: those of the profile and what they require.
+    std::vector<std::string> enable;
+    /// Enabled modules it would disable: neither in the profile nor required by it.
+    std::vector<std::string> disable;
+};
+
 /// What `ExtensionManager::apply_profile` did.
 struct ProfileReport {
     std::vector<std::string> enabled;   ///< Enabled by the profile, with dependencies.
@@ -135,6 +151,39 @@ struct ProfileReport {
     std::vector<ProfileIssue> version_mismatches;
     /// Installed but could not be enabled (incompatible, missing dependency, conflict).
     std::vector<ProfileIssue> failed;
+};
+
+/// What `ExtensionManager::reload` did with the modules it had to disable.
+struct ReloadReport {
+    /// Enabled again with the new manifest, the reloaded module first.
+    std::vector<std::string> enabled;
+    /// Could not be enabled again (the new manifest is incompatible, needs a missing module, takes
+    /// an id of another module); they stay disabled.
+    std::vector<ProfileIssue> failed;
+};
+
+/// A module installed from a folder whose manifest there has another version now: an update the
+/// module manager offers ("Updates").
+struct ExtensionUpdate {
+    std::string id;
+    Version installed;
+    Version available;
+};
+
+/// A module the objects of the document belong to, which is not enabled: its objects are opaque
+/// (docs/architecture.md §4.6 item 4; the bar "The model needs the modules…" of
+/// docs/interface-design.md §6, "Profiles").
+struct NeededModule {
+    std::string id;
+    /// Objects of the document it owns.
+    std::size_t objects = 0;
+    /// The installed module; nullptr if it is not installed.
+    const ExtensionInfo* extension = nullptr;
+
+    /// It is installed and this platform can run it.
+    [[nodiscard]] bool can_enable() const noexcept {
+        return extension != nullptr && extension->compatible();
+    }
 };
 
 struct ExtensionManagerOptions {
@@ -187,8 +236,28 @@ public:
     /// ExtensionError(conflict) if the id is installed from another folder.
     const ExtensionInfo& install(const std::filesystem::path& folder, ExtensionSource source);
     /// Installs a module from a parsed manifest; its files are in `folder`. Throws as above.
+    /// Each module installed sends "extension.installed".
     const ExtensionInfo& install(Manifest manifest, const std::filesystem::path& folder,
                                  ExtensionSource source);
+    /// Removes a module from the index: disables it and the modules that need it first, as
+    /// `disable` does, then forgets it and sends "extension.uninstalled". Its folder stays on disk
+    /// and its objects in the model stay opaque; a native library stays loaded until the next
+    /// start. Modules that need it stay installed and cannot be enabled until it is installed
+    /// again. Throws ExtensionError(unknown_extension), ExtensionError(invalid_state) for a module
+    /// shipped with the application, and as `disable`.
+    void uninstall(std::string_view id);
+    /// Reads the manifest of a module from its folder again: the module was changed there (an
+    /// update of a local module). If the module was enabled, it and the enabled modules that need
+    /// it are disabled, the new manifest replaces the old one ("extension.updated"), and they are
+    /// enabled again; what cannot be enabled any more is reported and stays disabled. A native
+    /// library loaded in this session is not reloaded until the next start. The `ExtensionInfo`
+    /// of the module stays where it was. Throws ExtensionError(unknown_extension),
+    /// ExtensionError(io) and ManifestError for the manifest, ExtensionError(conflict) if the
+    /// folder has a module of another id now, and as `disable`; then nothing changes.
+    ReloadReport reload(std::string_view id);
+    /// Modules not shipped with the application whose folder has a manifest of another version
+    /// now, sorted by id. Manifests that cannot be read are skipped.
+    [[nodiscard]] std::vector<ExtensionUpdate> updates() const;
 
     /// Installed modules, sorted by id.
     [[nodiscard]] std::vector<const ExtensionInfo*> extensions() const;
@@ -217,6 +286,10 @@ public:
     /// nothing while a command of one of them is running.
     std::vector<std::string> disable(std::string_view id);
 
+    /// Modules that own objects of the document but are not enabled, sorted by id: the modules the
+    /// model needs. Objects of the core never count.
+    [[nodiscard]] std::vector<NeededModule> needed_modules() const;
+
     // --- Activation ------------------------------------------------------------------------------
 
     /// The runtime for modules of `kind`, replacing the one there; nullptr removes it. The core
@@ -240,6 +313,9 @@ public:
     /// The enabled modules with their versions, as a profile.
     [[nodiscard]] Profile profile(std::string name,
                                   nlohmann::json layout = nlohmann::json::object()) const;
+    /// What `apply_profile` would enable and disable, sorted by id; modules of the profile that
+    /// cannot be enabled are left out.
+    [[nodiscard]] ProfilePlan plan_profile(const Profile& profile) const;
     /// Enables the modules of the profile (with their dependencies) and disables the others.
     ProfileReport apply_profile(const Profile& profile);
 
@@ -256,6 +332,8 @@ private:
     /// (and what they require) are left out.
     [[nodiscard]] std::vector<std::string> resolve(std::string_view id, bool skip_enabled) const;
     void check_conflicts(const std::vector<std::string>& plan) const;
+    /// Gives a disabled record its manifest and checks whether this platform can run it.
+    void set_manifest(Record& record, Manifest manifest) const;
     void enable_one(Record& record);
     void disable_one(Record& record);
     /// Activates `record` and what it requires; appends what was activated. Throws

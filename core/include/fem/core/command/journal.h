@@ -1,11 +1,13 @@
 #pragma once
 
 #include "fem/core/command/value.h"
+#include "fem/core/signal.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,6 +51,35 @@ public:
 private:
     std::filesystem::path path_;
     std::ofstream out_;
+};
+
+/// The journal of the session that the window shows (task 1.14): every entry of a Command Bus
+/// since the journal was made, kept in memory and saved as a script on request ("Save journal as
+/// script"). The bus must outlive it.
+class SessionJournal {
+public:
+    explicit SessionJournal(CommandBus& bus);
+    SessionJournal(const SessionJournal&) = delete;
+    SessionJournal& operator=(const SessionJournal&) = delete;
+    SessionJournal(SessionJournal&&) = delete;
+    SessionJournal& operator=(SessionJournal&&) = delete;
+    ~SessionJournal() = default;
+
+    /// The entries in the order they were journaled; a transaction is one entry of several lines.
+    [[nodiscard]] const std::vector<std::string>& entries() const noexcept { return entries_; }
+    /// The journal as a script: `journal_header()`, then each entry followed by '\n'.
+    [[nodiscard]] std::string text() const;
+    /// Writes `text()` to a file, replacing it through a temporary file. Throws
+    /// CommandError(journal_io).
+    void save(const std::filesystem::path& file) const;
+
+    /// Called with each new entry after it is added.
+    [[nodiscard]] Subscription on_entry(std::function<void(std::string_view entry)> listener);
+
+private:
+    std::vector<std::string> entries_;
+    Signal<std::string_view> added_;
+    Subscription journal_;
 };
 
 /// A statement of a journal.

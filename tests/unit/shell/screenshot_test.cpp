@@ -1,20 +1,27 @@
-// Pictures of the window for reviews (tasks 1.11-1.13): with STRESSLAB_SCREENSHOT_DIR set, the
-// window with a module, a model tree and the form of a material is drawn in the light and dark
-// themes, in Russian and English, and saved as PNG there. CI saves
-// them as artifacts on each OS; without the variable the test is skipped. Run it on the platform
+// Pictures of the window for reviews (tasks 1.11-1.14): with STRESSLAB_SCREENSHOT_DIR set, the
+// window with a module, a model tree and the form of a material, and the window with the module
+// manager, the console and the bar of the modules the model needs, are drawn in the light and dark
+// themes, in Russian and English, and saved as PNG there. CI saves them as artifacts on each OS;
+// without the variable the test is skipped. Run it on the platform
 // of the OS (QT_QPA_PLATFORM=windows or cocoa): the platform without a screen has no fonts on
 // Windows.
 
+#include "fem/core/command/journal.h"
 #include "fem/core/command/model_commands.h"
+#include "fem/core/extension/profile.h"
 #include "fem/core/l10n/localization.h"
+#include "fem/shell/extensions_panel.h"
+#include "fem/shell/file_dialogs.h"
 #include "fem/shell/main_window.h"
 #include "fem/shell/model_tree.h"
 #include "fem/shell/property_panel.h"
+#include "fem/shell/python_console.h"
 #include "fem/shell/strings.h"
 #include "fem/shell/theme.h"
 #include "fem/shell/workspaces.h"
 
 #include "shell_test_support.h"
+#include <DockWidget.h>
 #include <gtest/gtest.h>
 
 #include <QApplication>
@@ -24,6 +31,7 @@
 #include <QToolButton>
 #include <QtGlobal>
 #include <string>
+#include <tuple>
 #include <utility>
 
 namespace {
@@ -154,6 +162,83 @@ TEST(ShellScreenshots, OfTheWindow) {
         const QString file = QDir(folder).filePath(
             QStringLiteral("stresslab-%1-%2-%3.png").arg(os, shot.theme, shot.language));
         EXPECT_TRUE(window.grab().save(file)) << file.toStdString();
+    }
+    fem::shell::apply_theme(*qApp, Qt::ColorScheme::Light);
+}
+
+/// A console that echoes what it is given, for the pictures.
+class EchoConsole final : public fem::shell::ConsoleEngine {
+public:
+    [[nodiscard]] QString banner() const override {
+        return QStringLiteral("Python 3.12, stresslab 0.1.0");
+    }
+    Reply push(const QString& line) override {
+        if (line.startsWith(QLatin1String("print("))) {
+            return {.output = {{false, line.mid(7, line.size() - 9) + QLatin1Char('\n')}}};
+        }
+        return {};
+    }
+    void reset() override {}
+    [[nodiscard]] QStringList complete(const QString&) override { return {}; }
+};
+
+// Task 1.14: the module manager with the card of a module, the console, and the bar that names the
+// modules the model needs.
+TEST(ShellScreenshots, OfTheModuleManagerAndTheConsole) {
+    const QString folder = qEnvironmentVariable("STRESSLAB_SCREENSHOT_DIR");
+    if (folder.isEmpty()) {
+        GTEST_SKIP() << "STRESSLAB_SCREENSHOT_DIR is not set";
+    }
+    ASSERT_TRUE(QDir().mkpath(folder));
+    const QString os = QSysInfo::productType();
+    // The card in the light and dark themes, the list of modules with a profile in English.
+    for (const auto& [language, scheme, theme, card] :
+         {std::tuple{"ru", Qt::ColorScheme::Light, "light", true},
+          std::tuple{"en", Qt::ColorScheme::Dark, "dark", true},
+          std::tuple{"en", Qt::ColorScheme::Light, "list", false}}) {
+        fem::shell::testing::Application app;
+        app.localization.set_language(language);
+        fem::shell::apply_theme(*qApp, scheme);
+        app.add("demo.optimize", demo_module);
+        app.add("demo.dynamics", fem::shell::testing::utf8(u8R"(
+[[contributes.treeNodeTypes]]
+type = "damping"
+title = "Демпфирование"
+)"));
+        fem::command::SessionJournal journal(app.bus);
+        (void)build_model(app.bus);
+        for (const char* name : {"d1", "d2", "d3"}) {
+            (void)app.bus.execute(
+                "model.create", {{"type", "damping"}, {"owner", "demo.dynamics"}, {"name", name}});
+        }
+        (void)app.manager.disable("demo.dynamics");
+        EchoConsole console;
+        fem::shell::Workbench workbench = app.workbench();
+        workbench.console = &console;
+        workbench.journal = &journal;
+        const QString profiles = QDir(folder).filePath(QStringLiteral("profiles-%1").arg(theme));
+        fem::extension::ProfileLibrary library(fem::shell::to_path(profiles));
+        workbench.profiles = &library;
+        fem::shell::MainWindow window(workbench);
+        window.show_extensions();
+        window.extensions().save_profile(fem::shell::testing::utf8(u8"Прочность"));
+        if (card) {
+            window.extensions().show_card("demo.optimize");
+        }
+        window.console().run(QStringLiteral("print('Привет')"));
+        window.console().run(QStringLiteral("stresslab.model.rename(object=1, name='Опора')"));
+        window.check_required_modules();
+        if (scheme == Qt::ColorScheme::Dark) {
+            // The journal is in front otherwise.
+            qobject_cast<ads::CDockWidget*>(window.zone_widget(fem::shell::zone::python_console))
+                ->setAsCurrentTab();
+        }
+        window.show();
+        QApplication::processEvents();
+        const QString file = QDir(folder).filePath(
+            QStringLiteral("stresslab-%1-modules-%2-%3.png").arg(os, theme, language));
+        EXPECT_TRUE(window.grab().save(file)) << file.toStdString();
+        QDir(profiles).removeRecursively();
     }
     fem::shell::apply_theme(*qApp, Qt::ColorScheme::Light);
 }

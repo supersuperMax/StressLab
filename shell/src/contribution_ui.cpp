@@ -516,6 +516,10 @@ void ContributionUi::build_activities() {
         it = activity_panels_.erase(it);
     }
     hosts_.activity_bar->clear();
+    hosts_.activity_bar->addActions(hosts_.shell_activities);
+    if (!hosts_.shell_activities.isEmpty() && !registry.activity_bar().empty()) {
+        hosts_.activity_bar->addSeparator()->setObjectName(QStringLiteral("activity.separator"));
+    }
     for (const extension::ActivityBarContribution* activity : registry.activity_bar()) {
         const QString title =
             to_qstring(workbench_.localization.manifest_text(activity->owner, activity->title));

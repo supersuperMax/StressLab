@@ -24,7 +24,7 @@ endif()
 
 if(FEM_BUILD_GUI)
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
-    add_library(stresslab_window STATIC src/log_slot.cpp src/window.cpp)
+    add_library(stresslab_window STATIC src/console_engine.cpp src/log_slot.cpp src/window.cpp)
     target_link_libraries(stresslab_window PUBLIC stresslab_app fem::shell)
     target_link_libraries(stresslab PRIVATE stresslab_window)
     target_compile_definitions(stresslab PRIVATE FEM_WITH_WINDOW)

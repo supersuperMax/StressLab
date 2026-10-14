@@ -8,10 +8,15 @@
 #include "fem/shell/command_palette.h"
 #include "fem/shell/commands.h"
 #include "fem/shell/contribution_ui.h"
+#include "fem/shell/extensions_panel.h"
+#include "fem/shell/icons.h"
+#include "fem/shell/journal_panel.h"
 #include "fem/shell/keys.h"
 #include "fem/shell/model_tree.h"
 #include "fem/shell/problems.h"
 #include "fem/shell/property_panel.h"
+#include "fem/shell/python_console.h"
+#include "fem/shell/required_modules_bar.h"
 #include "fem/shell/settings_panel.h"
 #include "fem/shell/strings.h"
 
@@ -146,6 +151,10 @@ void MainWindow::build_zones() {
     auto* viewport_layout = new QVBoxLayout(viewport_content);
     viewport_layout->setContentsMargins(0, 0, 0, 0);
     viewport_layout->setSpacing(0);
+    // The bar "The model needs the modules…", hidden until a model needs them.
+    required_ = new RequiredModulesBar(workbench_, viewport_content);
+    required_->set_report([this](const QString& message) { set_prompt(message); });
+    viewport_layout->addWidget(required_);
     context_toolbar_ = new QToolBar(viewport_content);
     context_toolbar_->setObjectName(QStringLiteral("contextToolbar"));
     viewport_layout->addWidget(context_toolbar_);
@@ -162,8 +171,14 @@ void MainWindow::build_zones() {
     // The model tree and the properties of what is selected in it; the settings as a tab next to
     // the properties, closed until opened.
     tree_ = new ModelTreePanel(workbench_, *commands_);
-    docks_->addDockWidget(ads::LeftDockWidgetArea,
-                          add_dock(zone::model_tree, "zone.modelTree", tree_), central);
+    ads::CDockWidget* tree = add_dock(zone::model_tree, "zone.modelTree", tree_);
+    ads::CDockAreaWidget* left = docks_->addDockWidget(ads::LeftDockWidgetArea, tree, central);
+    // The module manager: a tab next to the tree, closed until its activity is clicked.
+    extensions_ = new ExtensionsPanel(workbench_);
+    ads::CDockWidget* extensions = add_dock(zone::extensions, "zone.extensions", extensions_);
+    docks_->addDockWidgetTabToArea(extensions, left);
+    extensions->toggleView(false);
+    left->setCurrentDockWidget(tree);
     properties_ = new PropertyPanel(workbench_);
     ads::CDockWidget* properties = add_dock(zone::properties, "zone.properties", properties_);
     ads::CDockAreaWidget* side =
@@ -190,12 +205,14 @@ void MainWindow::build_zones() {
     prompt_area->setDockAreaFlag(ads::CDockAreaWidget::HideSingleWidgetTitleBar, true);
 
     // The bottom panel: a tab per dock, the journal in front.
-    ads::CDockWidget* journal = add_empty_dock(zone::journal, "zone.journal");
+    journal_ = new JournalPanel(workbench_);
+    journal_->set_report([this](const QString& message) { set_prompt(message); });
+    ads::CDockWidget* journal = add_dock(zone::journal, "zone.journal", journal_);
     ads::CDockAreaWidget* bottom = docks_->addDockWidget(ads::BottomDockWidgetArea, journal);
-    for (const auto& [id, key] :
-         {std::pair{zone::python_console, "zone.console"}, std::pair{zone::jobs, "zone.jobs"}}) {
-        docks_->addDockWidgetTabToArea(add_empty_dock(id, key), bottom);
-    }
+    console_ = new PythonConsolePanel(workbench_);
+    docks_->addDockWidgetTabToArea(add_dock(zone::python_console, "zone.console", console_),
+                                   bottom);
+    docks_->addDockWidgetTabToArea(add_empty_dock(zone::jobs, "zone.jobs"), bottom);
     problems_ = new ProblemsPanel;
     docks_->addDockWidgetTabToArea(add_dock(zone::problems, "zone.problems", problems_), bottom);
     connect(problems_, &ProblemsPanel::changed, this, &MainWindow::retranslate);
@@ -232,6 +249,8 @@ void MainWindow::apply_default_sizes() {
 void MainWindow::build_menus() {
     file_menu_ = menuBar()->addMenu(QString());
     file_menu_->setObjectName(QStringLiteral("menu.file"));
+    file_menu_->addAction(journal_->save_action());
+    file_menu_->addSeparator();
     settings_action_ = file_menu_->addAction(QString(), this, &MainWindow::show_settings);
     settings_action_->setObjectName(QStringLiteral("app.settings"));
     // On macOS the item goes to the application menu, as Cmd+,.
@@ -300,6 +319,25 @@ void MainWindow::build_menus() {
 
 void MainWindow::build_contributions() {
     const auto dock = [this](std::string_view id) { return find_zone(id)->dock; };
+    // The activities of the shell open and close their panels.
+    QList<QAction*> shell_activities;
+    for (const auto& [id, icon] :
+         {std::pair{zone::model_tree, "model"}, std::pair{zone::extensions, "extensions"},
+          std::pair{zone::settings, "settings"}}) {
+        QAction* toggle = dock(id)->toggleViewAction();
+        toggle->setIcon(tinted_svg_icon_file(QStringLiteral(":/stresslab/icons/") +
+                                             QString::fromLatin1(icon) + QStringLiteral(".svg")));
+        shell_activities.push_back(toggle);
+    }
+    extensions_->set_hooks(
+        {.layout = [this] { return layout_to_json(layout()); },
+         .restore_layout =
+             [this](const nlohmann::json& json) {
+                 const std::optional<Layout> found = layout_from_json(json);
+                 return found && restore_layout(*found);
+             },
+         .show_settings = [this](const std::string& owner) { show_settings_of(owner); },
+         .report = [this](const QString& message) { set_prompt(message); }});
     ContributionHosts hosts{
         .window = this,
         .menu_bar = menuBar(),
@@ -309,6 +347,7 @@ void MainWindow::build_contributions() {
                         {"help", help_menu_}},
         .stage_bar = find_zone(zone::stage_bar)->bar,
         .activity_bar = find_zone(zone::activity_bar)->bar,
+        .shell_activities = std::move(shell_activities),
         .context_toolbar = context_toolbar_,
         .docks = docks_,
         .side_panel = dock(zone::model_tree),
@@ -328,7 +367,8 @@ void MainWindow::build_contributions() {
                 (void)show_context_menu("viewport", viewport, position);
             });
 
-    QList<QAction*> shell_actions{undo_, redo_, quit_, settings_action_, full_screen_, about_};
+    QList<QAction*> shell_actions{
+        undo_, redo_, quit_, settings_action_, full_screen_, about_, journal_->save_action()};
     for (const Zone& zone : zones_) {
         if (QAction* toggle = zone_action(zone.id)) {
             shell_actions.push_back(toggle);
@@ -393,6 +433,26 @@ void MainWindow::show_settings() {
     settings->toggleView(true);
     settings->setAsCurrentTab();
     settings->raise();
+}
+
+void MainWindow::show_settings_of(const std::string& owner) {
+    show_settings();
+    (void)settings_->show_section(owner);
+}
+
+void MainWindow::show_extensions() {
+    ads::CDockWidget* extensions = find_zone(zone::extensions)->dock;
+    extensions->toggleView(true);
+    extensions->setAsCurrentTab();
+    extensions->raise();
+}
+
+void MainWindow::check_required_modules() {
+    required_->check();
+}
+
+QAction* MainWindow::save_journal_action() const noexcept {
+    return journal_->save_action();
 }
 
 QMenu* MainWindow::show_context_menu(std::string_view location, QWidget* widget,

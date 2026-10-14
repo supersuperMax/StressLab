@@ -153,6 +153,10 @@ TEST_F(ProfileManagerTest, ApplyingAProfileEnablesItsModulesAndDisablesTheOthers
                           {"test.l10n", Version(0, 9, 0)},
                           {"test.missing", Version(1, 0, 0)},
                           {"test.post", Version(0, 3, 0)}};
+    // test.future cannot be enabled, test.missing is not installed: neither is planned.
+    const fem::extension::ProfilePlan plan = ws.manager.plan_profile(profile);
+    EXPECT_EQ(plan.enable, (Ids{"test.post", "test.solver"}));
+    EXPECT_TRUE(plan.disable.empty());
     const ProfileReport report = ws.manager.apply_profile(profile);
     EXPECT_EQ(report.enabled, (Ids{"test.solver", "test.post"}));
     EXPECT_TRUE(report.disabled.empty());
@@ -171,6 +175,9 @@ TEST_F(ProfileManagerTest, ApplyingAProfileEnablesItsModulesAndDisablesTheOthers
     Profile minimal;
     minimal.name = "Minimal";
     minimal.extensions = {{"test.base", Version(1, 2, 0)}};
+    const fem::extension::ProfilePlan smaller_plan = ws.manager.plan_profile(minimal);
+    EXPECT_TRUE(smaller_plan.enable.empty());
+    EXPECT_EQ(smaller_plan.disable, (Ids{"test.l10n", "test.post", "test.solver"}));
     const ProfileReport smaller = ws.manager.apply_profile(minimal);
     EXPECT_TRUE(smaller.enabled.empty());
     EXPECT_EQ(smaller.disabled, (Ids{"test.l10n", "test.post", "test.solver"}));
