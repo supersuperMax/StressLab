@@ -219,6 +219,8 @@ QWidget* FormWidget::make_editor(Entry& entry, QWidget* parent) {
 
     auto* edit = new QLineEdit(parent);
     edit->setObjectName(name);
+    // Room for a number like 2.1e+11 whatever sits next to the field.
+    edit->setMinimumWidth(edit->fontMetrics().averageCharWidth() * 10);
     entry.editor = edit;
     if (field.kind == FieldKind::raw || field.read_only) {
         edit->setReadOnly(true);
@@ -268,6 +270,9 @@ QWidget* FormWidget::make_editor(Entry& entry, QWidget* parent) {
     }
     auto* units = new QComboBox(row);
     units->setObjectName(object_name("unit:", field.pointer));
+    // As wide as a short unit, not as the longest of the list: the value keeps its room.
+    units->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    units->setMinimumContentsLength(5);
     const model::DisplayUnit* own = model::model_unit(quantity, source_->units());
     if (own == nullptr) {
         units->addItem(model_unit_label(quantity), QString());
