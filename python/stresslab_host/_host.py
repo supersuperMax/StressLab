@@ -123,6 +123,12 @@ class _Reader:
         message = self._host.request("document/data", {"id": int(id)})
         return _data.incoming(message, self._host.release)
 
+    def setting(self, key: str) -> Any:
+        """The value in effect of a setting, usually one of the module's own
+        (``contributes.settings``); ModuleError if no setting has this key. Read it when it is
+        needed: the module is not told when it changes."""
+        return self._host.request("settings/get", {"key": key})["value"]
+
 
 class Watch:
     """A `when` expression the module watches; ``value`` is its current value."""

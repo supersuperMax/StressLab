@@ -3,6 +3,7 @@
 #include "fem/core/command/command_bus.h"
 #include "fem/core/context/context_keys.h"
 #include "fem/core/context/core_keys.h"
+#include "fem/core/extension/manager.h"
 #include "fem/core/model/document.h"
 
 #include <functional>
@@ -125,8 +126,10 @@ public:
     // --- For the application ---------------------------------------------------------------------
 
     /// Python works with the document of `bus` and with `keys` until `detach`; the document becomes
-    /// the active one. Both must outlive the attachment. Replaces an earlier attachment.
-    void attach(command::CommandBus& bus, context::ContextKeys& keys);
+    /// the active one. `extensions`, if given, is what `stresslab.extensions` enables and disables
+    /// modules with. They must outlive the attachment. Replaces an earlier attachment.
+    void attach(command::CommandBus& bus, context::ContextKeys& keys,
+                extension::ExtensionManager* extensions = nullptr);
     /// Takes back what `attach` lent: releases what Python keeps in them and closes the handles
     /// Python has to the document. Does nothing if nothing is attached.
     void detach() noexcept;
@@ -152,6 +155,9 @@ public:
     void track(const std::shared_ptr<DocumentHandle>& document);
 
     [[nodiscard]] context::ContextKeys& context();
+    /// The Extension Manager the application lent; throws ExtensionError(invalid_state) if none:
+    /// outside the application modules are not managed from Python.
+    [[nodiscard]] extension::ExtensionManager& extensions();
     /// What Python keeps outside documents (watches on context keys, listeners of tasks);
     /// released when the context keys change hands and when Python shuts down.
     [[nodiscard]] PythonResources& resources() noexcept { return resources_; }
@@ -167,6 +173,7 @@ private:
     std::shared_ptr<DocumentHandle> active_;
     std::shared_ptr<DocumentHandle> attached_;
     context::ContextKeys* attached_keys_ = nullptr;
+    extension::ExtensionManager* attached_extensions_ = nullptr;
     std::unique_ptr<context::ContextKeys> own_keys_;
     std::unique_ptr<context::CoreKeys> core_keys_;
     PythonResources resources_;

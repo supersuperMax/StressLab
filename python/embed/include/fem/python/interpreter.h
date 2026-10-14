@@ -2,6 +2,7 @@
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/context/context_keys.h"
+#include "fem/core/extension/manager.h"
 
 #include <filesystem>
 #include <functional>
@@ -39,8 +40,11 @@ public:
     ~Interpreter();
 
     /// Python works with the document of `bus` and with `keys` until `detach`: `stresslab.cmd`
-    /// runs commands on `bus`. Both must outlive the attachment.
-    void attach(command::CommandBus& bus, context::ContextKeys& keys);
+    /// runs commands on `bus`, and `stresslab.extensions` enables and disables the modules of
+    /// `extensions`, if given (without it, it raises `stresslab.ExtensionError`). They must outlive
+    /// the attachment.
+    void attach(command::CommandBus& bus, context::ContextKeys& keys,
+                extension::ExtensionManager* extensions = nullptr);
     /// Releases what Python keeps in the attached objects; Python's handles to them close.
     void detach();
 

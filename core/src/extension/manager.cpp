@@ -1,5 +1,6 @@
 #include "fem/core/extension/manager.h"
 
+#include "fem/core/command/python_literal.h"
 #include "fem/core/extension/error.h"
 #include "fem/core/log/log.h"
 #include "fem/core/product.h"
@@ -136,6 +137,15 @@ bool ExtensionHost::evaluate_context(const context::WhenExpression& expression) 
 Subscription ExtensionHost::watch_context(context::WhenExpression expression,
                                           std::function<void(bool)> listener) {
     return keys_.watch(std::move(expression), std::move(listener));
+}
+
+nlohmann::json ExtensionHost::setting(std::string_view key) const {
+    if (!manager_.setting_reader_) {
+        throw ExtensionError(
+            ExtensionErrc::unknown_setting,
+            "the application gives modules no settings ('" + std::string(key) + "' was asked)");
+    }
+    return manager_.setting_reader_(key);
 }
 
 void ExtensionHost::report_crash(CrashReport report) {
@@ -492,17 +502,20 @@ void ExtensionManager::check_conflicts(const std::vector<std::string>& plan) con
     }
 }
 
-std::vector<std::string> ExtensionManager::enable(std::string_view id) {
+std::vector<std::string> ExtensionManager::enable(std::string_view id, Journaling journaling) {
+    check_journaling(journaling);
     std::vector<std::string> plan = plan_enable(id);
-    if (plan.empty()) {
-        return plan;
+    if (!plan.empty()) {
+        check_conflicts(plan);
+        for (const std::string& module : plan) {
+            enable_one(get_record(module));
+        }
+        if (started_) {
+            activate_on(ActivationEvent::startup());
+        }
     }
-    check_conflicts(plan);
-    for (const std::string& module : plan) {
-        enable_one(get_record(module));
-    }
-    if (started_) {
-        activate_on(ActivationEvent::startup());
+    if (journaling == Journaling::on) {
+        journal("enable", id);
     }
     return plan;
 }
@@ -560,7 +573,8 @@ std::vector<std::string> ExtensionManager::plan_disable(std::string_view id) con
     return order;
 }
 
-std::vector<std::string> ExtensionManager::disable(std::string_view id) {
+std::vector<std::string> ExtensionManager::disable(std::string_view id, Journaling journaling) {
+    check_journaling(journaling);
     std::vector<std::string> plan = plan_disable(id);
     for (const std::string& module : plan) {
         if (get_record(module).running > 0) {
@@ -570,6 +584,9 @@ std::vector<std::string> ExtensionManager::disable(std::string_view id) {
     }
     for (const std::string& module : plan) {
         disable_one(get_record(module));
+    }
+    if (journaling == Journaling::on) {
+        journal("disable", id);
     }
     return plan;
 }
@@ -753,7 +770,8 @@ ProfilePlan ExtensionManager::plan_profile(const Profile& profile) const {
     return plan;
 }
 
-ProfileReport ExtensionManager::apply_profile(const Profile& profile) {
+ProfileReport ExtensionManager::apply_profile(const Profile& profile, Journaling journaling) {
+    check_journaling(journaling);
     ProfileReport report;
     std::vector<std::string> wanted;
     for (const ProfileEntry& entry : profile.extensions) {
@@ -799,7 +817,30 @@ ProfileReport ExtensionManager::apply_profile(const Profile& profile) {
             report.failed.push_back({id, e.what()});
         }
     }
+    if (journaling == Journaling::on) {
+        for (const std::string& id : report.disabled) {
+            journal("disable", id);
+        }
+        for (const std::string& id : report.enabled) {
+            journal("enable", id);
+        }
+    }
     return report;
+}
+
+// --- Journal -------------------------------------------------------------------------------------
+
+void ExtensionManager::check_journaling(Journaling journaling) const {
+    if (journaling == Journaling::on && !bus_.is_idle()) {
+        throw ExtensionError(ExtensionErrc::invalid_state,
+                             "modules cannot be enabled or disabled inside a command or a "
+                             "transaction");
+    }
+}
+
+void ExtensionManager::journal(std::string_view action, std::string_view id) {
+    bus_.journal_action("stresslab.extensions." + std::string(action) + "(" +
+                        command::python_string(id) + ")");
 }
 
 // --- Events --------------------------------------------------------------------------------------

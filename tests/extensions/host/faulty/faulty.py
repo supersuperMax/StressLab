@@ -136,6 +136,10 @@ def activate(extension: Extension) -> None:
 
         threading.Thread(target=run).start()
 
+    @extension.command("faulty.setting")
+    def setting(call: Call, key: str) -> Any:
+        return call.setting(key)
+
     @extension.command("faulty.info")
     def info(call: Call) -> dict[str, Any]:
         return {"pid": os.getpid(), "path": sys.path[:4], "stdout": sys.stdout is sys.stderr}

@@ -118,6 +118,12 @@
 - `context/watch` `{"when": …}` → `{"watch": 3, "value": false}`; дальше — уведомления `context/changed`.
 - `context/unwatch` `{"watch": 3}`.
 
+### Настройки
+
+- `settings/get` `{"key": "acme.threads"}` → `{"value": …}` — значение в силе (по умолчанию < пользователь <
+  проект) своей настройки модуля (`contributes.settings`) или любой другой известной приложению. Ключ без
+  схемы — ошибка `-32004`. Модуль читает настройку, когда она нужна: уведомления об изменении нет.
+
 ### Модель
 
 - `model/subscribe`, `model/unsubscribe` — уведомления `model/changed`.

@@ -121,7 +121,7 @@ void CommandPalette::collect() {
                     text("palette.disabledModule", {{"module", module_name.toStdString()}});
                 entry.action = [this, id = module.id()] {
                     try {
-                        (void)workbench_.extensions.enable(id);
+                        (void)workbench_.extensions.enable(id, extension::Journaling::on);
                     } catch (const extension::ExtensionError& error) {
                         log::logger("shell")->error("module '{}' cannot be enabled: {}", id,
                                                     error.what());

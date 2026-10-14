@@ -1,5 +1,8 @@
 #include "fem/core/bindings.h"
 
+#include "fem/core/extension/error.h"
+#include "fem/core/settings/error.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -50,13 +53,26 @@ Subscription follow_setting(settings::Settings& settings, std::string_view key,
 }  // namespace
 
 Subscription bind_settings(extension::ExtensionManager& manager, settings::Settings& settings) {
-    return follow_modules(
+    // The code of modules reads the values in effect.
+    manager.set_setting_reader([&settings](std::string_view key) {
+        try {
+            return settings.value(key);
+        } catch (const settings::SettingsError& error) {
+            throw extension::ExtensionError(extension::ExtensionErrc::unknown_setting,
+                                            error.what());
+        }
+    });
+    auto schemas = std::make_shared<Subscription>(follow_modules(
         manager,
         [&settings](const extension::ExtensionInfo&,
                     const extension::Contributions& contributions) {
             settings.add_schemas(contributions.settings);
         },
-        [&settings](const std::string& id) { settings.remove_owner(id); });
+        [&settings](const std::string& id) { settings.remove_owner(id); }));
+    return Subscription([&manager, schemas] {
+        schemas->reset();
+        manager.set_setting_reader({});
+    });
 }
 
 Subscription bind_catalogs(extension::ExtensionManager& manager, l10n::Localization& localization) {

@@ -402,6 +402,14 @@ void CommandBus::check_idle(std::string_view action) const {
     }
 }
 
+void CommandBus::journal_action(std::string_view entry) {
+    check_idle("an action of the session");
+    if (entry.empty()) {
+        fail(CommandErrc::invalid_arguments, "an action of the session needs a journal line");
+    }
+    journal_.emit(entry);
+}
+
 void CommandBus::set_undo_limit(std::size_t limit) {
     undo_limit_ = limit;
     trim_undo_stack();

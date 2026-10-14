@@ -12,8 +12,10 @@ Every change of the model is a command of the Command Bus::
     stresslab.undo()
 
 Calls are recorded in the session journal (.slpy) as ``stresslab.cmd(...)`` lines, so a journal
-is a script that rebuilds the same document. Inside the application ``stresslab`` works with the
-application's document; in a plain Python process it makes a document of its own.
+is a script that rebuilds the same document. Modules are enabled and disabled with
+``stresslab.extensions.enable("fem.demo")`` and ``disable``, journaled too. Inside the application
+``stresslab`` works with the application's document; in a plain Python process it makes a
+document of its own.
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ from _stresslab import (
     ElementBlock,
     ElementSet,
     Error,
+    ExtensionError,
+    ExtensionInfo,
     JobError,
     Mesh,
     ModelChange,
@@ -58,6 +62,7 @@ from _stresslab import (
     set_active_document,
 )
 
+from . import extensions
 from ._commands import CommandNamespace, Commands, python_name
 
 __version__: str = _native.__version__
@@ -92,6 +97,8 @@ __all__ = [
     "ElementBlock",
     "ElementSet",
     "Error",
+    "ExtensionError",
+    "ExtensionInfo",
     "JobError",
     "Mesh",
     "ModelChange",
@@ -114,6 +121,7 @@ __all__ = [
     "commands",
     "context",
     "embedded",
+    "extensions",
     "journal_header",
     "make_task",
     "new_document",

@@ -589,7 +589,9 @@ bool MainWindow::restore_layout(const Layout& layout) {
         return false;
     }
     (void)restoreState(layout.bars, layout_version);
-    // A layout saved with other modules enabled closes the tabs it does not know.
+    // A layout saved with other modules enabled says nothing of their panels; their tabs follow
+    // their conditions again.
+    contributions_->dock_panels_missing_from(layout.docks);
     contributions_->apply_tab_conditions();
     return true;
 }

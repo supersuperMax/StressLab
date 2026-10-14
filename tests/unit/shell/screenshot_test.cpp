@@ -1,6 +1,7 @@
-// Pictures of the window for reviews (tasks 1.11-1.14): with STRESSLAB_SCREENSHOT_DIR set, the
+// Pictures of the window for reviews (tasks 1.11-1.15): with STRESSLAB_SCREENSHOT_DIR set, the
 // window with a module, a model tree and the form of a material, and the window with the module
-// manager, the console and the bar of the modules the model needs, are drawn in the light and dark
+// manager, the console and the bar of the modules the model needs, and the window with the module
+// fem.demo, enabled and disabled, are drawn in the light and dark
 // themes, in Russian and English, and saved as PNG there. CI saves them as artifacts on each OS;
 // without the variable the test is skipped. Run it on the platform
 // of the OS (QT_QPA_PLATFORM=windows or cocoa): the platform without a screen has no fonts on
@@ -21,6 +22,7 @@
 #include "fem/shell/workspaces.h"
 
 #include "shell_test_support.h"
+#include <DockManager.h>
 #include <DockWidget.h>
 #include <gtest/gtest.h>
 
@@ -30,6 +32,7 @@
 #include <QSysInfo>
 #include <QToolButton>
 #include <QtGlobal>
+#include <cstdint>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -239,6 +242,64 @@ title = "Демпфирование"
             QStringLiteral("stresslab-%1-modules-%2-%3.png").arg(os, theme, language));
         EXPECT_TRUE(window.grab().save(file)) << file.toStdString();
         QDir(profiles).removeRecursively();
+    }
+    fem::shell::apply_theme(*qApp, Qt::ColorScheme::Light);
+}
+
+// Task 1.15: the module fem.demo the application ships, on its stage, with a note selected and
+// its tab in front; and the window after it is disabled from the console.
+TEST(ShellScreenshots, OfTheDemoModule) {
+    const QString folder = qEnvironmentVariable("STRESSLAB_SCREENSHOT_DIR");
+    if (folder.isEmpty()) {
+        GTEST_SKIP() << "STRESSLAB_SCREENSHOT_DIR is not set";
+    }
+    ASSERT_TRUE(QDir().mkpath(folder));
+    const QString os = QSysInfo::productType();
+    for (const auto& [language, scheme, theme, enabled] :
+         {std::tuple{"ru", Qt::ColorScheme::Light, "light", true},
+          std::tuple{"en", Qt::ColorScheme::Dark, "dark", true},
+          std::tuple{"ru", Qt::ColorScheme::Light, "disabled", false}}) {
+        fem::shell::testing::Application app;
+        app.localization.set_language(language);
+        fem::shell::apply_theme(*qApp, scheme);
+        app.add_demo();
+        fem::command::SessionJournal journal(app.bus);
+        const auto note = [&app](const char* name, const std::string& text, const char* priority) {
+            return fem::model::ObjectId(static_cast<std::uint64_t>(
+                app.bus
+                    .execute(fem::command::model_commands::create,
+                             {{"type", "demo_note"},
+                              {"owner", "fem.demo"},
+                              {"name", name},
+                              {"properties",
+                               fem::command::Value::Dict{{"text", text}, {"priority", priority}}}})
+                    .value.as_integer()));
+        };
+        const fem::model::ObjectId first =
+            note("#1", fem::shell::testing::utf8(u8"Проверить опору"), "high");
+        (void)note("#2", "TODO", "normal");
+        EchoConsole console;
+        fem::shell::Workbench workbench = app.workbench();
+        workbench.console = &console;
+        workbench.journal = &journal;
+        fem::shell::MainWindow window(workbench);
+        app.keys.set("stage", "demo.review");
+        window.model_tree().select(first);
+        if (enabled) {
+            if (auto* tab =
+                    window.dock_manager()->findDockWidget(QStringLiteral("tab:demo.notes"))) {
+                tab->setAsCurrentTab();
+            }
+        } else {
+            (void)app.manager.disable("fem.demo", fem::extension::Journaling::on);
+            qobject_cast<ads::CDockWidget*>(window.zone_widget(fem::shell::zone::journal))
+                ->setAsCurrentTab();
+        }
+        window.show();
+        QApplication::processEvents();
+        const QString file = QDir(folder).filePath(
+            QStringLiteral("stresslab-%1-demo-%2-%3.png").arg(os, theme, language));
+        EXPECT_TRUE(window.grab().save(file)) << file.toStdString();
     }
     fem::shell::apply_theme(*qApp, Qt::ColorScheme::Light);
 }

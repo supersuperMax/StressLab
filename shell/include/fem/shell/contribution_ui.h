@@ -92,6 +92,9 @@ public:
     /// Opens and closes the tabs of modules by their `when` again: a restored layout puts them
     /// where it had them.
     void apply_tab_conditions();
+    /// After a layout was restored from `state` (the XML of Qt ADS): the panels of modules it does
+    /// not name, which the dock system left floating, go where new panels of modules go.
+    void dock_panels_missing_from(const QByteArray& state);
 
     /// A new menu of the context-menu location (`contextMenus`, e.g. "tree", "viewport") with the
     /// items that show now; nullptr if none does. The caller owns it.
@@ -158,6 +161,12 @@ private:
     void build_stages();
     void build_activities();
     void build_tabs();
+    /// Takes the panel of a module out of the window and deletes it once the event loop runs.
+    void remove_panel(ads::CDockWidget* panel);
+    /// Puts the panel of an activity next to the model tree, closed.
+    void dock_activity(ads::CDockWidget* panel);
+    /// Puts the panel of a tab into the bottom panel, behind the tab in front.
+    void dock_tab(ads::CDockWidget* panel);
     void build_shortcuts();
     void watch_conditions();
     void refresh_once();

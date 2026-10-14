@@ -138,6 +138,13 @@ public:
     /// is done at such points.
     [[nodiscard]] bool is_idle() const noexcept { return running_ == 0 && transactions_.empty(); }
 
+    /// Writes to the journal what changes the session but not the model, as Python that repeats
+    /// it (`stresslab.extensions.enable("fem.demo")`): an entry of its own, with no undo step, and
+    /// the steps to redo stay. Throws CommandError(invalid_state) inside a command or an open
+    /// transaction, whose undo could not take the action back, and
+    /// CommandError(invalid_arguments) for an empty entry.
+    void journal_action(std::string_view entry);
+
     // --- Events ----------------------------------------------------------------------------------
 
     /// Called after every completed step that changed the model: a command outside transactions,
