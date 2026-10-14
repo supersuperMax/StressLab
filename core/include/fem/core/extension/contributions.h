@@ -179,7 +179,7 @@ struct SettingContribution {
     nlohmann::json default_value;  ///< Null if none.
     /// May be "%key%" of a string catalog of the owner (docs/adr/0008-settings-logging-l10n.md).
     std::string description;
-    /// The whole entry of the manifest as JSON (type, scope, default, description, enum,
+    /// The whole entry of the manifest as JSON (type, scope, default, title, description, enum,
     /// minimum, maximum), for the settings form and validation.
     nlohmann::json schema = nlohmann::json::object();
 };

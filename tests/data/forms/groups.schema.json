@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["solver"],
+  "properties": {
+    "title": {"type": "string", "title": "Title", "x-order": 1},
+    "solver": {
+      "type": "object",
+      "title": "Solver",
+      "x-order": 2,
+      "additionalProperties": false,
+      "required": ["tolerance"],
+      "properties": {
+        "tolerance": {"type": "number", "title": "Tolerance", "exclusiveMinimum": 0},
+        "iterations": {"type": "integer", "title": "Iterations", "minimum": 1, "x-advanced": true},
+        "a/b": {"type": "boolean", "title": "Escaped name", "x-advanced": true}
+      }
+    },
+    "output": {
+      "type": "object",
+      "title": "Output",
+      "x-advanced": true,
+      "properties": {
+        "every": {"type": "integer", "title": "Every n-th increment", "minimum": 1}
+      }
+    }
+  }
+}

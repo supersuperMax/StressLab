@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "vector": {"type": "array", "items": {"type": "number"}, "title": "Direction"},
+    "either": {"oneOf": [{"type": "number"}, {"type": "string"}], "title": "Number or text"},
+    "linked": {"$ref": "#/definitions/other"},
+    "nullable": {"type": ["number", "null"], "title": "Optional number"},
+    "free": {"type": "object", "title": "Anything"}
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "required": ["E", "nu"],
+  "properties": {
+    "E": {
+      "type": "number",
+      "title": "%material.E%",
+      "description": "%material.E.description%",
+      "x-quantity": "pressure",
+      "exclusiveMinimum": 0,
+      "x-order": 1
+    },
+    "nu": {
+      "type": "number",
+      "title": "Poisson's ratio",
+      "minimum": 0,
+      "exclusiveMaximum": 0.5,
+      "default": 0.3,
+      "x-order": 2
+    },
+    "density": {
+      "type": "number",
+      "title": "Density",
+      "x-quantity": "density",
+      "minimum": 0,
+      "x-order": 3
+    },
+    "reference": {
+      "type": "number",
+      "title": "Reference temperature",
+      "x-quantity": "temperature",
+      "x-advanced": true,
+      "x-order": 4
+    },
+    "comment": {
+      "type": "string",
+      "title": "Comment"
+    }
+  }
+}

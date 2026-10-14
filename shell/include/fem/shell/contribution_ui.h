@@ -114,12 +114,12 @@ protected:
 private:
     /// A command placed in a menu or on a toolbar.
     struct Placement {
-        std::string command;
-        std::optional<context::WhenExpression> when;
-        MenuGroup group;
-        QString title;
-        QPointer<QAction> action;
-        QPointer<QAction> overflow;  ///< Context toolbar only: its item in the "⋯" menu.
+        std::string command{};
+        std::optional<context::WhenExpression> when{};
+        MenuGroup group{};
+        QString title{};
+        QPointer<QAction> action{};
+        QPointer<QAction> overflow{};  ///< Context toolbar only: its item in the "⋯" menu.
     };
     /// A menu built for modules, or a menu of the shell they add items to.
     struct BuiltMenu {

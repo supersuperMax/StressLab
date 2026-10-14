@@ -13,6 +13,7 @@ add_executable(
     unit/core/command/command_bus_test.cpp
     unit/core/command/journal_test.cpp
     unit/core/command/model_commands_test.cpp
+    unit/core/command/set_property_test.cpp
     unit/core/command/python_literal_test.cpp
     unit/core/command/transaction_test.cpp
     unit/core/command/undo_test.cpp
@@ -30,6 +31,8 @@ add_executable(
     unit/core/extension/profile_test.cpp
     unit/core/extension/registry_test.cpp
     unit/core/extension/semver_test.cpp
+    unit/core/form/form_test.cpp
+    unit/core/form/status_test.cpp
     unit/core/job/job_keys_test.cpp
     unit/core/job/job_manager_test.cpp
     unit/core/job/local_executor_test.cpp
@@ -44,6 +47,7 @@ add_executable(
     unit/core/model/element_type_test.cpp
     unit/core/model/mesh_test.cpp
     unit/core/model/opaque_test.cpp
+    unit/core/model/quantity_test.cpp
     unit/core/model/units_test.cpp
     unit/core/settings/settings_test.cpp
     unit/core/settings/settings_validation_test.cpp
@@ -150,8 +154,8 @@ add_test(NAME ModelBenchmark.MillionNodeMesh COMMAND fem_model_benchmark)
 set_tests_properties(ModelBenchmark.MillionNodeMesh PROPERTIES LABELS benchmark)
 
 if(FEM_BUILD_GUI)
-    # The shell (tasks 1.11 and 1.12): the window, its zones, themes, workspaces, the brand, and
-    # what modules contribute to it. The tests run on the platform of Qt without a screen
+    # The shell (tasks 1.11-1.13): the window, its zones, themes, workspaces, the brand, what
+    # modules contribute to it, the model tree and the forms of properties and settings. The tests run on the platform of Qt without a screen
     # (shell_test_main.cpp) and use Qt Test for clicks and keys; with STRESSLAB_SCREENSHOT_DIR set
     # they also save pictures of the window there.
     find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
@@ -161,11 +165,14 @@ if(FEM_BUILD_GUI)
         unit/shell/brand_test.cpp
         unit/shell/command_palette_test.cpp
         unit/shell/contribution_ui_test.cpp
+        unit/shell/form_widget_test.cpp
         unit/shell/icons_test.cpp
         unit/shell/keys_test.cpp
         unit/shell/main_window_test.cpp
+        unit/shell/model_tree_test.cpp
         unit/shell/order_test.cpp
         unit/shell/screenshot_test.cpp
+        unit/shell/settings_panel_test.cpp
         unit/shell/strings_test.cpp
         unit/shell/theme_test.cpp
         unit/shell/toolkit_info_test.cpp
@@ -174,6 +181,7 @@ if(FEM_BUILD_GUI)
     target_compile_definitions(
         fem_shell_tests
         PRIVATE FEM_SHELL_L10N_DIR="${PROJECT_SOURCE_DIR}/shell/l10n"
+                FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
                 FEM_BRANDING_SYMBOL_SMALL="${FEM_BRANDING_SYMBOL_SMALL}"
                 FEM_BRANDING_ICON_SVG="${FEM_BRANDING_ICON_SVG}"
                 FEM_BRANDING_LOGO_COLOR="${FEM_BRANDING_LOGO_COLOR}"

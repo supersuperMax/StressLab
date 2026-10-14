@@ -91,11 +91,20 @@ int run_window(Environment environment) {
     }
     shell::WorkspaceStore workspaces =
         workspace_file.empty() ? shell::WorkspaceStore() : shell::WorkspaceStore(workspace_file);
+    // The settings form saves what it changes at once.
+    std::function<void()> save_settings;
+    if (environment.user_settings) {
+        save_settings = [&application, file = *environment.user_settings] {
+            application.settings().save_file(settings::Level::user, file);
+        };
+    }
     shell::MainWindow window(shell::Workbench{.localization = application.localization(),
                                               .workspaces = workspaces,
                                               .extensions = application.extensions(),
                                               .bus = application.bus(),
-                                              .keys = application.keys()});
+                                              .keys = application.keys(),
+                                              .settings = application.settings(),
+                                              .save_settings = std::move(save_settings)});
     window.show();
 
     application.extensions().startup();

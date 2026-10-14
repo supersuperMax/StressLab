@@ -483,6 +483,19 @@ TEST(Manifest, ReportsErrorsWithTheirPosition) {
          with_header(
              "[contributes.settings]\n\"case.x\" = { type = \"string\", scope = \"machine\" }\n"),
          9, 39, "unknown setting scope 'machine'; expected project or user"},
+        {"setting title not text",
+         with_header("[contributes.settings]\n\"case.x\" = { type = \"string\", title = 5 }\n"), 9,
+         39, "'title' in setting 'case.x' must be text"},
+        {"unknown quantity in a property schema",
+         with_header("[[contributes.propertySchemas]]\ntype = \"material\"\nschema = { type = "
+                     "\"object\", properties = { E = { type = \"number\", x-quantity = "
+                     "\"stiffness\" } } }\n"),
+         10, 10,
+         "property schema of type 'material', property 'E': unknown quantity \"stiffness\""},
+        {"property schema of no object",
+         with_header("[[contributes.propertySchemas]]\ntype = \"material\"\nschema = { type = "
+                     "\"string\" }\n"),
+         10, 10, "property schema of type 'material': a property schema must have type"},
         {"unknown setting field",
          with_header(
              "[contributes.settings]\n\"case.x\" = { type = \"string\", markdown = \"x\" }\n"),

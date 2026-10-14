@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "required": "E",
+  "properties": {
+    "E": {"type": "number", "x-quantity": "stiffness", "x-order": 1.5},
+    "name": {"type": "string", "x-quantity": "length", "title": 5},
+    "kind": {"type": "string", "enum": ["a", "b"], "x-enumTitles": ["A"]},
+    "flag": {"type": "boolean", "x-advanced": "yes"},
+    "low": {"type": "number", "minimum": "zero"},
+    "broken": 7,
+    "empty": {"enum": []}
+  }
+}

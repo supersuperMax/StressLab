@@ -20,6 +20,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -125,9 +126,14 @@ protected:
     [[nodiscard]] bool running() const { return keys_.value(job_keys::running) == true; }
     [[nodiscard]] double active() const { return keys_.value(job_keys::active).as_number(); }
 
-    /// Waits for a job to finish, then runs what was posted meanwhile.
+    /// Waits for a job to finish, then runs what was posted meanwhile. The tracker posts its
+    /// update from the thread of the task, which may be after waiters wake: wait for the post too.
     void finish(const std::shared_ptr<Job>& job) {
         ASSERT_TRUE(job->task()->wait_for(timeout));
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (queue_.size() == 0 && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         queue_.drain();
     }
 

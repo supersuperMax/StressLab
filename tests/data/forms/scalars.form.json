@@ -1,0 +1,51 @@
+{
+  "errors": [],
+  "form": {
+    "fields": [
+      {
+        "default": 4,
+        "key": "count",
+        "kind": "integer",
+        "maximum": 100.0,
+        "minimum": 1.0,
+        "pointer": "count",
+        "title": "Count"
+      },
+      {
+        "default": false,
+        "key": "enabled",
+        "kind": "boolean",
+        "pointer": "enabled",
+        "title": "Enabled"
+      },
+      {
+        "key": "file",
+        "kind": "path",
+        "pointer": "file",
+        "title": "File"
+      },
+      {
+        "exclusiveMinimum": true,
+        "key": "limit",
+        "kind": "number",
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "pointer": "limit"
+      },
+      {
+        "key": "name",
+        "kind": "string",
+        "pointer": "name",
+        "title": "Name"
+      },
+      {
+        "key": "size",
+        "kind": "number",
+        "pointer": "size",
+        "quantity": "length",
+        "readOnly": true,
+        "title": "Size"
+      }
+    ]
+  }
+}

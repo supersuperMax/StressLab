@@ -4,7 +4,10 @@
 #include "fem/core/context/context_keys.h"
 #include "fem/core/extension/manager.h"
 #include "fem/core/l10n/localization.h"
+#include "fem/core/settings/settings.h"
 #include "fem/shell/workspaces.h"
+
+#include <functional>
 
 namespace fem::shell {
 
@@ -17,6 +20,10 @@ struct Workbench {
     extension::ExtensionManager& extensions;
     command::CommandBus& bus;
     context::ContextKeys& keys;
+    settings::Settings& settings;
+    /// Writes the settings of the user where the application keeps them; called after the
+    /// settings form changed them. Empty: they live as long as the application (tests).
+    std::function<void()> save_settings = {};
 };
 
 }  // namespace fem::shell

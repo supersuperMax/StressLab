@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fem/core/extension/manager.h"
+#include "fem/core/form/form.h"
 
 #include <QByteArray>
 #include <QColor>
@@ -30,6 +31,11 @@ namespace fem::shell {
 [[nodiscard]] QByteArray default_module_icon_svg();
 /// The default module icon, tinted like `tinted_svg_icon`.
 [[nodiscard]] QIcon default_module_icon();
+
+/// The mark of a status in the model tree and in forms: a triangle with "!" for a warning, a circle
+/// with "×" for an error, drawn in fixed colours that read on both themes (in the text colour of
+/// a selection on a selected row); a null icon for ok.
+[[nodiscard]] QIcon status_icon(form::Severity severity);
 
 /// The icon a module names in a contribution: the id of an `icons` contribution, or a path in the
 /// folder of the module. With `fallback`, the default module icon when `icon` is empty or the

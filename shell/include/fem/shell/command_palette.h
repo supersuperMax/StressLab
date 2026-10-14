@@ -61,13 +61,13 @@ protected:
 
 private:
     struct Entry {
-        QString id;
-        QString title;
-        QString detail;
-        QString shortcut;
-        QString search;  ///< Lowercase text the filter looks in.
+        QString id{};
+        QString title{};
+        QString detail{};
+        QString shortcut{};
+        QString search{};  ///< Lowercase text the filter looks in.
         RowKind kind = RowKind::run;
-        std::function<void()> action;
+        std::function<void()> action{};
     };
 
     void collect();

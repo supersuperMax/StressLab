@@ -69,6 +69,10 @@ def record_session() -> tuple[stresslab.Document, Recorder]:
     with stresslab.transaction("Нагрузки"):
         pressure = stresslab.cmd("model.create", type="load", owner=TEST_OWNER, parent=part)
         stresslab.model.set_properties(object=pressure, properties={"value": 0.5, "empty": {}})
+    # One field of a form: one property, a nested one, and one removed.
+    stresslab.model.set_property(object=steel, key="E", value=206000.0)
+    stresslab.cmd("model.set_property", object=pressure, key="empty/side", value="верх")
+    stresslab.model.set_property(object=steel, key="nu", value=None)
     with pytest.raises(ZeroDivisionError), stresslab.transaction("отменено"):
         stresslab.cmd("model.create", type="load", owner=TEST_OWNER, name="lost")
         _ = 1 / 0
@@ -83,6 +87,9 @@ def test_a_journal_recorded_in_python_runs_as_a_script(active: None, tmp_path: P
     journal = recorded.file()
     assert "stresslab.undo()" in journal and "with stresslab.transaction(" in journal
     assert "отменено" not in journal
+    assert 'stresslab.cmd("model.set_property", object=1, key="E", value=206000.0)' in journal
+    assert original.objects()[0].properties["E"] == 206000.0
+    assert "nu" not in original.objects()[0].properties
     file = tmp_path / "журнал с пробелами" / "сессия 1.slpy"
     file.parent.mkdir()
     file.write_text(journal, encoding="utf-8", newline="\n")

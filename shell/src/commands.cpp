@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <exception>
 #include <string>
+#include <utility>
 
 namespace fem::shell {
 
@@ -58,7 +59,11 @@ Availability Commands::availability(std::string_view id) const {
     }
     QStringList needed;
     for (const command::ArgSpec& arg : spec->args) {
-        if (arg.required) {
+        if (takes_selection(arg)) {
+            if (!selected_.is_valid()) {
+                return {.available = false, .reason = text("reason.selectObject")};
+            }
+        } else if (arg.required) {
             needed.push_back(to_qstring(arg.name));
         }
     }
@@ -109,8 +114,14 @@ bool Commands::run(std::string_view id) {
                                                   {"reason", availability.reason.toStdString()}}));
         return false;
     }
+    command::Value::Dict args;
+    for (const command::ArgSpec& arg : workbench_.bus.find_command(id)->args) {
+        if (takes_selection(arg)) {
+            args.emplace(arg.name, command::Value(selected_));
+        }
+    }
     try {
-        (void)workbench_.bus.execute(id);
+        (void)workbench_.bus.execute(id, std::move(args));
         return true;
     } catch (const std::exception& error) {
         log->error("command '{}' failed: {}", id, error.what());
@@ -118,6 +129,10 @@ bool Commands::run(std::string_view id) {
                                              {"message", std::string(error.what())}}));
         return false;
     }
+}
+
+bool Commands::takes_selection(const command::ArgSpec& arg) {
+    return arg.required && arg.type == command::ArgType::object && arg.name == "object";
 }
 
 QString Commands::text(std::string_view key, const l10n::Args& args) const {

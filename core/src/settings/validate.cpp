@@ -62,6 +62,7 @@ Schema core_schema(std::string_view key, Type type, nlohmann::json schema) {
     result.description = "%setting." + result.key + "%";
     schema["type"] = std::string(extension::to_string(type));
     schema["scope"] = "user";
+    schema["title"] = "%setting." + result.key + ".title%";
     schema["description"] = result.description;
     result.default_value = schema.at("default");
     result.schema = std::move(schema);

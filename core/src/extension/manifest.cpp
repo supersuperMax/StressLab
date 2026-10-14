@@ -3,6 +3,7 @@
 #include "fem/core/command/error.h"
 #include "fem/core/context/error.h"
 #include "fem/core/extension/error.h"
+#include "fem/core/form/form.h"
 #include "fem/core/model/object.h"
 
 #include "files.h"
@@ -994,6 +995,7 @@ void Parser::parse_settings(const toml::node& node, Contributions& out) {
                                                describe_type() + ", not " +
                                                std::string(type_name(*default_value)));
         }
+        (void)text(fields, "title", false);
         setting.description = text(fields, "description", false);
         if (const toml::node* values = fields.get("enum")) {
             const toml::array* array = values->as_array();
@@ -1163,31 +1165,40 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
         });
 
     Seen schema_types;
-    each_table(contributes, "propertySchemas",
-               [&](const toml::table& entry, const std::string& where) {
-                   Fields fields(*this, entry, where);
-                   PropertySchemaContribution schema;
-                   schema.owner = owner;
-                   schema.type = id(fields, "type", is_object_type, object_type_rule);
-                   unique(schema_types, schema.type, entry.get("type"), "property schema type");
-                   if (const auto version = fields.integer("version")) {
-                       if (*version < 1 || *version > std::numeric_limits<std::uint32_t>::max()) {
-                           error(entry.get("version")->source(),
-                                 "'version' of a property schema must be from 1 to 4294967295");
-                       } else {
-                           schema.version = static_cast<std::uint32_t>(*version);
-                       }
-                   }
-                   if (const toml::node* value = fields.require("schema")) {
-                       if (value->is_table()) {
-                           schema.schema = to_json(*value).value_or(nlohmann::json::object());
-                       } else {
-                           wrong_type(*value, "schema", where, "a table with a JSON Schema");
-                       }
-                   }
-                   fields.finish();
-                   out.property_schemas.push_back(std::move(schema));
-               });
+    each_table(
+        contributes, "propertySchemas", [&](const toml::table& entry, const std::string& where) {
+            Fields fields(*this, entry, where);
+            PropertySchemaContribution schema;
+            schema.owner = owner;
+            schema.type = id(fields, "type", is_object_type, object_type_rule);
+            unique(schema_types, schema.type, entry.get("type"), "property schema type");
+            if (const auto version = fields.integer("version")) {
+                if (*version < 1 || *version > std::numeric_limits<std::uint32_t>::max()) {
+                    error(entry.get("version")->source(),
+                          "'version' of a property schema must be from 1 to 4294967295");
+                } else {
+                    schema.version = static_cast<std::uint32_t>(*version);
+                }
+            }
+            if (const toml::node* value = fields.require("schema")) {
+                if (value->is_table()) {
+                    schema.schema = to_json(*value).value_or(nlohmann::json::object());
+                    std::vector<form::SchemaError> problems;
+                    (void)form::parse(schema.schema, &problems);
+                    for (const form::SchemaError& problem : problems) {
+                        error(value->source(), "property schema of type '" + schema.type + "'" +
+                                                   (problem.pointer.empty()
+                                                        ? std::string()
+                                                        : ", property '" + problem.pointer + "'") +
+                                                   ": " + problem.message);
+                    }
+                } else {
+                    wrong_type(*value, "schema", where, "a table with a JSON Schema");
+                }
+            }
+            fields.finish();
+            out.property_schemas.push_back(std::move(schema));
+        });
 
     Seen format_ids;
     each_table(contributes, "fileFormats", [&](const toml::table& entry, const std::string& where) {

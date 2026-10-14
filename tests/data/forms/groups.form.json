@@ -1,0 +1,66 @@
+{
+  "errors": [],
+  "form": {
+    "closed": true,
+    "fields": [
+      {
+        "key": "title",
+        "kind": "string",
+        "order": 1,
+        "pointer": "title",
+        "title": "Title"
+      },
+      {
+        "closed": true,
+        "fields": [
+          {
+            "advanced": true,
+            "key": "a/b",
+            "kind": "boolean",
+            "pointer": "solver/a~1b",
+            "title": "Escaped name"
+          },
+          {
+            "advanced": true,
+            "key": "iterations",
+            "kind": "integer",
+            "minimum": 1.0,
+            "pointer": "solver/iterations",
+            "title": "Iterations"
+          },
+          {
+            "exclusiveMinimum": true,
+            "key": "tolerance",
+            "kind": "number",
+            "minimum": 0.0,
+            "pointer": "solver/tolerance",
+            "required": true,
+            "title": "Tolerance"
+          }
+        ],
+        "key": "solver",
+        "kind": "group",
+        "order": 2,
+        "pointer": "solver",
+        "required": true,
+        "title": "Solver"
+      },
+      {
+        "advanced": true,
+        "fields": [
+          {
+            "key": "every",
+            "kind": "integer",
+            "minimum": 1.0,
+            "pointer": "output/every",
+            "title": "Every n-th increment"
+          }
+        ],
+        "key": "output",
+        "kind": "group",
+        "pointer": "output",
+        "title": "Output"
+      }
+    ]
+  }
+}

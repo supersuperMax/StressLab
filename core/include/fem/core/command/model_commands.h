@@ -18,6 +18,11 @@ inline constexpr std::string_view create = "model.create";
 inline constexpr std::string_view rename = "model.rename";
 /// Replaces all properties. object: object, properties: dict.
 inline constexpr std::string_view set_properties = "model.set_properties";
+/// Sets one property; the others stay. object: object, key: string, value: any. `key` is the name
+/// of a property, or a path into nested objects written as a JSON Pointer without the leading '/'
+/// ("solver/tolerance"; '~1' is '/' and '~0' is '~' in a name); missing objects on the path are
+/// created. A value of None removes the property.
+inline constexpr std::string_view set_property = "model.set_property";
 /// Removes an object with its subtree; returns the removed ids. Throws ModelError(removal_blocked)
 /// if that would lose or break an object of a disabled module. object: object.
 inline constexpr std::string_view remove = "model.remove";

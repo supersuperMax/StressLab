@@ -30,7 +30,10 @@ class AboutDialog;
 class CommandPalette;
 class Commands;
 class ContributionUi;
+class ModelTreePanel;
 class ProblemsPanel;
+class PropertyPanel;
+class SettingsPanel;
 
 /// Ids of the zones of the window (docs/interface-design.md §4): the object names of their
 /// widgets. Saved layouts refer to the zones by them, so they never change.
@@ -40,6 +43,9 @@ inline constexpr std::string_view activity_bar = "activityBar";
 inline constexpr std::string_view viewport = "viewport";
 inline constexpr std::string_view model_tree = "modelTree";
 inline constexpr std::string_view properties = "properties";
+/// The settings of the application and of modules: a tab next to the properties, closed until
+/// opened from the menu.
+inline constexpr std::string_view settings = "settings";
 inline constexpr std::string_view prompt_line = "promptLine";
 // The bottom panel: one tab each.
 inline constexpr std::string_view journal = "journal";
@@ -54,7 +60,7 @@ inline constexpr std::string_view problems = "problems";
 ///
 ///   menu (the system menu bar on macOS)
 ///   stage bar
-///   activity bar | model tree | 3D view | properties
+///   activity bar | model tree | 3D view | properties (settings)
 ///   prompt line
 ///   bottom panel: Journal | Python Console | Jobs | Problems
 ///
@@ -66,8 +72,12 @@ inline constexpr std::string_view problems = "problems";
 /// localization.
 ///
 /// Besides the zones the shell has its own few items: "Edit" with undo and redo of the Command
-/// Bus, the command palette (Ctrl/Cmd+Shift+P) in "View", the context toolbar at the top of the 3D
-/// view, and the "Problems" tab that lists modules whose code crashed or could not start.
+/// Bus, the command palette (Ctrl/Cmd+Shift+P) in "View", "Settings" (Ctrl/Cmd+,; in the
+/// application menu on macOS), the context toolbar at the top of the 3D view, and the "Problems"
+/// tab that lists modules whose code crashed or could not start.
+///
+/// The model tree and the properties are the panels of task 1.13 (docs/adr/0014-tree-and-forms.md):
+/// selecting an object in the tree shows its form in the properties.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -120,6 +130,14 @@ public:
     [[nodiscard]] ProblemsPanel& problems() const noexcept { return *problems_; }
     /// The context toolbar at the top of the 3D view.
     [[nodiscard]] QToolBar* context_toolbar() const noexcept { return context_toolbar_; }
+    /// The model tree, the properties and the settings.
+    [[nodiscard]] ModelTreePanel& model_tree() const noexcept { return *tree_; }
+    [[nodiscard]] PropertyPanel& properties() const noexcept { return *properties_; }
+    [[nodiscard]] SettingsPanel& settings() const noexcept { return *settings_; }
+    /// Opens the settings and brings them to the front.
+    void show_settings();
+    /// The commands of modules as the window runs them.
+    [[nodiscard]] Commands& commands() const noexcept { return *commands_; }
     /// Opens the context menu of a location ("tree", "viewport") of modules at a point of a
     /// widget; nullptr if no item shows there now. The menu deletes itself when closed.
     QMenu* show_context_menu(std::string_view location, QWidget* widget, const QPoint& position);
@@ -167,12 +185,16 @@ private:
     QAction* undo_ = nullptr;
     QAction* redo_ = nullptr;
     QAction* palette_action_ = nullptr;
+    QAction* settings_action_ = nullptr;
     QAction* full_screen_ = nullptr;
     QAction* about_ = nullptr;
     QActionGroup* workspace_group_ = nullptr;
 
     QToolBar* context_toolbar_ = nullptr;
     ProblemsPanel* problems_ = nullptr;
+    ModelTreePanel* tree_ = nullptr;
+    PropertyPanel* properties_ = nullptr;
+    SettingsPanel* settings_ = nullptr;
     std::unique_ptr<Commands> commands_;
     std::unique_ptr<ContributionUi> contributions_;
     CommandPalette* palette_ = nullptr;
