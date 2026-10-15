@@ -9,12 +9,20 @@
 #include "fem/core/settings/settings.h"
 #include "fem/shell/file_dialogs.h"
 #include "fem/shell/workspaces.h"
+#include "fem/storage/session.h"
 
+#include <QString>
+#include <cstdint>
 #include <functional>
+
+class QWidget;
 
 namespace fem::shell {
 
 class ConsoleEngine;
+
+/// What to do with unsaved changes of the project before it is closed.
+enum class UnsavedChanges : std::uint8_t { save, discard, cancel };
 
 /// What the window works with: the parts of the application it shows and drives. All of them
 /// outlive the window. The localization has the catalogs of the shell (`add_shell_catalogs`) and,
@@ -45,6 +53,11 @@ struct Workbench {
     /// How the window asks for files and folders: the dialogs of the system unless tests give
     /// their own.
     FileDialogs dialogs = system_file_dialogs();
+    /// The project folder of the document (task 2.1); nullptr: the window cannot open or save.
+    storage::ProjectSession* project = nullptr;
+    /// Asks what to do with the unsaved changes of the project of this name (parent, name).
+    /// Empty: a message box of the system; tests give their own.
+    std::function<UnsavedChanges(QWidget*, const QString&)> ask_unsaved = {};
 };
 
 }  // namespace fem::shell

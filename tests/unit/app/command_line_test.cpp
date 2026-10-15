@@ -35,6 +35,19 @@ std::string error_of(const std::vector<std::string>& args) {
 
 TEST(CommandLine, NoArgumentsOpenTheWindow) {
     EXPECT_EQ(parse_command_line({}).mode, Mode::window);
+    EXPECT_FALSE(parse_command_line({}).project);
+}
+
+TEST(CommandLine, AProjectFolderOpensInTheWindow) {
+    const CommandLine line = parse_command_line({utf8(u8"проекты/крыло.slproj")});
+    EXPECT_EQ(line.mode, Mode::window);
+    ASSERT_TRUE(line.project);
+    EXPECT_EQ(*line.project, fs::path(u8"проекты/крыло.slproj"));
+    EXPECT_EQ(*parse_command_line({"wing.slproj/"}).project, fs::path("wing.slproj/"));
+    // One folder only, with the extension of projects; options are not folders.
+    EXPECT_EQ(error_of({"a.slproj", "b.slproj"}), "app.unknownOption");
+    EXPECT_EQ(error_of({"wing"}), "app.unknownOption");
+    EXPECT_EQ(error_of({"--project"}), "app.unknownOption");
 }
 
 TEST(CommandLine, HelpVersionAndPython) {

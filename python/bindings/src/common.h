@@ -140,6 +140,7 @@ void define_mesh(nb::module_& m);
 void define_context(nb::module_& m);
 void define_tasks(nb::module_& m);
 void define_extensions(nb::module_& m);
+void define_project(nb::module_& m);
 
 /// Data of an object as its Python view (`stresslab.Mesh`, ...), or None.
 [[nodiscard]] nb::object data_to_python(const std::shared_ptr<const model::ObjectData>& data);

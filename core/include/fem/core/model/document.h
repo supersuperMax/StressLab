@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fem/core/model/change_set.h"
+#include "fem/core/model/contents.h"
 #include "fem/core/model/object.h"
 #include "fem/core/model/object_id.h"
 #include "fem/core/model/units.h"
@@ -90,6 +91,8 @@ public:
     [[nodiscard]] auto objects() const { return std::views::values(objects_); }
     /// Root objects in creation order.
     [[nodiscard]] std::span<const ObjectId> roots() const noexcept { return roots_; }
+    /// The id the next created object gets; ids below it may belong to removed objects.
+    [[nodiscard]] std::uint64_t next_id() const noexcept { return next_id_; }
 
     [[nodiscard]] std::vector<ObjectId> find_by_type(std::string_view type) const;
     [[nodiscard]] std::vector<ObjectId> find_by_owner(std::string_view owner) const;
@@ -125,6 +128,14 @@ private:
     bool remove_dependency(ObjectId dependent, ObjectId target, ChangeSet& changes);
     RemoveResult remove(ObjectId id, ChangeSet& changes);
     void set_units(const UnitSystem& units, ChangeSet& changes);
+
+    /// Makes the document hold `contents` instead of its objects (opening a project). Checks them
+    /// as creating the objects one by one would, but dependencies may name removed objects (ids
+    /// below `next_id`), and objects of disabled modules are welcome. Throws ModelError and leaves
+    /// the document unchanged if the contents are invalid. Which modules are enabled stays.
+    void replace(DocumentContents contents);
+    /// Adds a checked object of `replace`, without its dependencies.
+    void insert_loaded(ObjectId id, NewObject&& init);
 
     // --- History ---------------------------------------------------------------------------------
 

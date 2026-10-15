@@ -35,6 +35,7 @@ class ExtensionsPanel;
 class JournalPanel;
 class ModelTreePanel;
 class ProblemsPanel;
+class ProjectActions;
 class PropertyPanel;
 class PythonConsolePanel;
 class RequiredModulesBar;
@@ -89,6 +90,9 @@ inline constexpr std::string_view problems = "problems";
 /// Task 1.14 (docs/adr/0015-console-journal-extensions.md) adds the "Journal" and "Python Console"
 /// tabs, the module manager and the bar "The model needs the modules…" over the 3D view. The
 /// activity bar starts with the activities of the shell: Model, Modules and Settings.
+///
+/// Task 2.1 (docs/adr/0017-project-folder.md) adds opening and saving the project folder to the
+/// "File" menu (`ProjectActions`); the window asks about unsaved changes before it closes.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -157,9 +161,11 @@ public:
     void show_extensions();
     /// The bar "The model needs the modules…".
     [[nodiscard]] RequiredModulesBar& required_modules() const noexcept { return *required_; }
-    /// Shows the bar if the model needs modules that are not enabled: called when a model is
-    /// opened (at the start of the window for now; projects come with task 2.1).
+    /// Shows the bar if the model needs modules that are not enabled: called at the start of the
+    /// window and when a project is opened.
     void check_required_modules();
+    /// Open, save and autosave of the project folder (task 2.1), in the "File" menu.
+    [[nodiscard]] ProjectActions& project() const noexcept { return *project_; }
     /// The action "Save journal as script…" of the "File" menu.
     [[nodiscard]] QAction* save_journal_action() const noexcept;
     /// The commands of modules as the window runs them.
@@ -225,6 +231,7 @@ private:
     PythonConsolePanel* console_ = nullptr;
     ExtensionsPanel* extensions_ = nullptr;
     RequiredModulesBar* required_ = nullptr;
+    ProjectActions* project_ = nullptr;
     std::unique_ptr<Commands> commands_;
     std::unique_ptr<ContributionUi> contributions_;
     CommandPalette* palette_ = nullptr;

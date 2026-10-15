@@ -1,0 +1,14 @@
+{
+  "data": {
+    "kind": "element_set",
+    "size": 2
+  },
+  "dependencies": [],
+  "id": 3,
+  "name": "tets",
+  "owner": "fem.core",
+  "parent": 1,
+  "properties": {},
+  "schemaVersion": 1,
+  "type": "element_set"
+}

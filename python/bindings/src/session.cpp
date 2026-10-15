@@ -49,13 +49,19 @@ std::shared_ptr<DocumentHandle> DocumentHandle::create() {
     handle->owned_document_ = std::make_unique<model::Document>();
     handle->owned_bus_ = std::make_unique<command::CommandBus>(*handle->owned_document_);
     handle->bus_ = handle->owned_bus_.get();
+    handle->own_project_ = std::make_unique<storage::ProjectSession>(*handle->bus_);
     Session::instance().track(handle);
     return handle;
 }
 
-std::shared_ptr<DocumentHandle> DocumentHandle::borrow(command::CommandBus& bus) {
+std::shared_ptr<DocumentHandle> DocumentHandle::borrow(command::CommandBus& bus,
+                                                       storage::ProjectSession* project) {
     std::shared_ptr<DocumentHandle> handle(new DocumentHandle());
     handle->bus_ = &bus;
+    handle->lent_project_ = project;
+    if (project == nullptr) {
+        handle->own_project_ = std::make_unique<storage::ProjectSession>(bus);
+    }
     return handle;
 }
 
@@ -83,11 +89,18 @@ model::Document& DocumentHandle::owned_document() const {
     return *owned_document_;
 }
 
+storage::ProjectSession& DocumentHandle::project() const {
+    (void)bus();
+    return lent_project_ != nullptr ? *lent_project_ : *own_project_;
+}
+
 void DocumentHandle::close() noexcept {
     if (bus_ == nullptr) {
         return;
     }
     resources_.release_all();
+    own_project_.reset();
+    lent_project_ = nullptr;
     bus_ = nullptr;
     owned_bus_.reset();
     owned_document_.reset();
@@ -101,11 +114,11 @@ Session& Session::instance() {
 }
 
 void Session::attach(command::CommandBus& bus, context::ContextKeys& keys,
-                     extension::ExtensionManager* extensions) {
+                     extension::ExtensionManager* extensions, storage::ProjectSession* project) {
     detach();
     core_keys_.reset();
     resources_.release_all();
-    attached_ = DocumentHandle::borrow(bus);
+    attached_ = DocumentHandle::borrow(bus, project);
     attached_keys_ = &keys;
     attached_extensions_ = extensions;
     active_ = attached_;

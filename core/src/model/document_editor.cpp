@@ -60,6 +60,10 @@ void DocumentEditor::redo(ChangeSet& changes) {
     document_.apply(changes, false);
 }
 
+void DocumentEditor::replace(DocumentContents contents) {
+    document_.replace(std::move(contents));
+}
+
 ChangeSet& DocumentEditor::changes() {
     if (changes_ == nullptr) {
         throw ModelError(ModelErrc::outside_command,

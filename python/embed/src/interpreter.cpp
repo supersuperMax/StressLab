@@ -289,9 +289,10 @@ Interpreter::~Interpreter() {
 }
 
 void Interpreter::attach(command::CommandBus& bus, context::ContextKeys& keys,
-                         extension::ExtensionManager* extensions) {
+                         extension::ExtensionManager* extensions,
+                         storage::ProjectSession* project) {
     const nb::gil_scoped_acquire gil;
-    Session::instance().attach(bus, keys, extensions);
+    Session::instance().attach(bus, keys, extensions, project);
 }
 
 void Interpreter::detach() {

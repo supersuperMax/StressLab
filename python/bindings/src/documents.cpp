@@ -236,16 +236,8 @@ void define_documents(nb::module_& m) {
 
     nb::class_<command::ModelChange>(m, "ModelChange", "A completed step that changed the model.")
         .def_prop_ro("cause",
-                     [](const command::ModelChange& self) -> std::string {
-                         switch (self.cause) {
-                             case command::ModelChange::Cause::execute:
-                                 return "execute";
-                             case command::ModelChange::Cause::undo:
-                                 return "undo";
-                             case command::ModelChange::Cause::redo:
-                                 return "redo";
-                         }
-                         return {};
+                     [](const command::ModelChange& self) {
+                         return std::string(command::to_string(self.cause));
                      })
         .def_ro("label", &command::ModelChange::label)
         .def_prop_ro("created",

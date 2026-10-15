@@ -12,6 +12,7 @@
 #include "fem/core/model/document.h"
 #include "fem/core/settings/settings.h"
 #include "fem/core/signal.h"
+#include "fem/storage/session.h"
 
 #include <filesystem>
 #include <memory>
@@ -36,9 +37,10 @@ struct Environment {
 };
 
 /// The parts of the application that the window and the headless run share (ADR 0011,
-/// "Consequences"; ADR 0012): the document with its Command Bus and context keys, the settings of
-/// the user, the localization, the Extension Manager whose python and process modules run in
-/// processes of their own, and the Job Manager with the executor of this computer. Settings and
+/// "Consequences"; ADR 0012): the document with its Command Bus, context keys and project folder,
+/// the settings of the user, the localization, the Extension Manager whose python and process
+/// modules run in processes of their own, and the Job Manager with the executor of this computer.
+/// Settings and
 /// catalogs follow the enabled modules; the language and the undo limit follow the settings.
 /// Messages go to the logger of `log_category`.
 ///
@@ -63,6 +65,9 @@ public:
     /// Jobs of solvers and other programs. The keys `job.*` follow it where the owner of the loop
     /// of the thread of the model sets up `job::JobKeys`.
     [[nodiscard]] job::JobManager& jobs() noexcept { return jobs_; }
+    /// The project folder of the document (task 2.1): saving, opening, autosave. Modules are
+    /// saved with the versions the Extension Manager has installed.
+    [[nodiscard]] storage::ProjectSession& project() noexcept { return project_; }
 
     /// The level of `logging` follows the setting "log.level" from now on.
     void follow_log_level(log::Logging& logging);
@@ -90,6 +95,7 @@ private:
     settings::Settings settings_;
     l10n::Localization localization_;
     extension::ExtensionManager manager_;
+    storage::ProjectSession project_;
     std::shared_ptr<extension::HostRuntime> runtime_;
     job::JobManager jobs_;
     std::vector<Subscription> bindings_;

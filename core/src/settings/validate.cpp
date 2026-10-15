@@ -83,6 +83,8 @@ std::vector<Schema> core_schemas() {
         core_schema(
             keys::log_level, Type::string,
             {{"default", "info"}, {"enum", {"trace", "debug", "info", "warning", "error"}}}),
+        core_schema(keys::autosave_interval, Type::integer,
+                    {{"default", 60}, {"minimum", 0}, {"maximum", 86400}}),
     };
 }
 

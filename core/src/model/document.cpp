@@ -68,6 +68,24 @@ void check_properties(const Properties& properties) {
     check_property_value(properties);
 }
 
+void check_kind(const NewObject& init) {
+    if (init.type.empty() || init.owner.empty()) {
+        throw ModelError(ModelErrc::invalid_argument, "object type and owner must not be empty");
+    }
+    if (init.schema_version == 0) {
+        throw ModelError(ModelErrc::invalid_argument, "schema version starts at 1");
+    }
+    if (init.owner == core_owner && !is_core_type(init.type)) {
+        throw ModelError(ModelErrc::invalid_argument,
+                         "'" + init.type + "' is not an object type of the core");
+    }
+}
+
+void sort_unique(std::vector<ObjectId>& ids) {
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+}
+
 void erase_dependent(std::map<ObjectId, std::set<ObjectId>>& index, ObjectId target,
                      ObjectId dependent) {
     const auto entry = index.find(target);
@@ -187,25 +205,14 @@ void Document::throw_wrong_data(ObjectId id) {
 // Every change validates first, then records itself and applies the record (see `record`).
 
 ObjectId Document::create(NewObject init, ChangeSet& changes) {
-    if (init.type.empty() || init.owner.empty()) {
-        throw ModelError(ModelErrc::invalid_argument, "object type and owner must not be empty");
-    }
-    if (init.schema_version == 0) {
-        throw ModelError(ModelErrc::invalid_argument, "schema version starts at 1");
-    }
-    if (init.owner == core_owner && !is_core_type(init.type)) {
-        throw ModelError(ModelErrc::invalid_argument,
-                         "'" + init.type + "' is not an object type of the core");
-    }
+    check_kind(init);
     if (init.parent.is_valid() && is_opaque(get(init.parent))) {
         throw ModelError(ModelErrc::opaque_object,
                          "cannot add a child to an object of a disabled module", init.parent);
     }
     check_name(nullptr, init.parent, init.type, init.name);
     check_properties(init.properties);
-    std::sort(init.dependencies.begin(), init.dependencies.end());
-    init.dependencies.erase(std::unique(init.dependencies.begin(), init.dependencies.end()),
-                            init.dependencies.end());
+    sort_unique(init.dependencies);
     for (const ObjectId target : init.dependencies) {
         if (!contains(target)) {
             throw ModelError(ModelErrc::invalid_dependency, "dependency on a missing object",
@@ -334,6 +341,89 @@ void Document::set_units(const UnitSystem& units, ChangeSet& changes) {
         return;
     }
     record(changes, {change::Units{units}});
+}
+
+// --- Loading -------------------------------------------------------------------------------------
+
+void Document::replace(DocumentContents contents) {
+    std::sort(contents.objects.begin(), contents.objects.end(),
+              [](const StoredObject& a, const StoredObject& b) { return a.id < b.id; });
+    // The contents are built into a document of their own and swapped in only when all is well.
+    Document loaded(contents.units);
+    loaded.next_id_ = contents.next_id;
+    if (contents.next_id == 0) {
+        throw ModelError(ModelErrc::invalid_argument, "the next object id starts at 1");
+    }
+
+    // Objects in id order: a parent is always older than its children, so it is there already.
+    // Dependencies may point at younger objects and are added once every object is in.
+    std::vector<std::pair<ObjectId, std::vector<ObjectId>>> dependencies;
+    ObjectId previous;
+    for (StoredObject& stored : contents.objects) {
+        const ObjectId id = stored.id;
+        NewObject& init = stored.init;
+        try {
+            if (!id.is_valid() || id.value() >= contents.next_id) {
+                throw ModelError(ModelErrc::invalid_argument,
+                                 "object id must be between 1 and the next id " +
+                                     std::to_string(contents.next_id));
+            }
+            if (id == previous) {
+                throw ModelError(ModelErrc::invalid_argument, "two objects have the same id");
+            }
+            check_kind(init);
+            if (init.parent.is_valid() && !loaded.contains(init.parent)) {
+                throw ModelError(ModelErrc::unknown_object,
+                                 "the parent " + to_string(init.parent) +
+                                     " is missing or younger than its child");
+            }
+            loaded.check_name(nullptr, init.parent, init.type, init.name);
+            check_properties(init.properties);
+            loaded.check_data(init.owner, init.type, init.parent, init.data);
+        } catch (const ModelError& error) {
+            if (error.object().is_valid()) {
+                throw;
+            }
+            throw ModelError(error.code(), error.what(), id);
+        }
+        previous = id;
+        sort_unique(init.dependencies);
+        dependencies.emplace_back(id, std::move(init.dependencies));
+        init.dependencies.clear();
+        loaded.insert_loaded(id, std::move(init));
+    }
+
+    for (const auto& [id, targets] : dependencies) {
+        for (const ObjectId target : targets) {
+            if (target == id || !target.is_valid() || target.value() >= contents.next_id) {
+                throw ModelError(
+                    ModelErrc::invalid_dependency,
+                    "dependency on itself or on an id never issued " + to_string(target), id);
+            }
+            if (loaded.reaches(target, id)) {
+                throw ModelError(ModelErrc::dependency_cycle,
+                                 "dependency on " + to_string(target) + " closes a cycle", id);
+            }
+            loaded.get_mutable(id).dependencies_.push_back(target);
+            loaded.dependents_[target].insert(id);
+        }
+    }
+
+    std::swap(units_, loaded.units_);
+    std::swap(next_id_, loaded.next_id_);
+    std::swap(objects_, loaded.objects_);
+    std::swap(roots_, loaded.roots_);
+    std::swap(dependents_, loaded.dependents_);
+    std::swap(names_, loaded.names_);
+}
+
+void Document::insert_loaded(ObjectId id, NewObject&& init) {
+    const ObjectId parent = init.parent;
+    const Object& object = objects_.emplace(id, Object(id, std::move(init))).first->second;
+    siblings(parent).push_back(id);
+    if (!object.name_.empty()) {
+        names_.emplace(NameKey{parent, object.type_, object.name_}, id);
+    }
 }
 
 // --- History -------------------------------------------------------------------------------------

@@ -1,10 +1,9 @@
 // The `stresslab` executable:
 //
-//     stresslab                                                     the window (task 1.11, ADR
-//     0012) stresslab --python [python arguments]                         the embedded Python
-//     (task 1.8) stresslab --headless [options] run-script <file.py> [args]   a script without the
-//     window
-//                                                                    (task 1.10, ADR 0011)
+// - `stresslab [folder.slproj]`: the window (task 1.11, ADR 0012), with a project open (task 2.1);
+// - `stresslab --python [python arguments]`: the embedded Python (task 1.8);
+// - `stresslab --headless [options] run-script <file.py> [args]`: a script without the window
+//   (task 1.10, ADR 0011).
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/context/context_keys.h"
@@ -90,7 +89,7 @@ int run(const std::vector<std::string>& args) {
         case fem::app::CommandLine::Mode::window:
 #ifdef FEM_WITH_WINDOW
             detach_from_console();
-            return fem::app::run_window(application_environment());
+            return fem::app::run_window(application_environment(), line.project);
 #else
             // A build without the GUI: tell what it can do.
             print(text("app.usage", {{"program", "stresslab"}}), stdout);

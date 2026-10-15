@@ -1,0 +1,15 @@
+{
+  "data": {
+    "elements": 3,
+    "kind": "mesh",
+    "nodes": 5
+  },
+  "dependencies": [],
+  "id": 1,
+  "name": "Кронштейн",
+  "owner": "fem.core",
+  "parent": null,
+  "properties": {},
+  "schemaVersion": 1,
+  "type": "mesh"
+}

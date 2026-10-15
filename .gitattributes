@@ -12,3 +12,6 @@
 *.hdf5 binary
 *.zst binary
 *.slpack binary
+
+# Blocks of bulk data in project folders (.fem/objects): bytes hashed as they are.
+**/.fem/objects/** binary

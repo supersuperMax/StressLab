@@ -20,13 +20,18 @@ namespace fem::command {
 
 /// "The model changed": sent once for every completed step that changed it.
 struct ModelChange {
-    enum class Cause : std::uint8_t { execute, undo, redo };
+    /// `load`: the document got other contents (`CommandBus::replace_document`), such as an
+    /// opened project; listeners should read the whole model again.
+    enum class Cause : std::uint8_t { execute, undo, redo, load };
 
     Cause cause = Cause::execute;
     /// Id of the command, or label of the transaction.
     std::string label;
     model::ChangeSummary summary;
 };
+
+/// "execute", "undo", "redo", "load": the cause in Python and in the protocol of modules.
+[[nodiscard]] std::string_view to_string(ModelChange::Cause cause) noexcept;
 
 /// A group of commands that is undone as one step (see `CommandBus::begin_transaction`).
 /// Rolls back on destruction unless committed. Must not outlive its bus.
@@ -144,6 +149,14 @@ public:
     /// transaction, whose undo could not take the action back, and
     /// CommandError(invalid_arguments) for an empty entry.
     void journal_action(std::string_view entry);
+
+    /// Makes the document hold `contents` (opening a project, task 2.1): not a step, so the steps
+    /// to undo and redo, which belong to the old contents, are dropped. Writes `entry` to the
+    /// journal if it is not empty, then tells the listeners with `ModelChange::Cause::load`, whose
+    /// summary lists the objects of the new contents as created, or as updated if an object with
+    /// the same id was there before. Throws ModelError and changes nothing for invalid contents
+    /// (`Document` checks them), CommandError(invalid_state) inside a command or a transaction.
+    void replace_document(model::DocumentContents contents, std::string_view entry = {});
 
     // --- Events ----------------------------------------------------------------------------------
 

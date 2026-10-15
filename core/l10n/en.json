@@ -11,7 +11,7 @@
     "app.scriptNotFound": "Script “{file}” does not exist.",
     "app.unknownCommand": "Unknown command “{command}”: --headless knows run-script.",
     "app.unknownOption": "Unknown option “{option}”.",
-    "app.usage": "Usage:\n  {program} --python [arguments of python]\n      runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --headless [options] run-script <file.py> [arguments of the script]\n      runs a script without the window: loads the modules, runs the script on a new document, writes the log to the standard output\n      --extensions <folder>   installs the modules in the subfolders of the folder; may repeat\n      --profile <file>        enables the modules of the profile; without it all installed modules are enabled\n      --journal <file.slpy>   writes the journal of the session\n      --log-level <level>     trace, debug, info, warning, error, critical or off; without it the setting log.level\n      --log-file <file>       also writes the log to the file\n      exit code: 0 success, n after sys.exit(n), 1 an error in the script, 2 a wrong command line\n  {program} --version\n      prints the version",
+    "app.usage": "Usage:\n  {program} [<folder.slproj>]\n      opens the window, with the project of the folder if given\n  {program} --python [arguments of python]\n      runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --headless [options] run-script <file.py> [arguments of the script]\n      runs a script without the window: loads the modules, runs the script on a new document, writes the log to the standard output\n      --extensions <folder>   installs the modules in the subfolders of the folder; may repeat\n      --profile <file>        enables the modules of the profile; without it all installed modules are enabled\n      --journal <file.slpy>   writes the journal of the session\n      --log-level <level>     trace, debug, info, warning, error, critical or off; without it the setting log.level\n      --log-file <file>       also writes the log to the file\n      exit code: 0 success, n after sys.exit(n), 1 an error in the script, 2 a wrong command line\n  {program} --version\n      prints the version",
     "extension.crashed": "Module “{module}” stopped working and was restarted. The model is intact: the command it was running is cancelled.",
     "extension.gaveUp": {
       "one": "Module “{module}” stopped working {count} time in a row and is not restarted any more. The model is intact. Disable and enable the module to try again.",
@@ -58,6 +58,8 @@
     "setting.history.undoLimit.title": "Undo steps",
     "setting.log.level": "The least important messages written to the log.",
     "setting.log.level.title": "Log level",
+    "setting.project.autosaveInterval": "Seconds between automatic saves of a project that has a folder. 0 turns them off.",
+    "setting.project.autosaveInterval.title": "Autosave interval",
     "settings.error.above_maximum": "“{key}” must be at most {maximum}, not {value}.",
     "settings.error.below_minimum": "“{key}” must be at least {minimum}, not {value}.",
     "settings.error.duplicate_setting": "The setting “{key}” of module “{owner}” is ignored: another module already has it.",

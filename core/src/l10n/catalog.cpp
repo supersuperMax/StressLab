@@ -1,8 +1,8 @@
 #include "fem/core/l10n/catalog.h"
 
+#include "fem/core/io/files.h"
 #include "fem/core/l10n/error.h"
 
-#include "../io/files.h"
 #include <nlohmann/json.hpp>
 
 #include <array>

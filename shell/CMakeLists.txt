@@ -23,6 +23,7 @@ target_sources(
             src/menu_order.cpp
             src/model_tree.cpp
             src/problems.cpp
+            src/project_actions.cpp
             src/property_panel.cpp
             src/python_console.cpp
             src/required_modules_bar.cpp
@@ -41,13 +42,14 @@ target_sources(
             include/fem/shell/main_window.h
             include/fem/shell/model_tree.h
             include/fem/shell/problems.h
+            include/fem/shell/project_actions.h
             include/fem/shell/property_panel.h
             include/fem/shell/python_console.h
             include/fem/shell/required_modules_bar.h
             include/fem/shell/settings_panel.h)
 set_target_properties(femshell PROPERTIES AUTOMOC ON)
 target_include_directories(femshell PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_link_libraries(femshell PUBLIC fem::core Qt6::Widgets Qt6::Svg ads::qtadvanceddocking-qt6)
+target_link_libraries(femshell PUBLIC fem::core fem::storage Qt6::Widgets Qt6::Svg ads::qtadvanceddocking-qt6)
 # The core has its own `Signal::emit` and `slots_`: the shell and what uses it write Q_SIGNALS,
 # Q_SLOTS and Q_EMIT instead of the keywords of Qt.
 target_compile_definitions(femshell PUBLIC QT_NO_KEYWORDS)

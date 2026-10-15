@@ -68,6 +68,15 @@ HeadlessOptions parse_headless(const std::vector<std::string>& args, std::size_t
     fail("app.missingScript", {}, "run-script needs the file of a script");
 }
 
+/// "wing.slproj" or "wing.slproj/": a project folder, not a script given without run-script.
+bool is_project_folder_name(const std::string& arg) {
+    std::filesystem::path path = path_from_utf8(arg);
+    if (!path.has_filename()) {
+        path = path.parent_path();
+    }
+    return !arg.starts_with("-") && path.extension() == ".slproj";
+}
+
 }  // namespace
 
 std::filesystem::path path_from_utf8(const std::string& text) {
@@ -89,6 +98,8 @@ CommandLine parse_command_line(const std::vector<std::string>& args) {
     } else if (args[0] == "--headless") {
         line.mode = CommandLine::Mode::headless;
         line.headless = parse_headless(args, 1);
+    } else if (args.size() == 1 && is_project_folder_name(args[0])) {
+        line.project = path_from_utf8(args[0]);
     } else {
         unknown_option(args[0]);
     }
