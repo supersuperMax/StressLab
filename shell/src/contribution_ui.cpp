@@ -500,6 +500,61 @@ void ContributionUi::refresh_stages() {
 
 // --- Panels --------------------------------------------------------------------------------------
 
+void ContributionUi::remove_panel(ads::CDockWidget* panel) {
+    hosts_.docks->removeDockWidget(panel);
+    // Later, not now: Qt ADS queues work for the tab of a panel it has just shown (making the tab
+    // visible in its bar), and a module may be disabled before that work runs, e.g. enabled and
+    // disabled again in one line of the console.
+    panel->deleteLater();
+}
+
+void ContributionUi::dock_activity(ads::CDockWidget* panel) {
+    ads::CDockAreaWidget* area =
+        hosts_.side_panel != nullptr ? hosts_.side_panel->dockAreaWidget() : nullptr;
+    if (area != nullptr) {
+        hosts_.docks->addDockWidgetTabToArea(panel, area);
+    } else {
+        hosts_.docks->addDockWidget(ads::LeftDockWidgetArea, panel);
+    }
+    // Closed until its icon is clicked.
+    panel->toggleView(false);
+}
+
+void ContributionUi::dock_tab(ads::CDockWidget* panel) {
+    ads::CDockAreaWidget* area =
+        hosts_.bottom_panel != nullptr ? hosts_.bottom_panel->dockAreaWidget() : nullptr;
+    if (area != nullptr) {
+        // A new tab joins the others without taking the front from the one there.
+        ads::CDockWidget* front = area->currentDockWidget();
+        hosts_.docks->addDockWidgetTabToArea(panel, area);
+        if (front != nullptr && front != panel) {
+            area->setCurrentDockWidget(front);
+        }
+    } else {
+        hosts_.docks->addDockWidget(ads::BottomDockWidgetArea, panel);
+    }
+}
+
+void ContributionUi::dock_panels_missing_from(const QByteArray& state) {
+    // Qt ADS makes a panel the restored layout does not name a floating window of its own. A layout
+    // saved before the module was enabled (or installed) says nothing about its panels: they go
+    // where a new panel of a module goes. Panels the layout names stay where the user put them.
+    const auto named = [&state](const ads::CDockWidget* panel) {
+        return state.contains("Name=\"" + panel->objectName().toUtf8() + "\"");
+    };
+    for (const auto& [id, panel] : activity_panels_) {
+        if (!named(panel)) {
+            dock_activity(panel);
+        }
+    }
+    for (const auto& [id, panel] : tab_panels_) {
+        if (!named(panel)) {
+            dock_tab(panel);
+            panel->toggleView(true);
+        }
+    }
+}
+
 void ContributionUi::build_activities() {
     const extension::ContributionRegistry& registry = workbench_.extensions.registry();
     std::map<std::string, const extension::ActivityBarContribution*> wanted;
@@ -511,8 +566,7 @@ void ContributionUi::build_activities() {
             ++it;
             continue;
         }
-        hosts_.docks->removeDockWidget(it->second);
-        delete it->second;
+        remove_panel(it->second);
         it = activity_panels_.erase(it);
     }
     hosts_.activity_bar->clear();
@@ -529,15 +583,7 @@ void ContributionUi::build_activities() {
             panel->setObjectName(qname("activity:", activity->id));
             panel->setWidget(make_placeholder(text("zone.empty")),
                              ads::CDockWidget::ForceNoScrollArea);
-            ads::CDockAreaWidget* area =
-                hosts_.side_panel != nullptr ? hosts_.side_panel->dockAreaWidget() : nullptr;
-            if (area != nullptr) {
-                hosts_.docks->addDockWidgetTabToArea(panel, area);
-            } else {
-                hosts_.docks->addDockWidget(ads::LeftDockWidgetArea, panel);
-            }
-            // Closed until its icon is clicked.
-            panel->toggleView(false);
+            dock_activity(panel);
         }
         panel->setWindowTitle(title);
         QAction* toggle = panel->toggleViewAction();
@@ -560,8 +606,7 @@ void ContributionUi::build_tabs() {
             ++it;
             continue;
         }
-        hosts_.docks->removeDockWidget(it->second);
-        delete it->second;
+        remove_panel(it->second);
         tabs_.erase(it->first);
         it = tab_panels_.erase(it);
     }
@@ -572,18 +617,7 @@ void ContributionUi::build_tabs() {
             panel->setObjectName(qname("tab:", tab->id));
             panel->setWidget(make_placeholder(text("zone.empty")),
                              ads::CDockWidget::ForceNoScrollArea);
-            ads::CDockAreaWidget* area =
-                hosts_.bottom_panel != nullptr ? hosts_.bottom_panel->dockAreaWidget() : nullptr;
-            if (area != nullptr) {
-                // A new tab joins the others without taking the front from the one there.
-                ads::CDockWidget* front = area->currentDockWidget();
-                hosts_.docks->addDockWidgetTabToArea(panel, area);
-                if (front != nullptr) {
-                    area->setCurrentDockWidget(front);
-                }
-            } else {
-                hosts_.docks->addDockWidget(ads::BottomDockWidgetArea, panel);
-            }
+            dock_tab(panel);
         }
         panel->setWindowTitle(
             to_qstring(workbench_.localization.manifest_text(tab->owner, tab->title)));

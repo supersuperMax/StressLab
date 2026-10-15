@@ -6,6 +6,8 @@
 #include "fem/core/context/when.h"
 #include "fem/core/signal.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -65,6 +67,10 @@ public:
     /// `ContextKeys::watch` does. The subscription must not outlive the module's activation.
     [[nodiscard]] Subscription watch_context(context::WhenExpression expression,
                                              std::function<void(bool)> listener);
+    /// The value in effect of a setting: one of the module's own (`contributes.settings`) or of
+    /// another part of the application. Throws ExtensionError(unknown_setting) for a key without
+    /// a schema, or when the application gives modules no settings.
+    [[nodiscard]] nlohmann::json setting(std::string_view key) const;
     /// Tells the application that the code of the module stopped: the manager logs it and sends
     /// "extension.crashed" with the report, so the shell can show a message.
     void report_crash(CrashReport report);

@@ -186,6 +186,22 @@ struct NeededModule {
     }
 };
 
+/// Whether enabling and disabling modules is written to the journal of the Command Bus. The user
+/// enabling a module (the module manager, `stresslab.extensions.enable`) is journaled, so that the
+/// journal replays with the same modules; the application enabling modules at startup is not.
+enum class Journaling : std::uint8_t {
+    off,
+    /// Each call is written as `stresslab.extensions.enable("id")` or `disable("id")`, also when
+    /// the module already was in that state. Refused inside a command or a transaction, whose undo
+    /// could not take it back.
+    on,
+};
+
+/// Reads the value in effect of a setting for the code of a module (`ExtensionHost::setting`);
+/// throws ExtensionError(unknown_setting) for a key without a schema. `bind_settings` gives the
+/// manager one.
+using SettingReader = std::function<nlohmann::json(std::string_view key)>;
+
 struct ExtensionManagerOptions {
     /// Version of the platform for `engine` ranges; tests set their own.
     Version engine = engine_version();
@@ -276,15 +292,16 @@ public:
     /// Enables the module and the modules it requires, and returns them as `plan_enable` does.
     /// Throws as `plan_enable`, and ExtensionError(conflict) if an id they contribute is taken;
     /// then nothing is enabled. After `startup`, modules waiting for "onStartup" are activated at
-    /// once.
-    std::vector<std::string> enable(std::string_view id);
+    /// once. With `Journaling::on` the call is journaled after it succeeds; inside a command or a
+    /// transaction it throws ExtensionError(invalid_state) and enables nothing.
+    std::vector<std::string> enable(std::string_view id, Journaling journaling = Journaling::off);
     /// Modules `disable(id)` would disable: the enabled modules that need it, then itself; empty if
     /// it is disabled. Throws ExtensionError(unknown_extension).
     [[nodiscard]] std::vector<std::string> plan_disable(std::string_view id) const;
     /// Disables the module and the modules that need it, and returns them as `plan_disable` does;
     /// sends "extension.deactivated" for each. Throws ExtensionError(invalid_state) and disables
-    /// nothing while a command of one of them is running.
-    std::vector<std::string> disable(std::string_view id);
+    /// nothing while a command of one of them is running. `journaling` as for `enable`.
+    std::vector<std::string> disable(std::string_view id, Journaling journaling = Journaling::off);
 
     /// Modules that own objects of the document but are not enabled, sorted by id: the modules the
     /// model needs. Objects of the core never count.
@@ -316,8 +333,15 @@ public:
     /// What `apply_profile` would enable and disable, sorted by id; modules of the profile that
     /// cannot be enabled are left out.
     [[nodiscard]] ProfilePlan plan_profile(const Profile& profile) const;
-    /// Enables the modules of the profile (with their dependencies) and disables the others.
-    ProfileReport apply_profile(const Profile& profile);
+    /// Enables the modules of the profile (with their dependencies) and disables the others. With
+    /// `Journaling::on` it journals `disable` for each module of `ProfileReport::disabled`, then
+    /// `enable` for each of `ProfileReport::enabled`; refused as `enable` refuses.
+    ProfileReport apply_profile(const Profile& profile, Journaling journaling = Journaling::off);
+
+    // --- Settings --------------------------------------------------------------------------------
+
+    /// Where the code of modules reads settings from; an empty reader: nowhere.
+    void set_setting_reader(SettingReader reader) { setting_reader_ = std::move(reader); }
 
     // --- Events ----------------------------------------------------------------------------------
 
@@ -342,6 +366,10 @@ private:
     command::CommandResult run_command(const std::string& owner, command::CommandContext& context);
     void emit(ExtensionEvent::Kind kind, const std::string& id, std::string message = {},
               std::optional<CrashReport> crash = std::nullopt);
+    /// Throws ExtensionError(invalid_state) if `journaling` is on but the bus is not idle.
+    void check_journaling(Journaling journaling) const;
+    /// Writes `stresslab.extensions.<action>("id")` to the journal.
+    void journal(std::string_view action, std::string_view id);
     friend class ExtensionHost;
 
     model::Document& document_;
@@ -352,6 +380,7 @@ private:
     std::map<std::string, std::unique_ptr<Record>, std::less<>> records_;
     std::map<ExtensionKind, std::shared_ptr<ExtensionRuntime>> runtimes_;
     bool started_ = false;
+    SettingReader setting_reader_;
     Signal<const ExtensionEvent&> events_;
 };
 

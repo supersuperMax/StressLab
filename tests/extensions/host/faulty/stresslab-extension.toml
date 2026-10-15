@@ -85,6 +85,11 @@ id = "faulty.info"
 title = "Process id and path of the host"
 
 [[contributes.commands]]
+id = "faulty.setting"
+title = "Read a setting"
+args = [{ name = "key", type = "string" }]
+
+[[contributes.commands]]
 id = "faulty.undeclared"
 title = "Declared, but its code is not registered"
 
@@ -92,3 +97,6 @@ title = "Declared, but its code is not registered"
 name = "faulty.value"
 type = "number"
 default = 0
+
+[contributes.settings]
+"faulty.greeting" = { type = "string", default = "привет" }

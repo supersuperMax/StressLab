@@ -80,7 +80,7 @@ void RequiredModulesBar::enable_modules() {
             continue;
         }
         try {
-            (void)workbench_.extensions.enable(needed.id);
+            (void)workbench_.extensions.enable(needed.id, extension::Journaling::on);
         } catch (const extension::ExtensionError& error) {
             log::logger("shell")->error("module '{}' cannot be enabled: {}", needed.id,
                                         error.what());

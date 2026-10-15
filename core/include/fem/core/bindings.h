@@ -12,7 +12,8 @@
 // returned subscription lives; the connected objects must outlive it.
 namespace fem {
 
-/// Settings get the schemas of a module when it is enabled and lose them when it is disabled.
+/// Settings get the schemas of a module when it is enabled and lose them when it is disabled, and
+/// the code of modules reads their values in effect (`ExtensionManager::set_setting_reader`).
 [[nodiscard]] Subscription bind_settings(extension::ExtensionManager& manager,
                                          settings::Settings& settings);
 

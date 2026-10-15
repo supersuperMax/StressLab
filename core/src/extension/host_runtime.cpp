@@ -1096,6 +1096,16 @@ private:
             watches_.erase(integer_param(params, "watch"));
             return nullptr;
         }
+        if (method == "settings/get") {
+            try {
+                return {{"value", host_.setting(string_param(params, "key"))}};
+            } catch (const ExtensionError& e) {
+                if (e.code() == ExtensionErrc::unknown_setting) {
+                    throw RequestError(rpc_error::not_found, e.what());
+                }
+                throw;
+            }
+        }
         if (method == "model/subscribe") {
             std::weak_ptr<HostProcess> weak = process_;
             model_changes_ =

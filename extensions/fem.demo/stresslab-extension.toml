@@ -1,0 +1,87 @@
+# The demonstration module (task 1.15 of docs/plan.md): one of each kind of contribution the shell
+# shows, as a working example for docs/extension-guide.md. It knows nothing of finite elements: it
+# keeps notes in the model.
+
+[extension]
+id = "fem.demo"
+name = "%name%"
+description = "%description%"
+author = "StressLab"
+version = "1.0.0"
+engine = "^0.1"
+kind = "python"
+entry = "fem_demo:activate"
+# The code starts with the first command of the module, not with the application.
+activation = ["onCommand:demo.*"]
+
+# A command: in the palette, in Python as stresslab.demo.add_note(text="..."), in the journal.
+[[contributes.commands]]
+id = "demo.add_note"
+title = "%command.addNote%"
+category = "%category%"
+icon = "icons/note.svg"
+args = [{ name = "text", type = "string", default = "" }]
+
+# A button of the context toolbar above the 3D view, shown only on the stage of the module.
+[[contributes.contextToolbar]]
+command = "demo.add_note"
+when = "stage == 'demo.review'"
+
+# A stage after the standard stage "Results".
+[[contributes.stages]]
+id = "demo.review"
+title = "%stage.review%"
+slot = "after:results"
+
+# A tab of the bottom panel.
+[[contributes.bottomPanelTabs]]
+id = "demo.notes"
+title = "%tab.notes%"
+
+# Notes in the model tree, with their own form of properties.
+[[contributes.treeNodeTypes]]
+type = "demo_note"
+title = "%node.note%"
+icon = "icons/note.svg"
+
+[[contributes.propertySchemas]]
+type = "demo_note"
+version = 1
+
+[contributes.propertySchemas.schema]
+type = "object"
+required = ["text"]
+
+[contributes.propertySchemas.schema.properties.text]
+type = "string"
+title = "%note.text%"
+x-order = 1
+
+[contributes.propertySchemas.schema.properties.priority]
+type = "string"
+title = "%note.priority%"
+enum = ["low", "normal", "high"]
+x-enumTitles = ["%priority.low%", "%priority.normal%", "%priority.high%"]
+default = "normal"
+x-order = 2
+
+[contributes.propertySchemas.schema.properties.offset]
+type = "number"
+title = "%note.offset%"
+description = "%note.offset.description%"
+x-quantity = "length"
+default = 0
+x-advanced = true
+x-order = 3
+
+# A setting: the text of a note added without one. The code of the module reads it.
+[contributes.settings]
+"demo.defaultText" = { type = "string", default = "TODO", scope = "user", title = "%setting.defaultText%", description = "%setting.defaultText.description%" }
+
+[[contributes.localization]]
+language = "en"
+path = "l10n/en.json"
+
+[[contributes.localization]]
+language = "ru"
+path = "l10n/ru.json"

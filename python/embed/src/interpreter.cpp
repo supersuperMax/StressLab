@@ -288,9 +288,10 @@ Interpreter::~Interpreter() {
     Py_FinalizeEx();
 }
 
-void Interpreter::attach(command::CommandBus& bus, context::ContextKeys& keys) {
+void Interpreter::attach(command::CommandBus& bus, context::ContextKeys& keys,
+                         extension::ExtensionManager* extensions) {
     const nb::gil_scoped_acquire gil;
-    Session::instance().attach(bus, keys);
+    Session::instance().attach(bus, keys, extensions);
 }
 
 void Interpreter::detach() {

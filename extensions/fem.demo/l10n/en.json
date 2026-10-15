@@ -1,0 +1,22 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "category": "Demo",
+    "command.addNote": "Add a Note",
+    "description": "An example module: a command, a button, a stage, a tab, a node type with a form and a setting. It keeps notes in the model.",
+    "name": "Demo Module",
+    "node.note": "Note",
+    "note.offset": "Offset",
+    "note.offset.description": "How far from the place the note is about.",
+    "note.priority": "Priority",
+    "note.text": "Text",
+    "priority.high": "High",
+    "priority.low": "Low",
+    "priority.normal": "Normal",
+    "setting.defaultText": "Text of a new note",
+    "setting.defaultText.description": "The text a note gets when it is added without one.",
+    "stage.review": "Review",
+    "tab.notes": "Notes"
+  }
+}

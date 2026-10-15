@@ -690,7 +690,7 @@ void ExtensionsPanel::set_enabled(const std::string& id, bool enabled) {
     }
     if (enabled) {
         try {
-            (void)workbench_.extensions.enable(id);
+            (void)workbench_.extensions.enable(id, extension::Journaling::on);
             set_status({});
         } catch (const extension::ExtensionError& error) {
             set_status(
@@ -721,7 +721,7 @@ void ExtensionsPanel::set_enabled(const std::string& id, bool enabled) {
 
 void ExtensionsPanel::disable_now(const std::string& id) {
     try {
-        (void)workbench_.extensions.disable(id);
+        (void)workbench_.extensions.disable(id, extension::Journaling::on);
         set_status({});
     } catch (const extension::ExtensionError& error) {
         set_status(to_qstring(error.what()));
@@ -805,7 +805,7 @@ void ExtensionsPanel::install_now(const std::filesystem::path& folder) {
     const ExtensionInfo& info = workbench_.extensions.get(id);
     if (info.compatible() && !info.enabled()) {
         try {
-            (void)workbench_.extensions.enable(id);
+            (void)workbench_.extensions.enable(id, extension::Journaling::on);
         } catch (const extension::ExtensionError& error) {
             set_status(
                 tr_text("extensions.cannotEnable",
@@ -913,7 +913,13 @@ void ExtensionsPanel::apply_profile(const std::string& name) {
 }
 
 void ExtensionsPanel::apply_now(const extension::Profile& profile) {
-    const extension::ProfileReport report = workbench_.extensions.apply_profile(profile);
+    extension::ProfileReport report;
+    try {
+        report = workbench_.extensions.apply_profile(profile, extension::Journaling::on);
+    } catch (const extension::ExtensionError& error) {
+        set_status(to_qstring(error.what()));
+        return;
+    }
     QStringList problems;
     if (!report.missing.empty()) {
         problems.push_back(tr_text("profiles.missing", {{"modules", join(report.missing)}}));

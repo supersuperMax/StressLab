@@ -35,6 +35,7 @@ add_library(fem_python_bindings STATIC
     bindings/src/convert.cpp
     bindings/src/documents.cpp
     bindings/src/errors.cpp
+    bindings/src/extensions.cpp
     bindings/src/mesh.cpp
     bindings/src/module.cpp
     bindings/src/session.cpp
@@ -79,6 +80,7 @@ set(fem_python_package_files
     stresslab/__init__.py
     stresslab/_commands.py
     stresslab/_console.py
+    stresslab/extensions.py
     stresslab/py.typed
     stresslab_host/__init__.py
     stresslab_host/__main__.py

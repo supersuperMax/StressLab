@@ -27,6 +27,8 @@
 #include <QString>
 #include <QWidget>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -139,6 +141,26 @@ struct Application {
         (void)install(id, contributes, std::move(folder));
         (void)manager.enable(id);
     }
+
+#ifdef FEM_BUILTIN_EXTENSIONS_DIR
+    /// Installs and enables the module fem.demo the application ships (task 1.15), from its folder,
+    /// with its manifest as it is but for `engine`, which names the platform version of the tests.
+    void add_demo() {
+        const std::filesystem::path folder =
+            std::filesystem::path(FEM_BUILTIN_EXTENSIONS_DIR) / "fem.demo";
+        std::ifstream stream(folder / "stresslab-extension.toml", std::ios::binary);
+        std::string text{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+        const std::string shipped = "engine = \"^0.1\"";
+        const std::size_t at = text.find(shipped);
+        if (at == std::string::npos) {
+            throw std::runtime_error("the manifest of fem.demo has another engine");
+        }
+        text.replace(at, shipped.size(), "engine = \"^1.0\"");
+        (void)manager.install(extension::parse_manifest(text, engine), folder,
+                              extension::ExtensionSource::builtin);
+        (void)manager.enable("fem.demo");
+    }
+#endif
 };
 
 /// The action of a menu or a widget with this object name, or nullptr; submenus are searched too.

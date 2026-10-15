@@ -26,6 +26,7 @@ struct ErrorTypes {
     PyObject* task = nullptr;
     PyObject* task_cancelled = nullptr;
     PyObject* job = nullptr;
+    PyObject* extension = nullptr;
 };
 
 ErrorTypes types;
@@ -88,7 +89,7 @@ void translate(const std::exception_ptr& exception, void* /*payload*/) {
     } catch (const job::JobError& e) {
         raise(types.job, e.what(), job::to_string(e.code()));
     } catch (const extension::ExtensionError& e) {
-        raise(types.error, e.what(), extension::to_string(e.code()));
+        raise(types.extension, e.what(), extension::to_string(e.code()));
     } catch (const settings::SettingsError& e) {
         raise(types.error, e.what(), settings::to_string(e.code()));
     } catch (const l10n::L10nError& e) {
@@ -114,6 +115,9 @@ void define_errors(nb::module_& m) {
     types.task = new_error(m, "TaskError", types.error, "A task failed or is not finished.");
     types.task_cancelled = new_error(m, "TaskCancelled", types.task, "The task was cancelled.");
     types.job = new_error(m, "JobError", types.error, "A job of the Job Manager failed.");
+    types.extension = new_error(m, "ExtensionError", types.error,
+                                "A module cannot be enabled, disabled or found, or its code "
+                                "failed.");
     nb::register_exception_translator(&translate);
 }
 

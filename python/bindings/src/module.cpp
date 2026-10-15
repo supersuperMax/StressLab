@@ -20,6 +20,7 @@ void define_module(nb::module_& m) {
     define_mesh(m);
     define_context(m);
     define_tasks(m);
+    define_extensions(m);
     // What Python keeps in the core is released while Python can still destroy it.
     nb::module_::import_("atexit").attr("register")(m.attr("_shutdown"));
 }

@@ -101,7 +101,7 @@ int run(const HeadlessOptions& options, const Environment& environment) {
     }
 
     python::Interpreter python;
-    python.attach(bus, application.keys());
+    python.attach(bus, application.keys(), &application.extensions());
     // Lines of the script and of the log go to the standard output in the order they happen.
     python.run_string("import sys\nsys.stdout.reconfigure(line_buffering=True)\n");
     ModulePump pump(application.runtime(), bus, [&python](std::function<void()> work) {

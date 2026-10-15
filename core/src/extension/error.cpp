@@ -58,6 +58,8 @@ std::string_view to_string(ExtensionErrc code) noexcept {
             return "invalid_profile";
         case ExtensionErrc::io:
             return "io";
+        case ExtensionErrc::unknown_setting:
+            return "unknown_setting";
     }
     return "unknown";
 }

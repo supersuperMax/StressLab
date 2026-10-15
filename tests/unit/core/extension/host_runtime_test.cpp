@@ -5,6 +5,7 @@
 
 #include "fem/core/extension/host_runtime.h"
 
+#include "fem/core/bindings.h"
 #include "fem/core/command/command_bus.h"
 #include "fem/core/command/value.h"
 #include "fem/core/context/value.h"
@@ -13,6 +14,7 @@
 #include "fem/core/l10n/localization.h"
 #include "fem/core/model/mesh.h"
 #include "fem/core/model/object.h"
+#include "fem/core/settings/settings.h"
 #include "fem/core/task/task.h"
 
 #include "extension_test_support.h"
@@ -253,6 +255,24 @@ TEST_F(FaultyModuleTest, SetsAndWatchesContextKeys) {
     ASSERT_TRUE(
         poll_until([&] { return !run("faulty.seen").as_dict().at("watched").as_list().empty(); }));
     EXPECT_EQ(run("faulty.seen").as_dict().at("watched"), (Value(Value::List{true})));
+}
+
+TEST_F(FaultyModuleTest, ReadsSettingsInEffect) {
+    // Without settings the application gives the module none.
+    EXPECT_NE(failure("faulty.setting", {{"key", "faulty.greeting"}}).find("faulty.greeting"),
+              std::string::npos);
+
+    fem::settings::Settings settings;
+    const fem::Subscription binding = fem::bind_settings(ws.manager, settings);
+    EXPECT_EQ(run("faulty.setting", {{"key", "faulty.greeting"}}).as_string(), "привет");
+    settings.set(fem::settings::Level::user, "faulty.greeting", "здравствуй");
+    EXPECT_EQ(run("faulty.setting", {{"key", "faulty.greeting"}}).as_string(), "здравствуй");
+    settings.set(fem::settings::Level::project, "faulty.greeting", "проект");
+    EXPECT_EQ(run("faulty.setting", {{"key", "faulty.greeting"}}).as_string(), "проект");
+    // Settings of other parts of the application too; keys without a schema are not found.
+    EXPECT_EQ(run("faulty.setting", {{"key", "history.undoLimit"}}).as_integer(), 100);
+    EXPECT_NE(failure("faulty.setting", {{"key", "faulty.nothing"}}).find("faulty.nothing"),
+              std::string::npos);
 }
 
 TEST_F(FaultyModuleTest, ModelChangesReachTheModule) {

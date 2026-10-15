@@ -24,7 +24,9 @@ add_executable(
     unit/core/context/when_grammar_test.cpp
     unit/core/context/when_unmet_test.cpp
     unit/core/extension/activation_test.cpp
+    unit/core/extension/demo_module_test.cpp
     unit/core/extension/host_runtime_test.cpp
+    unit/core/extension/journaling_test.cpp
     unit/core/extension/manager_test.cpp
     unit/core/extension/manifest_test.cpp
     unit/core/extension/native_test.cpp
@@ -64,6 +66,7 @@ target_compile_definitions(
             FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
             FEM_CORE_L10N_DIR="${PROJECT_SOURCE_DIR}/core/l10n"
             FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
+            FEM_BUILTIN_EXTENSIONS_DIR="${PROJECT_SOURCE_DIR}/extensions"
             FEM_TEST_NATIVE_HELLO="$<TARGET_FILE:fem_test_extension_hello>"
             FEM_TEST_NATIVE_BAD_ABI="$<TARGET_FILE:fem_test_extension_hello_bad_abi>"
             FEM_TEST_FAKE_PROCESS="$<TARGET_FILE:fem_test_fake_process>"
@@ -75,11 +78,14 @@ gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
 # pytest suite run both by the embedded interpreter and by plain Python.
-add_executable(fem_python_tests unit/python/console_test.cpp unit/python/interpreter_test.cpp
-                                unit/python/journal_script_test.cpp
-                                unit/python/python_test_support.cpp)
+add_executable(
+    fem_python_tests unit/python/console_test.cpp unit/python/extensions_test.cpp
+                     unit/python/interpreter_test.cpp unit/python/journal_script_test.cpp
+                     unit/python/python_test_support.cpp)
 target_link_libraries(fem_python_tests PRIVATE fem_python_embed GTest::gtest_main)
-target_compile_definitions(fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(
+    fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+                             FEM_BUILTIN_EXTENSIONS_DIR="${PROJECT_SOURCE_DIR}/extensions")
 fem_copy_runtime_dlls(fem_python_tests)
 gtest_discover_tests(fem_python_tests DISCOVERY_MODE PRE_TEST)
 
@@ -171,6 +177,7 @@ if(FEM_BUILD_GUI)
         unit/shell/command_palette_test.cpp
         unit/shell/console_journal_test.cpp
         unit/shell/contribution_ui_test.cpp
+        unit/shell/demo_acceptance_test.cpp
         unit/shell/extensions_panel_test.cpp
         unit/shell/form_widget_test.cpp
         unit/shell/icons_test.cpp
@@ -190,6 +197,7 @@ if(FEM_BUILD_GUI)
         PRIVATE FEM_SHELL_L10N_DIR="${PROJECT_SOURCE_DIR}/shell/l10n"
                 FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
                 FEM_TEST_EXTENSIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/extensions"
+                FEM_BUILTIN_EXTENSIONS_DIR="${PROJECT_SOURCE_DIR}/extensions"
                 FEM_BRANDING_SYMBOL_SMALL="${FEM_BRANDING_SYMBOL_SMALL}"
                 FEM_BRANDING_ICON_SVG="${FEM_BRANDING_ICON_SVG}"
                 FEM_BRANDING_LOGO_COLOR="${FEM_BRANDING_LOGO_COLOR}"

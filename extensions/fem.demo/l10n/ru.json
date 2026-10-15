@@ -1,0 +1,22 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "category": "Демо",
+    "command.addNote": "Добавить заметку",
+    "description": "Пример модуля: команда, кнопка, этап, вкладка, тип узла с формой и настройка. Хранит в модели заметки.",
+    "name": "Демонстрационный модуль",
+    "node.note": "Заметка",
+    "note.offset": "Смещение",
+    "note.offset.description": "Как далеко от места, к которому относится заметка.",
+    "note.priority": "Важность",
+    "note.text": "Текст",
+    "priority.high": "Высокая",
+    "priority.low": "Низкая",
+    "priority.normal": "Обычная",
+    "setting.defaultText": "Текст новой заметки",
+    "setting.defaultText.description": "Текст, который получает заметка, добавленная без текста.",
+    "stage.review": "Проверка",
+    "tab.notes": "Заметки"
+  }
+}

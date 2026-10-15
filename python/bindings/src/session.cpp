@@ -1,5 +1,7 @@
 #include "fem/python/session.h"
 
+#include "fem/core/extension/error.h"
+
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
@@ -98,12 +100,14 @@ Session& Session::instance() {
     return *session;
 }
 
-void Session::attach(command::CommandBus& bus, context::ContextKeys& keys) {
+void Session::attach(command::CommandBus& bus, context::ContextKeys& keys,
+                     extension::ExtensionManager* extensions) {
     detach();
     core_keys_.reset();
     resources_.release_all();
     attached_ = DocumentHandle::borrow(bus);
     attached_keys_ = &keys;
+    attached_extensions_ = extensions;
     active_ = attached_;
 }
 
@@ -118,6 +122,7 @@ void Session::detach() noexcept {
     }
     attached_.reset();
     attached_keys_ = nullptr;
+    attached_extensions_ = nullptr;
 }
 
 void Session::shutdown() noexcept {
@@ -173,6 +178,16 @@ context::ContextKeys& Session::context() {
         bind_core_keys();
     }
     return *own_keys_;
+}
+
+extension::ExtensionManager& Session::extensions() {
+    if (attached_extensions_ == nullptr) {
+        throw extension::ExtensionError(
+            extension::ExtensionErrc::invalid_state,
+            "modules are managed by the application: run the script with "
+            "stresslab --headless run-script, or in the Python console of the window");
+    }
+    return *attached_extensions_;
 }
 
 void Session::bind_core_keys() {
