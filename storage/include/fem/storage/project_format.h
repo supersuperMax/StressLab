@@ -1,0 +1,65 @@
+#pragma once
+
+#include "fem/core/model/contents.h"
+#include "fem/core/model/document.h"
+#include "fem/core/model/object_id.h"
+#include "fem/storage/blob_store.h"
+
+#include <cstdint>
+#include <map>
+#include <string>
+#include <string_view>
+
+// The files of a project folder (docs/architecture.md §3.1, docs/adr/0017-project-folder.md),
+// made from a document and read back into one, in memory: the folder itself is `project.h`.
+//
+//     project.json                      format, modules with versions, next object id, units
+//     model/<type>/<id>.json            an object of the core (mesh, node_set...)
+//     model/ext/<owner>/<type>/<id>.json  an object of a module, enabled or not
+//     refs/blobs.json                   {"<object id>": "sha256:..."}: blocks of bulk data
+//
+// Every file is canonical JSON (`json.h`), so writing what was read gives the same bytes.
+namespace fem::storage {
+
+/// The version of the layout and of the files; a project of a later version is not opened.
+inline constexpr std::int64_t project_format_version = 1;
+
+inline constexpr std::string_view project_file = "project.json";
+inline constexpr std::string_view blob_refs_file = "refs/blobs.json";
+inline constexpr std::string_view model_folder = "model";
+
+/// Modules a project needs and their versions: id -> "major.minor.patch", "" if unknown.
+using ModuleVersions = std::map<std::string, std::string, std::less<>>;
+
+/// Files of a project: path relative to its folder with '/' -> contents.
+using ProjectFiles = std::map<std::string, std::string, std::less<>>;
+
+/// A project as read from its files.
+struct LoadedProject {
+    model::DocumentContents contents;
+    ModuleVersions modules;
+    /// The file of each object, for errors about it.
+    std::map<model::ObjectId, std::string> files;
+};
+
+/// The file of an object of this owner and type. Characters other than ASCII letters, digits,
+/// '.', '_' and '-' are written as %XX, and so are names that a file system refuses ("aux",
+/// "con", a trailing dot), so any owner and type make a portable path.
+[[nodiscard]] std::string object_file(std::string_view owner, std::string_view type,
+                                      model::ObjectId id);
+
+/// The files of `document`; the bulk data of its objects goes to `blobs`. `modules` gives the
+/// versions of the owners of its objects; an owner missing from it is written with "".
+/// Throws ProjectError(invalid_data) for what cannot be written (a non-finite number) and
+/// whatever `blobs` throws.
+[[nodiscard]] ProjectFiles write_project(const model::Document& document,
+                                         const ModuleVersions& modules, BlobStore& blobs);
+
+/// A project from its files: `project.json`, `refs/blobs.json` and every `.json` under `model/`
+/// (others are ignored). Checks the files but not the model they make: that is the document's job
+/// (`CommandBus::replace_document`). Throws ProjectError: not_a_project without `project.json`,
+/// unsupported_format for a later format, invalid_file with the file and line, and what `blobs`
+/// throws.
+[[nodiscard]] LoadedProject read_project(const ProjectFiles& files, const BlobStore& blobs);
+
+}  // namespace fem::storage

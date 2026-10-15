@@ -11,6 +11,7 @@
 #include "fem/python/interpreter.h"
 #include "fem/shell/brand.h"
 #include "fem/shell/main_window.h"
+#include "fem/shell/project_actions.h"
 #include "fem/shell/strings.h"
 #include "fem/shell/theme.h"
 #include "fem/shell/workspaces.h"
@@ -43,7 +44,7 @@ std::string qt_system_language() {
 
 }  // namespace
 
-int run_window(Environment environment) {
+int run_window(Environment environment, const std::optional<std::filesystem::path>& project) {
     // Qt reads the command line of the process itself where it matters (Windows); the window
     // takes no arguments of its own yet.
     int argc = 1;
@@ -148,7 +149,8 @@ int run_window(Environment environment) {
     std::string console_unavailable;
     try {
         python.emplace();
-        python->attach(application.bus(), application.keys(), &application.extensions());
+        python->attach(application.bus(), application.keys(), &application.extensions(),
+                       &application.project());
         console = std::make_unique<PythonConsoleEngine>();
     } catch (const std::exception& error) {
         log->error("the Python console is not available: {}", error.what());
@@ -168,10 +170,15 @@ int run_window(Environment environment) {
                                                   .console_unavailable = console_unavailable,
                                                   .journal = &journal,
                                                   .profiles = profiles ? &*profiles : nullptr,
-                                                  .save_modules = std::move(save_modules)});
+                                                  .save_modules = std::move(save_modules),
+                                                  .project = &application.project()});
         window.show();
 
         application.extensions().startup();
+        // `stresslab wing.slproj`: a failure is reported in the window like one from the menu.
+        if (project) {
+            (void)window.project().open(*project);
+        }
         window.check_required_modules();
         code = QApplication::exec();
         pump.drain();

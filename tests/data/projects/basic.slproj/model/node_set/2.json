@@ -1,0 +1,14 @@
+{
+  "data": {
+    "kind": "node_set",
+    "size": 3
+  },
+  "dependencies": [],
+  "id": 2,
+  "name": "Заделка",
+  "owner": "fem.core",
+  "parent": 1,
+  "properties": {},
+  "schemaVersion": 1,
+  "type": "node_set"
+}

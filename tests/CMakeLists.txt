@@ -49,6 +49,7 @@ add_executable(
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
+    unit/core/model/load_test.cpp
     unit/core/model/mesh_test.cpp
     unit/core/model/opaque_test.cpp
     unit/core/model/quantity_test.cpp
@@ -75,6 +76,21 @@ target_compile_definitions(
             FEM_TEST_HOST_PACKAGE_DIR="${PROJECT_SOURCE_DIR}/python"
             FEM_TEST_STRESSLAB="$<TARGET_FILE:stresslab>")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
+
+# The project folder (task 2.1): canonical JSON, blocks of bulk data, the files of a project and
+# its session. Like the core, built and run without Qt.
+add_executable(
+    fem_storage_tests
+    unit/storage/blob_test.cpp
+    unit/storage/json_test.cpp
+    unit/storage/object_data_codec_test.cpp
+    unit/storage/project_folder_test.cpp
+    unit/storage/project_format_test.cpp
+    unit/storage/round_trip_property_test.cpp
+    unit/storage/session_test.cpp)
+target_link_libraries(fem_storage_tests PRIVATE fem::storage GTest::gtest_main)
+target_compile_definitions(fem_storage_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+gtest_discover_tests(fem_storage_tests DISCOVERY_MODE PRE_TEST)
 
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
 # pytest suite run both by the embedded interpreter and by plain Python.
@@ -185,6 +201,7 @@ if(FEM_BUILD_GUI)
         unit/shell/main_window_test.cpp
         unit/shell/model_tree_test.cpp
         unit/shell/order_test.cpp
+        unit/shell/project_actions_test.cpp
         unit/shell/screenshot_test.cpp
         unit/shell/settings_panel_test.cpp
         unit/shell/strings_test.cpp

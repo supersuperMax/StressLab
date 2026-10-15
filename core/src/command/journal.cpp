@@ -2,9 +2,9 @@
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/command/error.h"
+#include "fem/core/io/files.h"
 #include "fem/core/product.h"
 
-#include "../io/files.h"
 #include "python_reader.h"
 
 #include <exception>

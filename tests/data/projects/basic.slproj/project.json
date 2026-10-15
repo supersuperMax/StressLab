@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "modules": {
+    "fem.core": "0.1.0",
+    "fem.demo": "0.1.0"
+  },
+  "nextObjectId": 7,
+  "units": {
+    "length": "mm",
+    "mass": "t",
+    "temperature": "degC",
+    "time": "s"
+  }
+}

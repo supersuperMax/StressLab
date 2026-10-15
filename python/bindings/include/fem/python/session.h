@@ -5,6 +5,7 @@
 #include "fem/core/context/core_keys.h"
 #include "fem/core/extension/manager.h"
 #include "fem/core/model/document.h"
+#include "fem/storage/session.h"
 
 #include <functional>
 #include <memory>
@@ -72,8 +73,10 @@ class DocumentHandle : public std::enable_shared_from_this<DocumentHandle> {
 public:
     /// A new document with a bus of its own.
     [[nodiscard]] static std::shared_ptr<DocumentHandle> create();
-    /// The document of `bus`, which the application owns.
-    [[nodiscard]] static std::shared_ptr<DocumentHandle> borrow(command::CommandBus& bus);
+    /// The document of `bus`, which the application owns, with the project session of the
+    /// application if it lends one.
+    [[nodiscard]] static std::shared_ptr<DocumentHandle> borrow(
+        command::CommandBus& bus, storage::ProjectSession* project = nullptr);
 
     DocumentHandle(const DocumentHandle&) = delete;
     DocumentHandle& operator=(const DocumentHandle&) = delete;
@@ -91,6 +94,9 @@ public:
     /// module. Throws ClosedError if closed and std::runtime_error for a document the application
     /// lent (its Extension Manager enables modules).
     [[nodiscard]] model::Document& owned_document() const;
+    /// The project of the document (`stresslab.project`): the one the application lent, or one of
+    /// the handle's own, made with the handle. Throws ClosedError if closed.
+    [[nodiscard]] storage::ProjectSession& project() const;
 
     /// What Python keeps in the bus; released when the document closes.
     [[nodiscard]] PythonResources& resources() noexcept { return resources_; }
@@ -104,6 +110,9 @@ private:
     std::unique_ptr<model::Document> owned_document_;
     std::unique_ptr<command::CommandBus> owned_bus_;
     command::CommandBus* bus_ = nullptr;
+    storage::ProjectSession* lent_project_ = nullptr;
+    // Listens to the bus: dropped before it.
+    std::unique_ptr<storage::ProjectSession> own_project_;
     PythonResources resources_;
 };
 
@@ -127,9 +136,11 @@ public:
 
     /// Python works with the document of `bus` and with `keys` until `detach`; the document becomes
     /// the active one. `extensions`, if given, is what `stresslab.extensions` enables and disables
-    /// modules with. They must outlive the attachment. Replaces an earlier attachment.
+    /// modules with, and `project` what `stresslab.project` opens and saves the document with.
+    /// They must outlive the attachment. Replaces an earlier attachment.
     void attach(command::CommandBus& bus, context::ContextKeys& keys,
-                extension::ExtensionManager* extensions = nullptr);
+                extension::ExtensionManager* extensions = nullptr,
+                storage::ProjectSession* project = nullptr);
     /// Takes back what `attach` lent: releases what Python keeps in them and closes the handles
     /// Python has to the document. Does nothing if nothing is attached.
     void detach() noexcept;

@@ -1,0 +1,23 @@
+{
+  "dependencies": [
+    2
+  ],
+  "id": 6,
+  "name": "Опора \"A\"",
+  "owner": "fem.demo",
+  "parent": null,
+  "properties": {
+    "E": 210000.0,
+    "count": 3,
+    "list": [
+      1,
+      2.5,
+      null,
+      true
+    ],
+    "nu": 0.3,
+    "text": "строка\nвторая"
+  },
+  "schemaVersion": 1,
+  "type": "note"
+}

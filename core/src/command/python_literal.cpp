@@ -1,6 +1,7 @@
 #include "fem/core/command/python_literal.h"
 
 #include "fem/core/command/error.h"
+#include "fem/core/text/number.h"
 
 #include "../model/utf8.h"
 #include "../text/number.h"
@@ -81,60 +82,12 @@ void append_string(std::string& out, std::string_view text) {
     out.push_back('"');
 }
 
-// Python's repr() of a float: the shortest digits that read back to the same double, positional
-// for decimal exponents from -4 to 15, exponential otherwise (Python/pystrtod.c, mode 'r').
+// Python's repr() of a float (fem::text::format_double).
 void append_number(std::string& out, double value) {
     if (!std::isfinite(value)) {
         throw_invalid_value("numbers in the journal must be finite");
     }
-    char buffer[64];
-    const std::to_chars_result result =
-        std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::scientific);
-    std::string_view text(buffer, static_cast<std::size_t>(result.ptr - buffer));
-    if (text.front() == '-') {
-        out.push_back('-');
-        text.remove_prefix(1);
-    }
-    // "d.ddde+XX" -> digits "dddd" and exponent XX.
-    const std::size_t e = text.find('e');
-    std::string digits(1, text[0]);
-    if (e > 1) {
-        digits.append(text.substr(2, e - 2));
-    }
-    int exponent = 0;
-    const std::string_view exponent_text = text.substr(e + (text[e + 1] == '+' ? 2 : 1));
-    const std::from_chars_result parsed = std::from_chars(
-        exponent_text.data(), exponent_text.data() + exponent_text.size(), exponent);
-    (void)parsed;  // to_chars wrote the exponent, so it parses.
-
-    const int count = static_cast<int>(digits.size());
-    const int point = exponent + 1;  // Position of the decimal point within the digits.
-    if (point <= -4 || point > 16) {
-        out.push_back(digits[0]);
-        if (count > 1) {
-            out.push_back('.');
-            out.append(digits, 1);
-        }
-        out.push_back('e');
-        out.push_back(exponent < 0 ? '-' : '+');
-        const std::string magnitude = std::to_string(std::abs(exponent));
-        if (magnitude.size() < 2) {
-            out.push_back('0');
-        }
-        out += magnitude;
-    } else if (point <= 0) {
-        out += "0.";
-        out.append(static_cast<std::size_t>(-point), '0');
-        out += digits;
-    } else if (point >= count) {
-        out += digits;
-        out.append(static_cast<std::size_t>(point - count), '0');
-        out += ".0";
-    } else {
-        out.append(digits, 0, static_cast<std::size_t>(point));
-        out.push_back('.');
-        out.append(digits, static_cast<std::size_t>(point));
-    }
+    out += text::format_double(value);
 }
 
 void append_value(std::string& out, const Value& value) {

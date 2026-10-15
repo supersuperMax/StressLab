@@ -123,18 +123,9 @@ Json summary_json(const command::ModelChange& change) {
         }
         return json;
     };
-    std::string_view cause = "execute";
-    if (change.cause == command::ModelChange::Cause::undo) {
-        cause = "undo";
-    } else if (change.cause == command::ModelChange::Cause::redo) {
-        cause = "redo";
-    }
-    return {{"cause", cause},
-            {"label", change.label},
-            {"created", ids(change.summary.created)},
-            {"updated", ids(change.summary.updated)},
-            {"removed", ids(change.summary.removed)},
-            {"units", change.summary.units}};
+    return {{"cause", command::to_string(change.cause)}, {"label", change.label},
+            {"created", ids(change.summary.created)},    {"updated", ids(change.summary.updated)},
+            {"removed", ids(change.summary.removed)},    {"units", change.summary.units}};
 }
 
 std::optional<context::ContextValue::Kind> parse_key_type(std::string_view name) {

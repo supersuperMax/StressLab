@@ -32,6 +32,8 @@ inline constexpr std::string_view language = "general.language";
 inline constexpr std::string_view undo_limit = "history.undoLimit";
 /// The lowest level written to the log: "trace", "debug", "info", "warning" or "error".
 inline constexpr std::string_view log_level = "log.level";
+/// Seconds between automatic saves of a project that has a folder; 0 turns them off.
+inline constexpr std::string_view autosave_interval = "project.autosaveInterval";
 }  // namespace keys
 
 /// The schemas of the settings of the core.

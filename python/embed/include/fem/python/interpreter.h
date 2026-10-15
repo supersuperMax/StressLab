@@ -3,6 +3,7 @@
 #include "fem/core/command/command_bus.h"
 #include "fem/core/context/context_keys.h"
 #include "fem/core/extension/manager.h"
+#include "fem/storage/session.h"
 
 #include <filesystem>
 #include <functional>
@@ -41,10 +42,12 @@ public:
 
     /// Python works with the document of `bus` and with `keys` until `detach`: `stresslab.cmd`
     /// runs commands on `bus`, and `stresslab.extensions` enables and disables the modules of
-    /// `extensions`, if given (without it, it raises `stresslab.ExtensionError`). They must outlive
-    /// the attachment.
+    /// `extensions`, if given (without it, it raises `stresslab.ExtensionError`), and
+    /// `stresslab.project` opens and saves with `project`, if given (without it, with a project
+    /// session of its own). They must outlive the attachment.
     void attach(command::CommandBus& bus, context::ContextKeys& keys,
-                extension::ExtensionManager* extensions = nullptr);
+                extension::ExtensionManager* extensions = nullptr,
+                storage::ProjectSession* project = nullptr);
     /// Releases what Python keeps in the attached objects; Python's handles to them close.
     void detach();
 

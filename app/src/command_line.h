@@ -32,7 +32,8 @@ struct HeadlessOptions {
 
 struct CommandLine {
     enum class Mode : std::uint8_t {
-        window,    ///< No arguments: the window (a build without the GUI prints the usage)
+        window,    ///< No arguments, or a project folder: the window (a build without the GUI
+                   ///< prints the usage)
         help,      ///< --help, -h
         version,   ///< --version
         python,    ///< --python [arguments of python]
@@ -40,6 +41,9 @@ struct CommandLine {
     };
 
     Mode mode = Mode::window;
+    /// For `window`: the project folder to open (`stresslab wing.slproj`); its name must end with
+    /// ".slproj", so that a script given without run-script is still an error.
+    std::optional<std::filesystem::path> project;
     /// For `python`: the arguments after --python.
     std::vector<std::string> python_args;
     /// For `headless`.

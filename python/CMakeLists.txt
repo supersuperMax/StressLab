@@ -38,10 +38,11 @@ add_library(fem_python_bindings STATIC
     bindings/src/extensions.cpp
     bindings/src/mesh.cpp
     bindings/src/module.cpp
+    bindings/src/project.cpp
     bindings/src/session.cpp
     bindings/src/tasks.cpp)
 target_include_directories(fem_python_bindings PUBLIC bindings/include)
-target_link_libraries(fem_python_bindings PUBLIC fem::core nanobind-static)
+target_link_libraries(fem_python_bindings PUBLIC fem::core fem::storage nanobind-static)
 nanobind_compile_options(fem_python_bindings)
 nanobind_set_visibility(fem_python_bindings)
 
@@ -81,6 +82,7 @@ set(fem_python_package_files
     stresslab/_commands.py
     stresslab/_console.py
     stresslab/extensions.py
+    stresslab/project.py
     stresslab/py.typed
     stresslab_host/__init__.py
     stresslab_host/__main__.py

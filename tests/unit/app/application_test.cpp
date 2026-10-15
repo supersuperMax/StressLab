@@ -10,6 +10,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -58,6 +59,29 @@ TEST(ApplicationModules, TheStateOfTheUserComesBack) {
         EXPECT_EQ(saved.disabled, std::vector<std::string>{"test.b"});
         EXPECT_EQ(saved.local, std::vector<fs::path>{
                                    (root / fs::path(u8"мои модули") / "c").lexically_normal()});
+    }
+    fs::remove_all(root, ignored);
+}
+
+// Task 2.1: the project of the application saves the versions the Extension Manager installed.
+TEST(ApplicationProject, SavesTheVersionsOfInstalledModules) {
+    const fs::path root = fs::temp_directory_path() / fs::path(u8"приложение StressLab проект");
+    std::error_code ignored;
+    fs::remove_all(root, ignored);
+    write_module(root / "builtin" / "a", "test.a");
+    {
+        Application application(Environment{.builtin_extensions = root / "builtin"}, "test");
+        application.install_modules();
+        application.enable_all_modules();
+        (void)application.bus().execute("model.create", {{"type", "note"}, {"owner", "test.a"}});
+        ASSERT_TRUE(application.project().is_modified());
+
+        application.project().save_as(root / fs::path(u8"мой проект"));
+        EXPECT_FALSE(application.project().is_modified());
+        std::ifstream in(root / fs::path(u8"мой проект.slproj") / "project.json");
+        const std::string text((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+        EXPECT_NE(text.find("\"test.a\": \"1.0.0\""), std::string::npos) << text;
     }
     fs::remove_all(root, ignored);
 }

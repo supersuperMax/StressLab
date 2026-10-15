@@ -13,7 +13,9 @@ Every change of the model is a command of the Command Bus::
 
 Calls are recorded in the session journal (.slpy) as ``stresslab.cmd(...)`` lines, so a journal
 is a script that rebuilds the same document. Modules are enabled and disabled with
-``stresslab.extensions.enable("fem.demo")`` and ``disable``, journaled too. Inside the application
+``stresslab.extensions.enable("fem.demo")`` and ``disable``, and the document is saved to and
+opened from a project folder with ``stresslab.project.save_as("wing")`` and
+``stresslab.project.open("wing.slproj")``, journaled too. Inside the application
 ``stresslab`` works with the application's document; in a plain Python process it makes a
 document of its own.
 """
@@ -46,6 +48,7 @@ from _stresslab import (
     ModelError,
     NodeSet,
     Object,
+    ProjectError,
     Subscription,
     Surface,
     Task,
@@ -62,7 +65,7 @@ from _stresslab import (
     set_active_document,
 )
 
-from . import extensions
+from . import extensions, project
 from ._commands import CommandNamespace, Commands, python_name
 
 __version__: str = _native.__version__
@@ -105,6 +108,7 @@ __all__ = [
     "ModelError",
     "NodeSet",
     "Object",
+    "ProjectError",
     "Subscription",
     "Surface",
     "Task",
@@ -125,6 +129,7 @@ __all__ = [
     "journal_header",
     "make_task",
     "new_document",
+    "project",
     "python_name",
     "redo",
     "register_command",

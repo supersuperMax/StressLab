@@ -187,7 +187,9 @@ void ModelTreeModel::update_worst(Node* node) {
 
 void ModelTreeModel::on_model_changed(const command::ModelChange& change) {
     const model::ChangeSummary& summary = change.summary;
-    if (!summary.created.empty() || !summary.removed.empty()) {
+    // An opened project may have other objects under the same ids: read it all again.
+    if (change.cause == command::ModelChange::Cause::load || !summary.created.empty() ||
+        !summary.removed.empty()) {
         reload();
         return;
     }

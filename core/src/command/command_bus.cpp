@@ -87,6 +87,20 @@ std::optional<Value> normalize(ArgType type, Value value) {
 
 }  // namespace
 
+std::string_view to_string(ModelChange::Cause cause) noexcept {
+    switch (cause) {
+        case ModelChange::Cause::execute:
+            return "execute";
+        case ModelChange::Cause::undo:
+            return "undo";
+        case ModelChange::Cause::redo:
+            return "redo";
+        case ModelChange::Cause::load:
+            return "load";
+    }
+    return "execute";
+}
+
 // --- Specs ---------------------------------------------------------------------------------------
 
 bool is_valid_command_id(std::string_view id) noexcept {
@@ -408,6 +422,30 @@ void CommandBus::journal_action(std::string_view entry) {
         fail(CommandErrc::invalid_arguments, "an action of the session needs a journal line");
     }
     journal_.emit(entry);
+}
+
+void CommandBus::replace_document(model::DocumentContents contents, std::string_view entry) {
+    check_idle("replacing the document");
+    std::set<model::ObjectId> before;
+    for (const model::Object& object : document_.objects()) {
+        before.insert(object.id());
+    }
+    const model::UnitSystem units = document_.units();
+    editor_.replace(std::move(contents));
+
+    ModelChange change{ModelChange::Cause::load, {}, {}};
+    for (const model::Object& object : document_.objects()) {
+        (before.erase(object.id()) > 0 ? change.summary.updated : change.summary.created)
+            .push_back(object.id());
+    }
+    change.summary.removed.assign(before.begin(), before.end());
+    change.summary.units = units != document_.units();
+    undo_stack_.clear();
+    redo_stack_.clear();
+    if (!entry.empty()) {
+        journal_.emit(entry);
+    }
+    model_changed_.emit(change);
 }
 
 void CommandBus::set_undo_limit(std::size_t limit) {

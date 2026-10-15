@@ -14,6 +14,7 @@
 #include "fem/shell/keys.h"
 #include "fem/shell/model_tree.h"
 #include "fem/shell/problems.h"
+#include "fem/shell/project_actions.h"
 #include "fem/shell/property_panel.h"
 #include "fem/shell/python_console.h"
 #include "fem/shell/required_modules_bar.h"
@@ -74,7 +75,6 @@ MainWindow::MainWindow(Workbench workbench, QWidget* parent)
       localization_(workbench.localization),
       workspaces_(workbench.workspaces) {
     setObjectName(QStringLiteral("mainWindow"));
-    setWindowTitle(to_qstring(kProductName));
     setWindowIcon(brand::application_icon());
     resize(default_size);
 
@@ -249,6 +249,17 @@ void MainWindow::apply_default_sizes() {
 void MainWindow::build_menus() {
     file_menu_ = menuBar()->addMenu(QString());
     file_menu_->setObjectName(QStringLiteral("menu.file"));
+    project_ = new ProjectActions(workbench_, this);
+    connect(project_, &ProjectActions::problem, this, [this](const QString& message) {
+        problems_->add(message);
+        set_prompt(message);
+    });
+    connect(project_, &ProjectActions::opened, this, &MainWindow::check_required_modules);
+    file_menu_->addAction(project_->open_action());
+    file_menu_->addSeparator();
+    file_menu_->addAction(project_->save_action());
+    file_menu_->addAction(project_->save_as_action());
+    file_menu_->addSeparator();
     file_menu_->addAction(journal_->save_action());
     file_menu_->addSeparator();
     settings_action_ = file_menu_->addAction(QString(), this, &MainWindow::show_settings);
@@ -367,8 +378,16 @@ void MainWindow::build_contributions() {
                 (void)show_context_menu("viewport", viewport, position);
             });
 
-    QList<QAction*> shell_actions{
-        undo_, redo_, quit_, settings_action_, full_screen_, about_, journal_->save_action()};
+    QList<QAction*> shell_actions{undo_,
+                                  redo_,
+                                  quit_,
+                                  settings_action_,
+                                  full_screen_,
+                                  about_,
+                                  journal_->save_action(),
+                                  project_->open_action(),
+                                  project_->save_action(),
+                                  project_->save_as_action()};
     for (const Zone& zone : zones_) {
         if (QAction* toggle = zone_action(zone.id)) {
             shell_actions.push_back(toggle);
@@ -542,6 +561,7 @@ void MainWindow::retranslate() {
     quit_->setText(text("action.quit"));
     full_screen_->setText(text("action.fullScreen"));
     about_->setText(text("action.about", {{"product", std::string(kProductName)}}));
+    project_->retranslate();
     rebuild_workspace_menu();
     update_history();
     set_prompt(prompt_text_);
@@ -637,6 +657,10 @@ AboutDialog* MainWindow::show_about() {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+    if (!project_->confirm_close()) {
+        event->ignore();
+        return;
+    }
     workspaces_.set_session(layout(), saveGeometry());
     (void)workspaces_.save();
     QMainWindow::closeEvent(event);

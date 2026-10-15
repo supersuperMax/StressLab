@@ -6,6 +6,7 @@
 #include "fem/core/model/error.h"
 #include "fem/core/settings/error.h"
 #include "fem/core/task/error.h"
+#include "fem/storage/error.h"
 
 #include "common.h"
 
@@ -27,6 +28,7 @@ struct ErrorTypes {
     PyObject* task_cancelled = nullptr;
     PyObject* job = nullptr;
     PyObject* extension = nullptr;
+    PyObject* project = nullptr;
 };
 
 ErrorTypes types;
@@ -90,6 +92,13 @@ void translate(const std::exception_ptr& exception, void* /*payload*/) {
         raise(types.job, e.what(), job::to_string(e.code()));
     } catch (const extension::ExtensionError& e) {
         raise(types.extension, e.what(), extension::to_string(e.code()));
+    } catch (const storage::ProjectError& e) {
+        nb::object error = make_error(types.project, e.what(), storage::to_string(e.code()));
+        if (error.is_valid()) {
+            error.attr("file") = to_str(e.file());
+            error.attr("line") = e.line();
+        }
+        raise(types.project, error);
     } catch (const settings::SettingsError& e) {
         raise(types.error, e.what(), settings::to_string(e.code()));
     } catch (const l10n::L10nError& e) {
@@ -118,6 +127,9 @@ void define_errors(nb::module_& m) {
     types.extension = new_error(m, "ExtensionError", types.error,
                                 "A module cannot be enabled, disabled or found, or its code "
                                 "failed.");
+    types.project = new_error(m, "ProjectError", types.error,
+                              "A project folder cannot be opened or saved; `file` and `line` say "
+                              "where (empty and 0 if unknown).");
     nb::register_exception_translator(&translate);
 }
 

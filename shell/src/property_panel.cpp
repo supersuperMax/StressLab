@@ -133,7 +133,9 @@ PropertyPanel::PropertyPanel(Workbench& workbench, QWidget* parent)
         if (!object_.is_valid()) {
             return;
         }
-        if (!workbench_.bus.document().contains(object_) ||
+        // An opened project may have another object under the same id.
+        if (change.cause == command::ModelChange::Cause::load ||
+            !workbench_.bus.document().contains(object_) ||
             workbench_.bus.document().is_opaque(object_)) {
             show_object({});
             return;

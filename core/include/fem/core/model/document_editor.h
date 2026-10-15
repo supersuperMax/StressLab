@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fem/core/model/change_set.h"
+#include "fem/core/model/contents.h"
 #include "fem/core/model/document.h"
 #include "fem/core/model/object.h"
 #include "fem/core/model/object_data.h"
@@ -76,6 +77,9 @@ private:
     /// changes nothing if that would change an object of a disabled module.
     void undo(ChangeSet& changes);
     void redo(ChangeSet& changes);
+    /// Makes the document hold other contents (`Document::replace`). Not recorded: the bus drops
+    /// its steps, which belong to the old contents.
+    void replace(DocumentContents contents);
 
     ChangeSet& changes();
 

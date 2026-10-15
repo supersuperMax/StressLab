@@ -39,7 +39,11 @@ Application::Application(const Environment& environment, std::string log_categor
       builtin_extensions_(environment.builtin_extensions),
       bus_(document_),
       core_keys_(bus_, keys_),
-      manager_(document_, bus_, keys_) {
+      manager_(document_, bus_, keys_),
+      project_(bus_, [this](std::string_view id) {
+          const extension::ExtensionInfo* info = manager_.find(id);
+          return info != nullptr ? info->manifest->version.to_string() : std::string();
+      }) {
     const auto log = log::logger(log_category_);
     bindings_.push_back(bind_settings(manager_, settings_));
     bindings_.push_back(bind_catalogs(manager_, localization_));

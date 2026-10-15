@@ -285,3 +285,37 @@ def test_a_script_may_start_processes_with_the_inherited_input(headless: Headles
     result = headless.run("run-script", script, modules=False, stdin=None)
     assert result.returncode == 0, explain(result)
     assert "from the child" in result.stdout.splitlines()
+
+
+SAVE_PROJECT = """\
+import stresslab
+
+stresslab.headless.make(name="Вал")
+stresslab.project.save_as("проект вала")
+print("saved:", stresslab.project.folder().name)
+"""
+
+OPEN_PROJECT = """\
+import stresslab
+
+stresslab.project.open("проект вала.slproj")
+print("opened:", [item.name for item in stresslab.active_document().objects()])
+print("modified:", stresslab.project.is_modified())
+"""
+
+
+def test_a_script_saves_a_project_that_another_run_opens(headless: Headless) -> None:
+    saved = headless.run("run-script", headless.script("сохранить.py", SAVE_PROJECT))
+    assert saved.returncode == 0, explain(saved)
+    assert "saved: проект вала.slproj" in saved.stdout
+    project = headless.folder / "проект вала.slproj" / "project.json"
+    assert '"test.headless": "1.0.0"' in project.read_text(encoding="utf-8")
+
+    journal = headless.folder / "открытие.slpy"
+    opened = headless.run(
+        "--journal", journal, "run-script", headless.script("открыть.py", OPEN_PROJECT)
+    )
+    assert opened.returncode == 0, explain(opened)
+    assert "opened: ['Вал']" in opened.stdout
+    assert "modified: False" in opened.stdout
+    assert 'stresslab.project.open("проект вала.slproj")' in journal.read_text(encoding="utf-8")
