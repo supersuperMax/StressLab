@@ -3,6 +3,9 @@
 #include "fem/core/io/files.h"
 #include "fem/storage/blob_store.h"
 #include "fem/storage/error.h"
+#include "fem/storage/garbage.h"
+
+#include "folders.h"
 
 #include <algorithm>
 #include <map>
@@ -49,29 +52,6 @@ std::vector<fs::path> files_below(const fs::path& folder, std::string_view exten
         throw_io("cannot list the folder", folder);
     }
     return result;
-}
-
-/// Removes the empty folders below `folder` (not `folder` itself), deepest first.
-void remove_empty_folders(const fs::path& folder) {
-    std::error_code error;
-    if (!fs::is_directory(folder, error)) {
-        return;
-    }
-    std::vector<fs::path> folders;
-    for (fs::recursive_directory_iterator it(folder, error);
-         !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
-        if (it->is_directory(error)) {
-            folders.push_back(it->path());
-        }
-    }
-    std::sort(folders.begin(), folders.end(), [](const fs::path& a, const fs::path& b) {
-        return a.native().size() > b.native().size();
-    });
-    for (const fs::path& path : folders) {
-        if (fs::is_empty(path, error)) {
-            fs::remove(path, error);
-        }
-    }
 }
 
 void check_target(const fs::path& folder) {
@@ -152,8 +132,29 @@ SaveStats save_project(const fs::path& folder, const model::Document& document,
         }
         ++stats.removed;
     }
-    remove_empty_folders(model);
+    detail::remove_empty_folders(model);
     return stats;
+}
+
+CleanStats clean_project(const fs::path& folder, std::span<const std::string> extra_roots) {
+    if (!is_project_folder(folder)) {
+        throw ProjectError(ProjectErrc::not_a_project, "the folder has no project.json",
+                           io::display(folder));
+    }
+    ProjectFiles files;
+    for (const std::string_view key : {project_file, blob_refs_file}) {
+        const fs::path file = folder / to_path(key);
+        std::optional<std::string> bytes = io::read_file(file);
+        if (!bytes) {
+            // No refs/blobs.json is not "no blocks": without it nothing is known to be garbage.
+            throw_io("cannot read the file", file);
+        }
+        files.emplace(std::string(key), std::move(*bytes));
+    }
+    std::vector<std::string> roots = read_blob_roots(files);
+    roots.insert(roots.end(), extra_roots.begin(), extra_roots.end());
+    FolderBlobStore blobs(folder / to_path(objects_folder));
+    return collect_garbage(blobs, roots);
 }
 
 LoadedProject load_project(const fs::path& folder) {

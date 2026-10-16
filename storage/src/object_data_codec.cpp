@@ -10,10 +10,8 @@
 #include <cstring>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace fem::storage {
 
@@ -23,6 +21,12 @@ constexpr std::array<char, 8> magic = {'S', 'L', 'D', 'A', 'T', 'A', '\0', '\0'}
 
 enum class Kind : std::uint32_t { mesh = 1, node_set = 2, element_set = 3, surface = 4 };
 
+/// How an array is kept in the table of contents.
+enum class Storage : std::uint32_t { inline_items = 0, pieces = 1 };
+
+constexpr std::size_t digest_size = 32;
+constexpr std::string_view ref_prefix = "sha256:";
+
 [[noreturn]] void throw_corrupt(const std::string& message) {
     throw ProjectError(ProjectErrc::corrupt_blob, "bulk data block: " + message);
 }
@@ -30,6 +34,73 @@ enum class Kind : std::uint32_t { mesh = 1, node_set = 2, element_set = 3, surfa
 /// Unsigned integer of the same size as T, for writing T byte by byte.
 template <class T>
 using Bits = std::conditional_t<sizeof(T) == 8, std::uint64_t, std::uint32_t>;
+
+/// The items of `values` as little-endian bytes: the memory of `values` itself on a little-endian
+/// computer, otherwise a copy in `copy`.
+template <class T>
+std::span<const std::byte> little_endian(std::span<const T> values, Bytes& copy) {
+    static_assert(sizeof(T) == 4 || sizeof(T) == 8);
+    if constexpr (std::endian::native == std::endian::little) {
+        return std::as_bytes(values);
+    } else {
+        copy.resize(values.size() * sizeof(T));
+        std::size_t at = 0;
+        for (const T value : values) {
+            const auto bits = std::bit_cast<Bits<T>>(value);
+            for (std::size_t i = 0; i < sizeof(T); ++i) {
+                copy[at++] = static_cast<std::byte>(bits >> (8 * i));
+            }
+        }
+        return copy;
+    }
+}
+
+/// Appends the items of little-endian `bytes` (a whole number of items) to `values`.
+template <class T>
+void append_items(std::vector<T>& values, std::span<const std::byte> bytes) {
+    const std::size_t first = values.size();
+    values.resize(first + bytes.size() / sizeof(T));
+    if constexpr (std::endian::native == std::endian::little) {
+        if (!bytes.empty()) {
+            std::memcpy(values.data() + first, bytes.data(), bytes.size());
+        }
+    } else {
+        for (std::size_t item = 0; item < bytes.size() / sizeof(T); ++item) {
+            Bits<T> bits = 0;
+            for (std::size_t i = 0; i < sizeof(T); ++i) {
+                bits |=
+                    static_cast<Bits<T>>(std::to_integer<std::uint8_t>(bytes[item * sizeof(T) + i]))
+                    << (8 * i);
+            }
+            values[first + item] = std::bit_cast<T>(bits);
+        }
+    }
+}
+
+int hex_value(char c) {
+    return c <= '9' ? c - '0' : c - 'a' + 10;
+}
+
+/// The 32 bytes of the digest of a reference.
+std::array<std::byte, digest_size> digest_of(std::string_view ref) {
+    std::array<std::byte, digest_size> digest{};
+    const std::string_view hex = ref.substr(ref_prefix.size());
+    for (std::size_t i = 0; i < digest_size; ++i) {
+        digest[i] = static_cast<std::byte>(hex_value(hex[2 * i]) * 16 + hex_value(hex[2 * i + 1]));
+    }
+    return digest;
+}
+
+std::string ref_of(std::span<const std::byte> digest) {
+    constexpr std::string_view digits = "0123456789abcdef";
+    std::string ref(ref_prefix);
+    for (const std::byte value : digest) {
+        const auto bits = std::to_integer<std::uint8_t>(value);
+        ref += digits[bits >> 4];
+        ref += digits[bits & 0xf];
+    }
+    return ref;
+}
 
 class Writer {
 public:
@@ -42,26 +113,13 @@ public:
         }
     }
 
-    template <class T>
-    void array(std::span<const T> values) {
-        scalar(static_cast<std::uint64_t>(values.size()));
-        bytes_.reserve(bytes_.size() + values.size() * sizeof(T));
-        for (const T value : values) {
-            scalar(value);
-        }
+    void raw(std::span<const std::byte> value) {
+        bytes_.insert(bytes_.end(), value.begin(), value.end());
     }
 
     void text(std::string_view value) {
         scalar(static_cast<std::uint32_t>(value.size()));
-        for (const char c : value) {
-            bytes_.push_back(static_cast<std::byte>(c));
-        }
-    }
-
-    void raw(std::span<const char> value) {
-        for (const char c : value) {
-            bytes_.push_back(static_cast<std::byte>(c));
-        }
+        raw(std::as_bytes(std::span(value)));
     }
 
     [[nodiscard]] Bytes take() { return std::move(bytes_); }
@@ -77,41 +135,40 @@ public:
     template <class T>
     [[nodiscard]] T scalar() {
         static_assert(sizeof(T) == 4 || sizeof(T) == 8);
-        need(sizeof(T));
         Bits<T> bits = 0;
+        const std::span<const std::byte> item = take(sizeof(T));
         for (std::size_t i = 0; i < sizeof(T); ++i) {
-            bits |= static_cast<Bits<T>>(std::to_integer<std::uint8_t>(bytes_[position_ + i]))
-                    << (8 * i);
+            bits |= static_cast<Bits<T>>(std::to_integer<std::uint8_t>(item[i])) << (8 * i);
         }
-        position_ += sizeof(T);
         return std::bit_cast<T>(bits);
     }
 
-    /// A count of items of `item_size` bytes that follow; refused if they do not fit the block,
-    /// so a corrupt count cannot make a huge allocation.
+    /// A count of items of at least `item_size` bytes each that follow; refused if they do not fit
+    /// the block, so a damaged count cannot make a huge allocation.
     [[nodiscard]] std::size_t count(std::size_t item_size) {
-        const auto count = scalar<std::uint64_t>();
+        return fitting(scalar<std::uint64_t>(), item_size);
+    }
+
+    /// `count`, refused unless that many items of `item_size` bytes fit the rest of the block.
+    [[nodiscard]] std::size_t fitting(std::uint64_t count, std::size_t item_size) const {
         if (count > remaining() / item_size) {
             throw_corrupt("an array is longer than the block");
         }
         return static_cast<std::size_t>(count);
     }
 
-    template <class T>
-    [[nodiscard]] std::vector<T> array() {
-        std::vector<T> values(count(sizeof(T)));
-        for (T& value : values) {
-            value = scalar<T>();
+    [[nodiscard]] std::span<const std::byte> take(std::size_t size) {
+        if (size > remaining()) {
+            throw_corrupt("the block is truncated");
         }
-        return values;
+        const std::span<const std::byte> result = bytes_.subspan(position_, size);
+        position_ += size;
+        return result;
     }
 
     [[nodiscard]] std::string text() {
-        const auto size = scalar<std::uint32_t>();
-        need(size);
-        std::string value(reinterpret_cast<const char*>(bytes_.data() + position_), size);
-        position_ += size;
-        return value;
+        const std::span<const std::byte> value = take(scalar<std::uint32_t>());
+        return {reinterpret_cast<const char*>(value.data()), value.size()};
     }
 
     [[nodiscard]] bool starts_with_magic() {
@@ -132,85 +189,112 @@ public:
 private:
     [[nodiscard]] std::size_t remaining() const noexcept { return bytes_.size() - position_; }
 
-    void need(std::size_t size) const {
-        if (size > remaining()) {
-            throw_corrupt("the block is truncated");
-        }
-    }
-
     std::span<const std::byte> bytes_;
     std::size_t position_ = 0;
 };
 
-void begin(Writer& out, Kind kind) {
-    out.raw(magic);
-    out.scalar(object_data_codec_version);
-    out.scalar(static_cast<std::uint32_t>(kind));
-}
+// --- Writing -------------------------------------------------------------------------------------
 
-void write_mesh(Writer& out, const model::Mesh& mesh) {
-    begin(out, Kind::mesh);
-    out.array(mesh.node_ids());
-    out.array(mesh.x());
-    out.array(mesh.y());
-    out.array(mesh.z());
-    out.scalar(static_cast<std::uint64_t>(mesh.blocks().size()));
-    for (const model::ElementBlock& block : mesh.blocks()) {
-        out.text(model::to_string(block.type()));
-        out.array(block.ids());
-        out.array(block.connectivity());
+class TableWriter {
+public:
+    TableWriter(Kind kind, BlobStore& blobs, const ChunkLimits& limits)
+        : blobs_(blobs), limits_(limits) {
+        out_.raw(std::as_bytes(std::span(magic)));
+        out_.scalar(object_data_codec_version);
+        out_.scalar(static_cast<std::uint32_t>(kind));
     }
-}
 
-std::shared_ptr<const model::ObjectData> read_mesh(Reader& in) {
-    model::NodeArrays nodes;
-    nodes.ids = in.array<model::Label>();
-    nodes.x = in.array<double>();
-    nodes.y = in.array<double>();
-    nodes.z = in.array<double>();
-    // A block takes at least its type name length and two counts.
-    const std::size_t block_count = in.count(4 + 8 + 8);
-    std::vector<model::ElementBlock> blocks;
-    blocks.reserve(block_count);
-    for (std::size_t b = 0; b < block_count; ++b) {
-        const std::string name = in.text();
-        const std::optional<model::ElementType> type = model::parse_element_type(name);
-        if (!type) {
-            throw_corrupt("unknown element type '" + name + "'");
+    template <class T>
+    void array(std::span<const T> values) {
+        Bytes copy;
+        const std::span<const std::byte> bytes = little_endian(values, copy);
+        out_.scalar(static_cast<std::uint64_t>(values.size()));
+        if (bytes.size() <= inline_array_bytes) {
+            out_.scalar(static_cast<std::uint32_t>(Storage::inline_items));
+            out_.raw(bytes);
+            return;
         }
-        std::vector<model::Label> ids = in.array<model::Label>();
-        std::vector<model::Index> connectivity = in.array<model::Index>();
-        blocks.emplace_back(*type, std::move(ids), std::move(connectivity));
-    }
-    return std::make_shared<const model::Mesh>(std::move(nodes), std::move(blocks));
-}
-
-}  // namespace
-
-Bytes encode_object_data(const model::ObjectData& data) {
-    Writer out;
-    if (const auto* mesh = dynamic_cast<const model::Mesh*>(&data)) {
-        write_mesh(out, *mesh);
-    } else if (const auto* nodes = dynamic_cast<const model::NodeSet*>(&data)) {
-        begin(out, Kind::node_set);
-        out.array(nodes->nodes());
-    } else if (const auto* elements = dynamic_cast<const model::ElementSet*>(&data)) {
-        begin(out, Kind::element_set);
-        out.array(elements->elements());
-    } else if (const auto* surface = dynamic_cast<const model::Surface*>(&data)) {
-        begin(out, Kind::surface);
-        out.scalar(static_cast<std::uint64_t>(surface->sides().size()));
-        for (const model::ElementSide& side : surface->sides()) {
-            out.scalar(side.element);
-            out.scalar(side.side);
+        out_.scalar(static_cast<std::uint32_t>(Storage::pieces));
+        const std::vector<std::size_t> ends = chunk_ends(bytes, sizeof(T), limits_);
+        out_.scalar(static_cast<std::uint64_t>(ends.size()));
+        std::size_t start = 0;
+        for (const std::size_t end : ends) {
+            const std::span<const std::byte> piece = bytes.subspan(start, end - start);
+            const std::string ref = blobs_.put(shuffle_bytes(piece, sizeof(T)));
+            out_.raw(digest_of(ref));
+            out_.scalar(static_cast<std::uint64_t>(piece.size() / sizeof(T)));
+            start = end;
         }
-    } else {
-        throw ProjectError(ProjectErrc::invalid_data, "this kind of object data cannot be saved");
     }
-    return out.take();
+
+    void count(std::size_t value) { out_.scalar(static_cast<std::uint64_t>(value)); }
+    void text(std::string_view value) { out_.text(value); }
+
+    /// Stores the table and returns its reference.
+    std::string finish() { return blobs_.put(out_.take()); }
+
+private:
+    Writer out_;
+    BlobStore& blobs_;
+    const ChunkLimits& limits_;
+};
+
+// --- Reading -------------------------------------------------------------------------------------
+
+struct Piece {
+    std::string ref;
+    std::size_t items = 0;
+};
+
+/// An array as the table of contents gives it: inline items or pieces.
+struct ArrayEntry {
+    std::size_t item_size = 0;
+    std::uint64_t count = 0;
+    std::span<const std::byte> items;  ///< Inline items, little-endian.
+    std::vector<Piece> pieces;
+};
+
+/// A table of contents read but not resolved: its arrays in the order of the encoding.
+struct Table {
+    Kind kind{};
+    std::vector<ArrayEntry> arrays;
+    std::vector<model::ElementType> block_types;  ///< For a mesh: the type of each element block.
+};
+
+ArrayEntry read_array(Reader& in, std::size_t item_size) {
+    ArrayEntry entry;
+    entry.item_size = item_size;
+    entry.count = in.scalar<std::uint64_t>();
+    const auto storage = static_cast<Storage>(in.scalar<std::uint32_t>());
+    if (storage == Storage::inline_items) {
+        entry.items = in.take(in.fitting(entry.count, item_size) * item_size);
+        return entry;
+    }
+    if (storage != Storage::pieces) {
+        throw_corrupt("unknown storage of an array " +
+                      std::to_string(static_cast<std::uint32_t>(storage)));
+    }
+    const std::size_t pieces = in.count(digest_size + 8);
+    entry.pieces.reserve(pieces);
+    std::uint64_t total = 0;
+    for (std::size_t i = 0; i < pieces; ++i) {
+        Piece piece;
+        piece.ref = ref_of(in.take(digest_size));
+        const auto items = in.scalar<std::uint64_t>();
+        if (items == 0 || items > entry.count - total) {
+            throw_corrupt("the pieces of an array do not add up to its size");
+        }
+        total += items;
+        piece.items = static_cast<std::size_t>(items);
+        entry.pieces.push_back(std::move(piece));
+    }
+    if (total != entry.count) {
+        throw_corrupt("the pieces of an array do not add up to its size");
+    }
+    return entry;
 }
 
-std::shared_ptr<const model::ObjectData> decode_object_data(std::span<const std::byte> bytes) {
+Table read_table(std::span<const std::byte> bytes) {
     Reader in(bytes);
     if (!in.starts_with_magic()) {
         throw_corrupt("not a block of object data");
@@ -218,37 +302,159 @@ std::shared_ptr<const model::ObjectData> decode_object_data(std::span<const std:
     if (const auto version = in.scalar<std::uint32_t>(); version != object_data_codec_version) {
         throw_corrupt("unknown encoding version " + std::to_string(version));
     }
-    const auto kind = static_cast<Kind>(in.scalar<std::uint32_t>());
-    std::shared_ptr<const model::ObjectData> data;
-    try {
-        switch (kind) {
-            case Kind::mesh:
-                data = read_mesh(in);
-                break;
-            case Kind::node_set:
-                data = std::make_shared<const model::NodeSet>(in.array<model::Index>());
-                break;
-            case Kind::element_set:
-                data = std::make_shared<const model::ElementSet>(in.array<model::Index>());
-                break;
-            case Kind::surface: {
-                std::vector<model::ElementSide> sides(in.count(2 * sizeof(model::Index)));
-                for (model::ElementSide& side : sides) {
-                    side.element = in.scalar<model::Index>();
-                    side.side = in.scalar<model::Index>();
-                }
-                data = std::make_shared<const model::Surface>(std::move(sides));
-                break;
+    Table table;
+    table.kind = static_cast<Kind>(in.scalar<std::uint32_t>());
+    switch (table.kind) {
+        case Kind::mesh: {
+            table.arrays.push_back(read_array(in, sizeof(model::Label)));
+            for (int axis = 0; axis < 3; ++axis) {
+                table.arrays.push_back(read_array(in, sizeof(double)));
             }
-            default:
-                throw_corrupt("unknown kind of data " +
-                              std::to_string(static_cast<std::uint32_t>(kind)));
+            // A block takes at least its type name length and two empty arrays.
+            const std::size_t blocks = in.count(4 + 2 * (8 + 4));
+            for (std::size_t b = 0; b < blocks; ++b) {
+                const std::string name = in.text();
+                const std::optional<model::ElementType> type = model::parse_element_type(name);
+                if (!type) {
+                    throw_corrupt("unknown element type '" + name + "'");
+                }
+                table.block_types.push_back(*type);
+                table.arrays.push_back(read_array(in, sizeof(model::Label)));
+                table.arrays.push_back(read_array(in, sizeof(model::Index)));
+            }
+            break;
         }
+        case Kind::node_set:
+        case Kind::element_set:
+        case Kind::surface:
+            table.arrays.push_back(read_array(in, sizeof(model::Index)));
+            break;
+        default:
+            throw_corrupt("unknown kind of data " +
+                          std::to_string(static_cast<std::uint32_t>(table.kind)));
+    }
+    in.finish();
+    return table;
+}
+
+/// The items of an array, its pieces read from `blobs`.
+template <class T>
+std::vector<T> resolve(const ArrayEntry& entry, const BlobStore& blobs) {
+    std::vector<T> values;
+    if (entry.pieces.empty()) {
+        append_items(values, entry.items);
+        return values;
+    }
+    // No reserve from the count of the table: it is trusted only as far as the pieces go.
+    for (const Piece& piece : entry.pieces) {
+        const Bytes bytes = blobs.get(piece.ref);
+        if (bytes.size() % sizeof(T) != 0 || bytes.size() / sizeof(T) != piece.items) {
+            throw_corrupt("the piece " + piece.ref + " has another size than its table says");
+        }
+        append_items(values, unshuffle_bytes(bytes, sizeof(T)));
+    }
+    return values;
+}
+
+std::shared_ptr<const model::ObjectData> make_data(const Table& table, const BlobStore& blobs) {
+    switch (table.kind) {
+        case Kind::mesh: {
+            model::NodeArrays nodes;
+            nodes.ids = resolve<model::Label>(table.arrays[0], blobs);
+            nodes.x = resolve<double>(table.arrays[1], blobs);
+            nodes.y = resolve<double>(table.arrays[2], blobs);
+            nodes.z = resolve<double>(table.arrays[3], blobs);
+            std::vector<model::ElementBlock> blocks;
+            blocks.reserve(table.block_types.size());
+            for (std::size_t b = 0; b < table.block_types.size(); ++b) {
+                blocks.emplace_back(table.block_types[b],
+                                    resolve<model::Label>(table.arrays[4 + 2 * b], blobs),
+                                    resolve<model::Index>(table.arrays[5 + 2 * b], blobs));
+            }
+            return std::make_shared<const model::Mesh>(std::move(nodes), std::move(blocks));
+        }
+        case Kind::node_set:
+            return std::make_shared<const model::NodeSet>(
+                resolve<model::Index>(table.arrays[0], blobs));
+        case Kind::element_set:
+            return std::make_shared<const model::ElementSet>(
+                resolve<model::Index>(table.arrays[0], blobs));
+        case Kind::surface: {
+            const std::vector<model::Index> flat = resolve<model::Index>(table.arrays[0], blobs);
+            if (flat.size() % 2 != 0) {
+                throw_corrupt("a surface needs an element and a side for each of its sides");
+            }
+            std::vector<model::ElementSide> sides(flat.size() / 2);
+            for (std::size_t i = 0; i < sides.size(); ++i) {
+                sides[i] = {flat[2 * i], flat[2 * i + 1]};
+            }
+            return std::make_shared<const model::Surface>(std::move(sides));
+        }
+    }
+    throw_corrupt("unknown kind of data");
+}
+
+}  // namespace
+
+std::string put_object_data(const model::ObjectData& data, BlobStore& blobs,
+                            const ChunkLimits& limits) {
+    if (const auto* mesh = dynamic_cast<const model::Mesh*>(&data)) {
+        TableWriter out(Kind::mesh, blobs, limits);
+        out.array(mesh->node_ids());
+        out.array(mesh->x());
+        out.array(mesh->y());
+        out.array(mesh->z());
+        out.count(mesh->blocks().size());
+        for (const model::ElementBlock& block : mesh->blocks()) {
+            out.text(model::to_string(block.type()));
+            out.array(block.ids());
+            out.array(block.connectivity());
+        }
+        return out.finish();
+    }
+    if (const auto* nodes = dynamic_cast<const model::NodeSet*>(&data)) {
+        TableWriter out(Kind::node_set, blobs, limits);
+        out.array(nodes->nodes());
+        return out.finish();
+    }
+    if (const auto* elements = dynamic_cast<const model::ElementSet*>(&data)) {
+        TableWriter out(Kind::element_set, blobs, limits);
+        out.array(elements->elements());
+        return out.finish();
+    }
+    if (const auto* surface = dynamic_cast<const model::Surface*>(&data)) {
+        std::vector<model::Index> flat;
+        flat.reserve(2 * surface->sides().size());
+        for (const model::ElementSide& side : surface->sides()) {
+            flat.push_back(side.element);
+            flat.push_back(side.side);
+        }
+        TableWriter out(Kind::surface, blobs, limits);
+        out.array(std::span<const model::Index>(flat));
+        return out.finish();
+    }
+    throw ProjectError(ProjectErrc::invalid_data, "this kind of object data cannot be saved");
+}
+
+std::shared_ptr<const model::ObjectData> get_object_data(std::string_view ref,
+                                                         const BlobStore& blobs) {
+    const Bytes bytes = blobs.get(ref);
+    const Table table = read_table(bytes);
+    try {
+        return make_data(table, blobs);
     } catch (const model::ModelError& error) {
         throw_corrupt(error.what());
     }
-    in.finish();
-    return data;
+}
+
+std::vector<std::string> object_data_pieces(std::span<const std::byte> table) {
+    std::vector<std::string> pieces;
+    for (const ArrayEntry& entry : read_table(table).arrays) {
+        for (const Piece& piece : entry.pieces) {
+            pieces.push_back(piece.ref);
+        }
+    }
+    return pieces;
 }
 
 nlohmann::json describe_object_data(const model::ObjectData& data) {

@@ -1,8 +1,11 @@
 // Opening and saving the project folder in the window (task 2.1): the "File" menu, the title,
-// autosave and the question about unsaved changes.
+// autosave and the question about unsaved changes; "Clean project" (task 2.2).
 
 #include "fem/shell/project_actions.h"
 
+#include "fem/core/io/files.h"
+#include "fem/core/model/document_editor.h"
+#include "fem/core/model/mesh.h"
 #include "fem/core/model/object.h"
 #include "fem/core/settings/settings.h"
 #include "fem/shell/main_window.h"
@@ -22,6 +25,7 @@
 #include <QTest>
 #include <QTimer>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <system_error>
 #include <vector>
@@ -87,10 +91,12 @@ TEST_F(ShellProject, FileMenuHasTheProjectActions) {
     QMenu* file = window_->menuBar()->findChild<QMenu*>(QStringLiteral("menu.file"));
     ASSERT_NE(file, nullptr);
     const QList<QAction*> items = file->actions();
-    ASSERT_GE(items.size(), 4);
+    ASSERT_GE(items.size(), 5);
     EXPECT_EQ(items[0]->objectName(), QStringLiteral("project.open"));
     EXPECT_EQ(items[2]->objectName(), QStringLiteral("project.save"));
     EXPECT_EQ(items[3]->objectName(), QStringLiteral("project.saveAs"));
+    EXPECT_EQ(items[4]->objectName(), QStringLiteral("project.clean"));
+    EXPECT_EQ(actions().clean_action()->text(), QStringLiteral("Clean Project"));
     EXPECT_EQ(actions().save_action()->shortcut(), QKeySequence(QKeySequence::Save));
     EXPECT_EQ(actions().open_action()->shortcut(), QKeySequence(QKeySequence::Open));
     EXPECT_TRUE(actions().save_as_action()->shortcut().isEmpty());
@@ -182,11 +188,66 @@ TEST_F(ShellProject, AutosaveFollowsTheSetting) {
     EXPECT_TRUE(window_->problems().messages().isEmpty());
 }
 
+TEST_F(ShellProject, CleanRemovesOldDataAndTellsHowMuch) {
+    QAction* clean = actions().clean_action();
+    EXPECT_FALSE(clean->isEnabled());  // No folder yet.
+
+    // A mesh large enough to be stored in pieces, saved twice with other coordinates.
+    const auto mesh_with = [](double shift) {
+        fem::model::NodeArrays nodes;
+        for (int i = 0; i < 5000; ++i) {
+            nodes.ids.push_back(i + 1);
+            nodes.x.push_back(0.001 * i + shift);
+            nodes.y.push_back(0.002 * i);
+            nodes.z.push_back(0.003 * i);
+        }
+        return std::make_shared<const fem::model::Mesh>(std::move(nodes),
+                                                        std::vector<fem::model::ElementBlock>{});
+    };
+    std::function<void(fem::model::DocumentEditor&)> edit;
+    app_.bus.register_command({.id = "test.edit", .owner = "test.module"},
+                              [&edit](fem::command::CommandContext& context) {
+                                  edit(context.editor());
+                                  return fem::command::CommandResult{};
+                              });
+    fem::model::ObjectId mesh;
+    edit = [&](fem::model::DocumentEditor& editor) {
+        mesh = editor.create(fem::model::mesh_object("mesh", mesh_with(0.0)));
+    };
+    (void)app_.bus.execute("test.edit");
+    project_.save_as(folder_ / "p");
+    EXPECT_TRUE(clean->isEnabled());
+    edit = [&](fem::model::DocumentEditor& editor) { editor.set_data(mesh, mesh_with(1.0)); };
+    (void)app_.bus.execute("test.edit");
+    project_.save();
+
+    clean->trigger();
+    EXPECT_TRUE(window_->prompt().startsWith(QStringLiteral("Project cleaned: ")))
+        << window_->prompt().toStdString();
+    EXPECT_TRUE(window_->problems().messages().isEmpty());
+    EXPECT_TRUE(actions().open(folder_ / "p.slproj"));
+
+    // A damaged block of the saved project: nothing is removed, the reason goes to the problems.
+    for (const auto& entry : fs::recursive_directory_iterator(folder_ / "p.slproj" / ".fem")) {
+        if (entry.is_regular_file()) {
+            ASSERT_TRUE(fem::io::write_file(entry.path(), "garbage"));
+        }
+    }
+    EXPECT_FALSE(actions().clean());
+    ASSERT_EQ(window_->problems().messages().size(), 1);
+    EXPECT_TRUE(window_->problems().messages()[0].contains(QStringLiteral("cannot be cleaned")))
+        << window_->problems().messages()[0].toStdString();
+
+    project_.close();
+    EXPECT_FALSE(clean->isEnabled());
+}
+
 TEST(ShellProjectWithoutSession, ActionsAreDisabled) {
     fem::shell::testing::Application app;
     MainWindow window(app.workbench());
     EXPECT_FALSE(window.project().save_action()->isEnabled());
     EXPECT_FALSE(window.project().open_action()->isEnabled());
+    EXPECT_FALSE(window.project().clean_action()->isEnabled());
     EXPECT_EQ(window.windowTitle(), QStringLiteral("StressLab"));
 }
 

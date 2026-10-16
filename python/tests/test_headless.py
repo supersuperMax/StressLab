@@ -301,6 +301,7 @@ import stresslab
 stresslab.project.open("проект вала.slproj")
 print("opened:", [item.name for item in stresslab.active_document().objects()])
 print("modified:", stresslab.project.is_modified())
+print("cleaned:", stresslab.project.clean()["removed"])
 """
 
 
@@ -319,3 +320,5 @@ def test_a_script_saves_a_project_that_another_run_opens(headless: Headless) -> 
     assert "opened: ['Вал']" in opened.stdout
     assert "modified: False" in opened.stdout
     assert 'stresslab.project.open("проект вала.slproj")' in journal.read_text(encoding="utf-8")
+    assert "cleaned: 0" in opened.stdout
+    assert "stresslab.project.clean()" in journal.read_text(encoding="utf-8")

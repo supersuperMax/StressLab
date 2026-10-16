@@ -17,13 +17,15 @@ namespace fem::shell {
 
 /// The project folder in the window (task 2.1, docs/interface-design.md §12): "Open project…"
 /// (Ctrl/Cmd+O), "Save" (Ctrl/Cmd+S), "Save as…" (no shortcut: Ctrl/Cmd+Shift+S is kept for
-/// "Commit version"), autosave every "project.autosaveInterval" seconds, the title of the window
+/// "Commit version"), "Clean project" (task 2.2: removes blocks of data the saved project no
+/// longer needs), autosave every "project.autosaveInterval" seconds, the title of the window
 /// with the name of the project and a mark of unsaved changes, and the question about unsaved
 /// changes before the window closes or another project opens.
 ///
 /// Failures are not modal: their message goes to the "Problems" tab and the prompt line
-/// (`problem`), the details to the log. Object names, for tests: the actions "project.open",
-/// "project.save", "project.saveAs"; the timer "project.autosave".
+/// (`problem`), the details to the log; what "Clean project" did goes to the prompt line
+/// (`message`). Object names, for tests: the actions "project.open", "project.save",
+/// "project.saveAs", "project.clean"; the timer "project.autosave".
 class ProjectActions : public QObject {
     Q_OBJECT
 
@@ -38,6 +40,8 @@ public:
     [[nodiscard]] QAction* open_action() const noexcept { return open_; }
     [[nodiscard]] QAction* save_action() const noexcept { return save_; }
     [[nodiscard]] QAction* save_as_action() const noexcept { return save_as_; }
+    /// Enabled while the project has a folder.
+    [[nodiscard]] QAction* clean_action() const noexcept { return clean_; }
     [[nodiscard]] QTimer& autosave_timer() const noexcept { return *autosave_; }
 
     /// Asks for a folder and opens it; false if cancelled or it failed.
@@ -50,6 +54,9 @@ public:
     bool save();
     /// Asks for a folder and saves there; false if cancelled or it failed.
     bool save_as();
+    /// Removes the blocks of data the saved project no longer refers to; false if there is no
+    /// folder or it failed.
+    bool clean();
     /// Saves if autosave is due (a folder, unsaved changes, nothing running); failures are
     /// reported like the others.
     void autosave();
@@ -70,6 +77,8 @@ Q_SIGNALS:
     void opened();
     /// A message for the user about a failure.
     void problem(const QString& message);
+    /// A message for the user about what was done.
+    void message(const QString& message);
 
 private:
     void update_state();
@@ -83,6 +92,7 @@ private:
     QAction* open_ = nullptr;
     QAction* save_ = nullptr;
     QAction* save_as_ = nullptr;
+    QAction* clean_ = nullptr;
     QTimer* autosave_ = nullptr;
     Subscription project_changed_;
     Subscription settings_changed_;

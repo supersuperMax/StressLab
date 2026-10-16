@@ -6,11 +6,12 @@
     stresslab.project.save_as("wing")           # writes wing.slproj
     stresslab.project.save()                    # only the files that changed
     stresslab.project.open("wing.slproj")       # in place of the document
+    stresslab.project.clean()                   # removes blocks of data saved before
 
-Opening, saving and closing are written to the session journal as these same calls, so a journal
-replays them; they are refused inside a command or a transaction. Errors of the folder raise
-`stresslab.ProjectError`, whose `code` says what went wrong ("not_a_project", "invalid_file"...)
-and `file` and `line` where.
+Opening, saving, cleaning and closing are written to the session journal as these same calls, so a
+journal replays them; they are refused inside a command or a transaction. Errors of the folder
+raise `stresslab.ProjectError`, whose `code` says what went wrong ("not_a_project",
+"invalid_file"...) and `file` and `line` where.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from _stresslab import ProjectError
 
 _native = _stresslab.project
 
-__all__ = ["ProjectError", "close", "folder", "is_modified", "open", "save", "save_as"]
+__all__ = ["ProjectError", "clean", "close", "folder", "is_modified", "open", "save", "save_as"]
 
 
 def open(folder: str | os.PathLike[str]) -> None:  # noqa: A001 - the name of the action
@@ -39,6 +40,14 @@ def save() -> None:
 def save_as(folder: str | os.PathLike[str]) -> None:
     """Saves to `folder` (".slproj" is added if missing), which becomes the project folder."""
     _native.save_as(folder)
+
+
+def clean() -> dict[str, int]:
+    """The "Clean project" command: removes the blocks of bulk data in the project folder that
+    the saved project no longer refers to, such as the data of meshes saved before. Returns
+    ``{"removed": files, "freed_bytes": ..., "kept": blocks, "kept_bytes": ...}``; ProjectError
+    with code "no_folder" for a project never saved."""
+    return _native.clean()
 
 
 def close() -> None:

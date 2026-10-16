@@ -6,8 +6,10 @@
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <map>
 #include <string>
+#include <string_view>
 
 namespace fem::storage {
 namespace {
@@ -17,16 +19,36 @@ using model::ObjectId;
 
 constexpr const char* module = "fem.demo";
 
-/// Every file below `folder` by its path with '/'.
+/// Every file below `folder` by its path with '/'; blocks by their contents rather than their
+/// zstd frames, which may differ between versions of zstd.
 std::map<std::string, std::string> folder_files(const fs::path& folder) {
     std::map<std::string, std::string> result;
+    const FolderBlobStore blobs(folder / ".fem" / "objects");
     for (const auto& entry : fs::recursive_directory_iterator(folder)) {
-        if (entry.is_regular_file()) {
-            result.emplace(io::display(entry.path().lexically_relative(folder)),
-                           io::read_file(entry.path()).value());
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        const std::string key = io::display(entry.path().lexically_relative(folder));
+        constexpr std::string_view blocks = ".fem/objects/sha256/";
+        if (key.starts_with(blocks) && key.size() == blocks.size() + 65) {
+            const std::string hex = key.substr(blocks.size(), 2) + key.substr(blocks.size() + 3);
+            const Bytes bytes = blobs.get("sha256:" + hex);
+            result.emplace(key,
+                           std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+        } else {
+            result.emplace(key, io::read_file(entry.path()).value());
         }
     }
     return result;
+}
+
+/// The size on disk of the blocks of a project.
+std::uintmax_t blocks_size(const fs::path& folder) {
+    std::uintmax_t size = 0;
+    for (const auto& file : FolderBlobStore(folder / ".fem" / "objects").files()) {
+        size += file.size;
+    }
+    return size;
 }
 
 ProjectErrc error_code(const std::function<void()>& action) {
@@ -97,6 +119,39 @@ TEST(StorageProjectFolder, GoldenProjectLoadsAndSavesToTheSameBytes) {
     TestDocument built;
     build_basic(built);
     EXPECT_EQ(describe(doc.document), describe(built.document));
+}
+
+TEST(StorageProjectFolder, OnePercentOfAMeshAddsLittleToTheFolder) {
+    TempDir dir("one-percent");
+    const fs::path folder = dir.path() / "p.slproj";
+    TestDocument doc;
+    GridMesh grid(60, 60, 50);  // 189 771 nodes, 180 000 hex8.
+    const ObjectId mesh = doc.edit.create(model::mesh_object("mesh", grid.make()));
+    (void)save_project(folder, doc.document, basic_versions);
+    const std::uintmax_t first = blocks_size(folder);
+
+    // A change costs about two pieces (2 x 64 KiB before zstd) in each array it touches, whatever
+    // the size of the mesh: for this one, where the ids and connectivity of a regular grid pack to
+    // almost nothing, moving 1% of the nodes adds about 8% of the folder; for a mesh of a million
+    // nodes, about 2% (docs/adr/0018-blob-store.md). A whole copy would add 100%.
+    grid.move_nodes(grid.nodes.ids.size() / 4, grid.nodes.ids.size() / 100);
+    doc.edit.set_data(mesh, grid.make());
+    (void)save_project(folder, doc.document, basic_versions);
+    const std::uintmax_t moved = blocks_size(folder) - first;
+    EXPECT_LT(moved, first / 10) << moved << " bytes added to " << first;
+
+    const std::uintmax_t before_removal = blocks_size(folder);
+    grid.remove_elements(grid.element_ids.size() / 2, grid.element_ids.size() / 100);
+    doc.edit.set_data(mesh, grid.make());
+    (void)save_project(folder, doc.document, basic_versions);
+    const std::uintmax_t removed = blocks_size(folder) - before_removal;
+    EXPECT_LT(removed, first / 10) << removed << " bytes added to " << first;
+
+    // The same mesh again (undo, another object, another branch): nothing is added.
+    const std::uintmax_t before_repeat = blocks_size(folder);
+    doc.edit.create(model::mesh_object("copy", grid.make()));
+    (void)save_project(folder, doc.document, basic_versions);
+    EXPECT_EQ(blocks_size(folder), before_repeat);
 }
 
 TEST(StorageProjectFolder, SavesOnlyWhatChanged) {

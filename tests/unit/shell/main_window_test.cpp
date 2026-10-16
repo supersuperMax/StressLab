@@ -215,6 +215,7 @@ TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
                                "app.about",
                                "view.extensions",
                                "journal.saveAsScript",
+                               "project.clean",
                                "project.open",
                                "project.save",
                                "project.saveAs"};

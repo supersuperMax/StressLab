@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QWidget>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -64,6 +65,9 @@ ProjectActions::ProjectActions(Workbench& workbench, QWidget* window)
     save_as_ = new QAction(this);
     save_as_->setObjectName(QStringLiteral("project.saveAs"));
     connect(save_as_, &QAction::triggered, this, [this] { (void)save_as(); });
+    clean_ = new QAction(this);
+    clean_->setObjectName(QStringLiteral("project.clean"));
+    connect(clean_, &QAction::triggered, this, [this] { (void)clean(); });
 
     autosave_ = new QTimer(this);
     autosave_->setObjectName(QStringLiteral("project.autosave"));
@@ -73,6 +77,7 @@ ProjectActions::ProjectActions(Workbench& workbench, QWidget* window)
     for (QAction* action : {open_, save_, save_as_}) {
         action->setEnabled(available);
     }
+    clean_->setEnabled(false);  // Until there is a folder: `update_state`.
     if (available) {
         project_changed_ = workbench_.project->on_changed([this] { update_state(); });
         settings_changed_ = workbench_.settings.on_changed([this](std::string_view key) {
@@ -145,6 +150,28 @@ bool ProjectActions::save_as() {
     return true;
 }
 
+bool ProjectActions::clean() {
+    if (workbench_.project == nullptr || !workbench_.project->folder()) {
+        return false;
+    }
+    const fs::path folder = *workbench_.project->folder();
+    storage::CleanStats stats;
+    try {
+        stats = workbench_.project->clean();
+    } catch (const std::exception& error) {
+        report("project.cleanFailed", folder, error);
+        return false;
+    }
+    log::logger("shell")->info("project.clean '{}': {} files removed, {} bytes freed, {} kept",
+                               utf8(folder), stats.removed, stats.freed_bytes, stats.kept);
+    // Megabytes with one decimal: "12.3".
+    const double megabytes =
+        std::round(static_cast<double>(stats.freed_bytes) / (1024.0 * 1024.0) * 10.0) / 10.0;
+    Q_EMIT message(text("project.cleaned", {{"count", static_cast<std::int64_t>(stats.removed)},
+                                            {"megabytes", megabytes}}));
+    return true;
+}
+
 void ProjectActions::autosave() {
     if (workbench_.project == nullptr) {
         return;
@@ -198,6 +225,7 @@ void ProjectActions::retranslate() {
     open_->setText(text("action.openProject"));
     save_->setText(text("action.save"));
     save_as_->setText(text("action.saveAs"));
+    clean_->setText(text("action.cleanProject"));
     update_state();
 }
 
@@ -205,6 +233,7 @@ void ProjectActions::update_state() {
     if (window_ == nullptr) {
         return;
     }
+    clean_->setEnabled(workbench_.project != nullptr && workbench_.project->folder());
     window_->setWindowTitle(window_title());
     window_->setWindowModified(workbench_.project != nullptr && workbench_.project->is_modified());
 }

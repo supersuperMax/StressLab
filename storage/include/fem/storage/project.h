@@ -1,10 +1,13 @@
 #pragma once
 
 #include "fem/core/model/document.h"
+#include "fem/storage/garbage.h"
 #include "fem/storage/project_format.h"
 
 #include <cstddef>
 #include <filesystem>
+#include <span>
+#include <string>
 #include <string_view>
 
 // A project folder on disk (docs/architecture.md §3.1): the files of `project_format.h` and the
@@ -31,6 +34,15 @@ struct SaveStats {
 /// something cannot be written, and what `write_project` throws.
 SaveStats save_project(const std::filesystem::path& folder, const model::Document& document,
                        const ModuleVersions& modules);
+
+/// "Clean project": removes the blocks of bulk data in `.fem/objects` that neither
+/// `refs/blobs.json` nor `extra_roots` reach (`collect_garbage`), such as the data of meshes
+/// saved before. The history (task 2.3) and pinned results (2.5) add their blocks as
+/// `extra_roots`. Throws ProjectError: not_a_project without project.json, io if project.json or
+/// refs/blobs.json cannot be read, unsupported_format for a project of another format, and what
+/// `collect_garbage` throws; then nothing is removed.
+CleanStats clean_project(const std::filesystem::path& folder,
+                         std::span<const std::string> extra_roots = {});
 
 /// Reads the project of `folder` (`read_project`). Throws ProjectError: not_a_project without
 /// project.json, io if a file cannot be read, and what `read_project` throws.

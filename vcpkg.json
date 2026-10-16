@@ -9,7 +9,8 @@
     "gtest",
     "nlohmann-json",
     "spdlog",
-    "tomlplusplus"
+    "tomlplusplus",
+    "zstd"
   ],
   "features": {
     "gui": {

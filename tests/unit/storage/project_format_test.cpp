@@ -6,6 +6,7 @@
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <functional>
 #include <string>
 
@@ -61,7 +62,7 @@ TEST(StorageProjectFormat, FilesOfASmallProject) {
                                                "project.json", "refs/blobs.json"}));
     EXPECT_EQ(files.at("project.json"),
               "{\n"
-              "  \"format\": 1,\n"
+              "  \"format\": 2,\n"
               "  \"modules\": {\n"
               "    \"fem.core\": \"0.1.0\",\n"
               "    \"fem.demo\": \"1.2.0\"\n"
@@ -106,8 +107,9 @@ TEST(StorageProjectFormat, FilesOfASmallProject) {
               "  \"schemaVersion\": 1,\n"
               "  \"type\": \"node_set\"\n"
               "}\n");
-    const std::string mesh_ref = blob_ref(encode_object_data(*model::testing::small_mesh()));
-    const std::string set_ref = blob_ref(encode_object_data(model::NodeSet({0, 1})));
+    MemoryBlobStore expected;
+    const std::string mesh_ref = put_object_data(*model::testing::small_mesh(), expected);
+    const std::string set_ref = put_object_data(model::NodeSet({0, 1}), expected);
     EXPECT_EQ(files.at("refs/blobs.json"),
               "{\n  \"1\": \"" + mesh_ref + "\",\n  \"2\": \"" + set_ref + "\"\n}\n");
     EXPECT_EQ(blobs.size(), 2U);
@@ -177,10 +179,29 @@ TEST_F(StorageProjectFormatErrors, NoProjectFile) {
 
 TEST_F(StorageProjectFormatErrors, LaterFormat) {
     edit("project.json", [](nlohmann::json& json) {
-        json["format"] = 2;
+        json["format"] = 3;
         json["somethingNew"] = true;
     });
     expect_error(ProjectErrc::unsupported_format, "project.json");
+}
+
+TEST_F(StorageProjectFormatErrors, FormatOfTask21IsNotRead) {
+    edit("project.json", [](nlohmann::json& json) { json["format"] = 1; });
+    expect_error(ProjectErrc::unsupported_format, "project.json");
+}
+
+TEST_F(StorageProjectFormatErrors, BlobRootsAreTheBlocksOfRefs) {
+    const std::vector<std::string> roots = read_blob_roots(files);
+    const nlohmann::json refs = nlohmann::json::parse(files.at("refs/blobs.json"));
+    ASSERT_EQ(roots.size(), 2U);
+    EXPECT_TRUE(std::is_sorted(roots.begin(), roots.end()));
+    for (const auto& [id, ref] : refs.items()) {
+        EXPECT_TRUE(std::find(roots.begin(), roots.end(), ref.get<std::string>()) != roots.end())
+            << id;
+    }
+    // A project of another format is not cleaned.
+    edit("project.json", [](nlohmann::json& json) { json["format"] = 3; });
+    EXPECT_THROW((void)read_blob_roots(files), ProjectError);
 }
 
 TEST_F(StorageProjectFormatErrors, BrokenJsonNamesTheLine) {
