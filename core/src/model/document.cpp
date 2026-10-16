@@ -234,9 +234,8 @@ ObjectId Document::create(NewObject init, ChangeSet& changes) {
 void Document::restore(StoredObject stored, ChangeSet& changes) {
     const ObjectId id = stored.id;
     NewObject& init = stored.init;
-    if (!id.is_valid() || id.value() >= next_id_) {
-        throw ModelError(ModelErrc::invalid_argument,
-                         "only an object with an id the document issued can be restored", id);
+    if (!id.is_valid()) {
+        throw ModelError(ModelErrc::invalid_argument, "an object needs an id to be restored", id);
     }
     if (contains(id)) {
         throw ModelError(ModelErrc::invalid_argument, "the object is in the document", id);
@@ -269,6 +268,12 @@ void Document::restore(StoredObject stored, ChangeSet& changes) {
         static_cast<std::size_t>(std::lower_bound(list.begin(), list.end(), id) - list.begin());
     std::map<ObjectId, Object> staging;
     staging.emplace(id, Object(id, std::move(init)));
+    // An object made on another variant of the project after this model branched off has an id
+    // this document never issued: the id is taken, as `create` takes one, so it is not issued
+    // again. Like that of `create`, it stays taken after undo (task 2.4).
+    if (id.value() >= next_id_) {
+        next_id_ = id.value() + 1;
+    }
     record(changes, {change::Existence{id, staging.extract(id), position}});
 }
 

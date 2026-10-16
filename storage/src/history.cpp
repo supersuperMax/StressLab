@@ -7,6 +7,7 @@
 #include "fem/core/model/object.h"
 #include "fem/storage/blob_store.h"
 #include "fem/storage/error.h"
+#include "fem/storage/object_data_codec.h"
 #include "fem/storage/project.h"
 #include "fem/storage/session.h"
 
@@ -148,10 +149,18 @@ ProjectHistory::ProjectHistory(ProjectSession& session, command::CommandBus& bus
          .args = {{.name = "object", .type = command::ArgType::object},
                   {.name = "version", .type = command::ArgType::string}}},
         [this](command::CommandContext& context) { return restore_object(context); });
+    bus_.register_command(
+        {.id = std::string(restore_objects_command),
+         .owner = std::string(owner),
+         .args = {{.name = "version", .type = command::ArgType::string},
+                  {.name = "types", .type = command::ArgType::list, .required = false},
+                  {.name = "objects", .type = command::ArgType::list, .required = false}}},
+        [this](command::CommandContext& context) { return restore_objects(context); });
 }
 
 ProjectHistory::~ProjectHistory() {
     (void)bus_.unregister_command(restore_object_command);
+    (void)bus_.unregister_command(restore_objects_command);
 }
 
 // --- What there is -------------------------------------------------------------------------------
@@ -244,6 +253,19 @@ std::vector<VersionInfo> ProjectHistory::stashes() const {
         }
     }
     return result;
+}
+
+ModelDiff ProjectHistory::diff(std::string_view from, std::optional<std::string_view> to) const {
+    const std::optional<Repository> repo = repository();
+    if (!repo) {
+        throw ProjectError(ProjectErrc::unknown_version, "the project has no versions yet");
+    }
+    const std::string before = repo->resolve(from);
+    if (to) {
+        const std::string after = repo->resolve(*to);
+        return diff_files(repo->read(before).files, repo->read(after).files);
+    }
+    return diff_files(repo->read(before).files, current_files());
 }
 
 std::vector<std::string> ProjectHistory::blob_roots() const {
@@ -508,31 +530,52 @@ void ProjectHistory::set_author(Author author) {
     author_ = std::move(author);
 }
 
-// --- Restoring one object ------------------------------------------------------------------------
+// --- Restoring objects ---------------------------------------------------------------------------
 
-command::CommandResult ProjectHistory::restore_object(command::CommandContext& context) {
-    const ObjectId id = context.args().object("object");
-    const std::string& target = context.args().string("version");
-    const std::optional<Repository> repo = repository();
-    if (!repo) {
-        throw ProjectError(ProjectErrc::unknown_version, "the project has no versions yet");
-    }
-    const std::string version = repo->resolve(target);
-    const FolderBlobStore blobs(objects_folder(folder()));
-    std::optional<model::StoredObject> stored = read_object(repo->read(version).files, blobs, id);
-    if (!stored) {
-        throw model::ModelError(model::ModelErrc::unknown_object,
-                                "the version " + short_id(version) + " has no such object", id);
-    }
+namespace {
 
-    const model::Document& document = context.document();
-    model::DocumentEditor& editor = context.editor();
+/// A store that keeps nothing: the reference data would have, without writing it.
+class HashingBlobStore final : public BlobStore {
+public:
+    std::string put(std::span<const std::byte> bytes) override { return blob_ref(bytes); }
+    [[nodiscard]] Bytes get(std::string_view ref) const override {
+        throw ProjectError(ProjectErrc::missing_blob, "the block is not kept: " + std::string(ref));
+    }
+    [[nodiscard]] bool contains(std::string_view /*ref*/) const override { return false; }
+};
+
+/// The object of the model is as the version keeps it.
+bool same_as(const model::Object& now, const ObjectRecord& record) {
+    const model::NewObject& old = record.object.init;
+    if (now.owner() != old.owner || now.type() != old.type ||
+        now.schema_version() != old.schema_version || now.name() != old.name ||
+        now.parent() != old.parent || now.properties().dump() != old.properties.dump()) {
+        return false;
+    }
+    std::vector<ObjectId> dependencies = old.dependencies;
+    std::sort(dependencies.begin(), dependencies.end());
+    if (!std::equal(dependencies.begin(), dependencies.end(), now.dependencies().begin(),
+                    now.dependencies().end())) {
+        return false;
+    }
+    if ((now.data() != nullptr) != !record.blob.empty()) {
+        return false;
+    }
+    HashingBlobStore hashes;
+    return now.data() == nullptr || put_object_data(*now.data(), hashes) == record.blob;
+}
+
+/// Makes an object of the model be as `stored`, an object of a version with the same id: the
+/// same object, back after its removal or in place of what it is now.
+void put_back(model::DocumentEditor& editor, model::StoredObject stored) {
+    const ObjectId id = stored.id;
+    const model::Document& document = editor.document();
     if (!document.contains(id)) {
-        editor.restore(std::move(*stored));
-        return command::Value(id);
+        editor.restore(std::move(stored));
+        return;
     }
     const model::Object& now = document.get(id);
-    model::NewObject& old = stored->init;
+    model::NewObject& old = stored.init;
     if (now.type() != old.type || now.owner() != old.owner) {
         throw model::ModelError(model::ModelErrc::invalid_argument,
                                 "the object of the version is of another type", id);
@@ -543,6 +586,11 @@ command::CommandResult ProjectHistory::restore_object(command::CommandContext& c
                                     std::to_string(old.schema_version) + ", the model in " +
                                     std::to_string(now.schema_version()),
                                 id);
+    }
+    if (now.parent() != old.parent) {
+        // Objects do not move in the tree; only a hand-edited file could make this.
+        throw model::ModelError(model::ModelErrc::invalid_argument,
+                                "the object has another parent in the version", id);
     }
     editor.rename(id, std::move(old.name));
     editor.set_properties(id, std::move(old.properties));
@@ -559,7 +607,133 @@ command::CommandResult ProjectHistory::restore_object(command::CommandContext& c
     for (const ObjectId target_id : old.dependencies) {
         (void)editor.add_dependency(id, target_id);
     }
+}
+
+}  // namespace
+
+command::CommandResult ProjectHistory::restore_object(command::CommandContext& context) {
+    const ObjectId id = context.args().object("object");
+    const std::string& target = context.args().string("version");
+    const std::optional<Repository> repo = repository();
+    if (!repo) {
+        throw ProjectError(ProjectErrc::unknown_version, "the project has no versions yet");
+    }
+    const std::string version = repo->resolve(target);
+    const FolderBlobStore blobs(objects_folder(folder()));
+    std::optional<model::StoredObject> stored = read_object(repo->read(version).files, blobs, id);
+    if (!stored) {
+        throw model::ModelError(model::ModelErrc::unknown_object,
+                                "the version " + short_id(version) + " has no such object", id);
+    }
+    put_back(context.editor(), std::move(*stored));
     return command::Value(id);
+}
+
+command::CommandResult ProjectHistory::restore_objects(command::CommandContext& context) {
+    const command::Arguments& args = context.args();
+    const std::string& target = args.string("version");
+    std::vector<std::string> types;
+    if (args.has("types")) {
+        for (const command::Value& type : args.list("types")) {
+            types.push_back(type.as_string());
+        }
+    }
+    const std::vector<ObjectId> named =
+        args.has("objects") ? args.objects("objects") : std::vector<ObjectId>{};
+    if (types.empty() && named.empty()) {
+        throw model::ModelError(model::ModelErrc::invalid_argument,
+                                "name the types or the objects to restore");
+    }
+    const std::optional<Repository> repo = repository();
+    if (!repo) {
+        throw ProjectError(ProjectErrc::unknown_version, "the project has no versions yet");
+    }
+    const std::string version = repo->resolve(target);
+    const ProjectFiles files = repo->read(version).files;
+    const ProjectRecords records = read_project_records(files);
+    const model::Document& document = context.document();
+    model::DocumentEditor& editor = context.editor();
+
+    // "material" is every object of that type, "fem.model.structural/material" those of one owner.
+    const auto chosen = [&](ObjectId id, const std::string& object_owner, const std::string& type) {
+        if (std::find(named.begin(), named.end(), id) != named.end()) {
+            return true;
+        }
+        return std::any_of(types.begin(), types.end(), [&](const std::string& selector) {
+            return selector == type || selector == object_owner + '/' + type;
+        });
+    };
+    for (const ObjectId id : named) {
+        if (!document.contains(id) && !records.objects.contains(id)) {
+            throw model::ModelError(
+                model::ModelErrc::unknown_object,
+                "neither the model nor the version " + short_id(version) + " has the object", id);
+        }
+    }
+    std::vector<ObjectId> back;     // Removed since the version: brought back, parents first.
+    std::vector<ObjectId> changed;  // In both and different: made as in the version.
+    std::vector<ObjectId> added;    // Created since the version: removed, children first.
+    for (const auto& [id, record] : records.objects) {
+        const model::NewObject& init = record.object.init;
+        if (!chosen(id, init.owner, init.type)) {
+            continue;
+        }
+        if (!document.contains(id)) {
+            back.push_back(id);
+        } else if (!same_as(document.get(id), record)) {
+            changed.push_back(id);
+        }
+    }
+    for (const model::Object& object : document.objects()) {
+        if (!records.objects.contains(object.id()) &&
+            chosen(object.id(), object.owner(), object.type())) {
+            added.push_back(object.id());
+        }
+    }
+    std::sort(back.begin(), back.end());
+    std::sort(added.begin(), added.end());
+
+    const FolderBlobStore blobs(objects_folder(folder()));
+    const auto stored = [&](ObjectId id) {
+        std::optional<model::StoredObject> object = read_object(files, blobs, id);
+        return std::move(object.value());
+    };
+    // A parent is older than its children, so it has a smaller id and comes back first.
+    for (const ObjectId id : back) {
+        model::StoredObject object = stored(id);
+        const ObjectId parent = object.init.parent;
+        if (parent.is_valid() && !document.contains(parent)) {
+            throw model::ModelError(model::ModelErrc::unknown_object,
+                                    "the parent " + model::to_string(parent) +
+                                        " of the object is not in the model: restore it too",
+                                    id);
+        }
+        put_back(editor, std::move(object));
+    }
+    for (const ObjectId id : changed) {
+        put_back(editor, stored(id));
+    }
+    for (auto it = added.rbegin(); it != added.rend(); ++it) {
+        if (!document.contains(*it)) {
+            continue;  // Removed with its parent.
+        }
+        if (!editor.remove(*it).ok()) {
+            throw model::ModelError(model::ModelErrc::removal_blocked,
+                                    "the object was made after the version " + short_id(version) +
+                                        " and cannot be removed: a disabled module needs it",
+                                    *it);
+        }
+    }
+
+    std::vector<ObjectId> touched = back;
+    touched.insert(touched.end(), changed.begin(), changed.end());
+    touched.insert(touched.end(), added.begin(), added.end());
+    std::sort(touched.begin(), touched.end());
+    command::Value::List result;
+    for (const ObjectId id : touched) {
+        result.emplace_back(id);
+    }
+    return command::Value(std::move(result));
 }
 
 // --- For ProjectSession --------------------------------------------------------------------------

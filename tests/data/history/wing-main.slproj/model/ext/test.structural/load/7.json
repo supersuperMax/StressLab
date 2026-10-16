@@ -1,0 +1,14 @@
+{
+  "dependencies": [
+    2
+  ],
+  "id": 7,
+  "name": "cruise",
+  "owner": "test.structural",
+  "parent": null,
+  "properties": {
+    "magnitude": 0.02
+  },
+  "schemaVersion": 1,
+  "type": "load"
+}

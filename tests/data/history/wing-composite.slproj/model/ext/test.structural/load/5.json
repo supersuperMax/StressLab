@@ -1,0 +1,14 @@
+{
+  "dependencies": [
+    2
+  ],
+  "id": 5,
+  "name": "gust-1a",
+  "owner": "test.structural",
+  "parent": null,
+  "properties": {
+    "magnitude": 0.05
+  },
+  "schemaVersion": 1,
+  "type": "load"
+}

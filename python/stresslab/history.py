@@ -11,14 +11,18 @@ aside (docs/architecture.md §3.1, docs/interface-design.md §12)::
     stresslab.model.set_property(object=skin, key="thickness", value=3.0)
     history.commit("Thickness 3 mm")
     history.checkout("main")                          # back to the main variant
+    print(history.diff("main", "Composite skin"))     # "Section skin: Thickness 2 → 3 mm"
+    history.restore("main~2", types=["material"])     # only the materials, as two versions back
     history.restore_object(material, "main~2")        # one object as it was two versions back
     history.restore_version("main~2")                 # the whole model, as a new version
 
 Versions are named by their ids (40 hex digits, or the start of one), by a variant or a label,
 each optionally with ``~N``: N versions back. Actions are written to the session journal as these
-same calls, with the names as given; ``restore_object`` is the command
-``history.restore_object`` and one step of undo. Errors raise ``stresslab.ProjectError`` whose
-``code`` says what went wrong: "uncommitted_changes", "unknown_version", "detached"...
+same calls, with the names as given; ``restore_object`` and ``restore`` are the commands
+``history.restore_object`` and ``history.restore_objects``, each one step of undo. Comparing
+(``diff``) only reads the history and is not written to the journal. Errors raise
+``stresslab.ProjectError`` whose ``code`` says what went wrong: "uncommitted_changes",
+"unknown_version", "detached"...
 """
 
 from __future__ import annotations
@@ -32,6 +36,9 @@ import _stresslab
 _native = _stresslab.history
 
 __all__ = [
+    "Diff",
+    "ObjectChange",
+    "PropertyChange",
     "Version",
     "author",
     "branch",
@@ -39,12 +46,14 @@ __all__ = [
     "checkout",
     "commit",
     "current_branch",
+    "diff",
     "current_version",
     "has_changes",
     "info",
     "journal",
     "log",
     "resolve",
+    "restore",
     "restore_object",
     "restore_version",
     "set_author",
@@ -100,6 +109,86 @@ def _version(data: dict[str, Any]) -> Version:
     )
 
 
+@dataclass(frozen=True)
+class PropertyChange:
+    """A property of an object that differs between two versions."""
+
+    #: The path of the property, as forms and ``model.set_property`` name it: "solver/tolerance".
+    pointer: str
+    #: The value before; None if the property is new (``had_before`` tells it from a null value).
+    before: Any
+    after: Any
+    had_before: bool
+    has_after: bool
+
+
+@dataclass(frozen=True)
+class ObjectChange:
+    """An object that differs between two versions."""
+
+    id: int
+    #: "added", "removed" or "changed".
+    kind: str
+    owner: str
+    type: str
+    #: The name in the later version, or in the earlier one if the object was removed.
+    name: str
+    #: For a changed object: the properties that differ, by pointer.
+    properties: tuple[PropertyChange, ...]
+    #: Everything about the change as JSON: "renamed", "parent", "schemaVersion",
+    #: "dependencies", "data" of a changed object; all members of an added or removed one.
+    details: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Diff:
+    """How the model of one version differs from that of another, in the terms of the model."""
+
+    objects: tuple[ObjectChange, ...]
+    #: (before, after) if the units of the model changed: "mm-t-s-degC".
+    units: tuple[str, str] | None
+    #: The diff in words, a line per change, in the language of the application.
+    lines: tuple[str, ...]
+
+    @property
+    def empty(self) -> bool:
+        """True if the two models are the same."""
+        return not self.objects and self.units is None
+
+    def find(self, object: int | Any) -> ObjectChange | None:  # noqa: A002
+        """The change of an object (an id or an object with ``id``), or None."""
+        target = object if isinstance(object, int) else object.id
+        return next((change for change in self.objects if change.id == target), None)
+
+    def __str__(self) -> str:
+        return "; ".join(self.lines)
+
+
+def _object_change(data: dict[str, Any]) -> ObjectChange:
+    properties: tuple[PropertyChange, ...] = ()
+    if data["kind"] == "changed":
+        properties = tuple(
+            PropertyChange(
+                pointer=item["pointer"],
+                before=item.get("before"),
+                after=item.get("after"),
+                had_before="before" in item,
+                has_after="after" in item,
+            )
+            for item in data.get("properties", [])
+        )
+    common = ("id", "kind", "owner", "type", "name")
+    return ObjectChange(
+        id=data["id"],
+        kind=data["kind"],
+        owner=data["owner"],
+        type=data["type"],
+        name=data["name"],
+        properties=properties,
+        details={key: value for key, value in data.items() if key not in common},
+    )
+
+
 def current_branch() -> str | None:
     """The variant the next version goes to; None while a version is viewed on its own."""
     return _native.current_branch()
@@ -150,6 +239,18 @@ def tags() -> dict[str, str]:
 def stashes() -> list[Version]:
     """Changes put aside, newest first."""
     return [_version(data) for data in _native.stashes()]
+
+
+def diff(before: str, after: str | None = None) -> Diff:
+    """How the model of `after` differs from that of `before`; without `after`, the model now with
+    its changes not in the history yet. Versions are named as in ``resolve``."""
+    data = _native.diff(before, after)
+    units = data.get("units")
+    return Diff(
+        objects=tuple(_object_change(item) for item in data["objects"]),
+        units=(units["before"], units["after"]) if units else None,
+        lines=tuple(data["lines"]),
+    )
 
 
 def commit(message: str) -> str:
@@ -205,6 +306,26 @@ def restore_object(object: int | Any, version: str) -> int:  # noqa: A002 - the 
 
     target = object if isinstance(object, int) else object.id
     return cmd("history.restore_object", object=target, version=version)
+
+
+def restore(
+    version: str,
+    *,
+    types: list[str] | None = None,
+    objects: list[int | Any] | None = None,
+) -> list[int]:
+    """A part of the model as it was in `version`: the objects of `types` ("material", or
+    "owner/material" for those of one module) and the `objects` named. Changed ones get back what
+    they had, removed ones come back with their ids, ones made since are removed; the rest of the
+    model stays. One step of undo. Returns the ids of the objects it changed."""
+    from . import cmd
+
+    arguments: dict[str, Any] = {"version": version}
+    if types is not None:
+        arguments["types"] = list(types)
+    if objects is not None:
+        arguments["objects"] = [item if isinstance(item, int) else item.id for item in objects]
+    return cmd("history.restore_objects", **arguments)
 
 
 def set_author(name: str, email: str) -> None:

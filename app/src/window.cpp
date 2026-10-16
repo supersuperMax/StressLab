@@ -150,7 +150,7 @@ int run_window(Environment environment, const std::optional<std::filesystem::pat
     try {
         python.emplace();
         python->attach(application.bus(), application.keys(), &application.extensions(),
-                       &application.project());
+                       &application.project(), &application.localization());
         console = std::make_unique<PythonConsoleEngine>();
     } catch (const std::exception& error) {
         log->error("the Python console is not available: {}", error.what());

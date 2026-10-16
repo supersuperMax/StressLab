@@ -1,0 +1,24 @@
+{
+  "dependencies": [
+    3
+  ],
+  "id": 4,
+  "name": "skin-upper",
+  "owner": "test.structural",
+  "parent": null,
+  "properties": {
+    "integration": {
+      "points": 5,
+      "rule": "simpson"
+    },
+    "kind": "shell",
+    "note": "draft",
+    "offsets": [
+      0.0,
+      1.0
+    ],
+    "thickness": 2.0
+  },
+  "schemaVersion": 1,
+  "type": "section"
+}

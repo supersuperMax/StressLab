@@ -114,13 +114,15 @@ Session& Session::instance() {
 }
 
 void Session::attach(command::CommandBus& bus, context::ContextKeys& keys,
-                     extension::ExtensionManager* extensions, storage::ProjectSession* project) {
+                     extension::ExtensionManager* extensions, storage::ProjectSession* project,
+                     const l10n::Localization* localization) {
     detach();
     core_keys_.reset();
     resources_.release_all();
     attached_ = DocumentHandle::borrow(bus, project);
     attached_keys_ = &keys;
     attached_extensions_ = extensions;
+    attached_localization_ = localization;
     active_ = attached_;
 }
 
@@ -136,6 +138,7 @@ void Session::detach() noexcept {
     attached_.reset();
     attached_keys_ = nullptr;
     attached_extensions_ = nullptr;
+    attached_localization_ = nullptr;
 }
 
 void Session::shutdown() noexcept {
@@ -201,6 +204,20 @@ extension::ExtensionManager& Session::extensions() {
             "stresslab --headless run-script, or in the Python console of the window");
     }
     return *attached_extensions_;
+}
+
+const extension::ContributionRegistry* Session::registry() const noexcept {
+    return attached_extensions_ != nullptr ? &attached_extensions_->registry() : nullptr;
+}
+
+const l10n::Localization& Session::localization() {
+    if (attached_localization_ != nullptr) {
+        return *attached_localization_;
+    }
+    if (own_localization_ == nullptr) {
+        own_localization_ = std::make_unique<l10n::Localization>();
+    }
+    return *own_localization_;
 }
 
 void Session::bind_core_keys() {

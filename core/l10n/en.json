@@ -12,6 +12,55 @@
     "app.unknownCommand": "Unknown command “{command}”: --headless knows run-script.",
     "app.unknownOption": "Unknown option “{option}”.",
     "app.usage": "Usage:\n  {program} [<folder.slproj>]\n      opens the window, with the project of the folder if given\n  {program} --python [arguments of python]\n      runs the embedded Python with the stresslab module attached to a new document: -m module, -c code, a script or the interactive prompt\n  {program} --headless [options] run-script <file.py> [arguments of the script]\n      runs a script without the window: loads the modules, runs the script on a new document, writes the log to the standard output\n      --extensions <folder>   installs the modules in the subfolders of the folder; may repeat\n      --profile <file>        enables the modules of the profile; without it all installed modules are enabled\n      --journal <file.slpy>   writes the journal of the session\n      --log-level <level>     trace, debug, info, warning, error, critical or off; without it the setting log.level\n      --log-file <file>       also writes the log to the file\n      exit code: 0 success, n after sys.exit(n), 1 an error in the script, 2 a wrong command line\n  {program} --version\n      prints the version",
+    "diff.absent": "—",
+    "diff.added": "Added: {object}",
+    "diff.changed": "{object}: {changes}",
+    "diff.data.added": "data added",
+    "diff.data.changed": "data changed",
+    "diff.data.removed": "data removed",
+    "diff.data.size": {
+      "one": "{before} → {count} item",
+      "other": "{before} → {count} items"
+    },
+    "diff.dependencyAdded": "now depends on {object}",
+    "diff.dependencyRemoved": "no longer depends on {object}",
+    "diff.elementSet.size": {
+      "one": "{before} → {count} element",
+      "other": "{before} → {count} elements"
+    },
+    "diff.false": "no",
+    "diff.field": "{field} {before} → {after}",
+    "diff.field.unit": "{field} {before} → {after} {unit}",
+    "diff.field.units": "{field} {before} {unitBefore} → {after} {unitAfter}",
+    "diff.mesh.elements": {
+      "one": "rebuilt ({before} → {count} element)",
+      "other": "rebuilt ({before} → {count} elements)"
+    },
+    "diff.mesh.nodes": {
+      "one": "rebuilt ({before} → {count} node)",
+      "other": "rebuilt ({before} → {count} nodes)"
+    },
+    "diff.mesh.same": "rebuilt (the same number of nodes and elements)",
+    "diff.nodeSet.size": {
+      "one": "{before} → {count} node",
+      "other": "{before} → {count} nodes"
+    },
+    "diff.object": "{type} {name}",
+    "diff.object.unnamed": "{type} #{id}",
+    "diff.parent": "parent {before} → {after}",
+    "diff.raw": "{object} (module {module} is not enabled): {before} → {after}",
+    "diff.raw.added": "Added: {object} (module {module} is not enabled) {after}",
+    "diff.raw.removed": "Removed: {object} (module {module} is not enabled) {before}",
+    "diff.removed": "Removed: {object}",
+    "diff.renamed": "name {before} → {after}",
+    "diff.schemaVersion": "schema version {before} → {after}",
+    "diff.surface.size": {
+      "one": "{before} → {count} face",
+      "other": "{before} → {count} faces"
+    },
+    "diff.true": "yes",
+    "diff.type": "type {before} → {after}",
+    "diff.units": "Units: {before} → {after}",
     "extension.crashed": "Module “{module}” stopped working and was restarted. The model is intact: the command it was running is cancelled.",
     "extension.gaveUp": {
       "one": "Module “{module}” stopped working {count} time in a row and is not restarted any more. The model is intact. Disable and enable the module to try again.",
@@ -35,6 +84,10 @@
     "form.type.number": "a number",
     "form.type.path": "a path",
     "form.type.string": "text",
+    "model.type.element_set": "Element set",
+    "model.type.mesh": "Mesh",
+    "model.type.node_set": "Node set",
+    "model.type.surface": "Surface",
     "quantity.acceleration": "acceleration",
     "quantity.angle": "angle",
     "quantity.area": "area",

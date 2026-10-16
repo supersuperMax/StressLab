@@ -5,6 +5,8 @@
 #include "fem/core/model/object_id.h"
 #include "fem/storage/blob_store.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -69,6 +71,31 @@ struct LoadedProject {
 /// of the garbage collection. Reads `project.json` first, so that a project of another format,
 /// whose blocks may be laid out otherwise, is not cleaned. Throws as `read_project` does.
 [[nodiscard]] std::vector<std::string> read_blob_roots(const ProjectFiles& files);
+
+/// An object as its file describes it, without decoding its bulk data.
+struct ObjectRecord {
+    /// The object; `init.data` is null.
+    model::StoredObject object;
+    /// What the file says about the data (`describe_object_data`); null without data.
+    nlohmann::json data;
+    /// The block of the data in refs/blobs.json; empty without data.
+    std::string blob;
+    /// The file of the object.
+    std::string file;
+};
+
+/// A project as its files describe it, with no block read: what a diff of versions compares
+/// (task 2.4).
+struct ProjectRecords {
+    model::UnitSystem units{};
+    ModuleVersions modules;
+    std::uint64_t next_id = 1;
+    std::map<model::ObjectId, ObjectRecord> objects;
+};
+
+/// The records of the files, checked as `read_project` checks them except that the data is not
+/// decoded (so a data description is not compared with its block). Throws as `read_project` does.
+[[nodiscard]] ProjectRecords read_project_records(const ProjectFiles& files);
 
 /// One object of the files, found by its id, with its bulk data; none if the files do not have it.
 /// Only that object is read and only its data is decoded (restoring one object from an older

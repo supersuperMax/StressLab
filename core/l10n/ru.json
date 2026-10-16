@@ -12,6 +12,67 @@
     "app.unknownCommand": "Неизвестная команда «{command}»: --headless знает run-script.",
     "app.unknownOption": "Неизвестный параметр «{option}».",
     "app.usage": "Использование:\n  {program} [<папка.slproj>]\n      открывает окно, с проектом из папки, если она указана\n  {program} --python [аргументы python]\n      запускает встроенный Python с модулем stresslab, подключённым к новому документу: -m модуль, -c код, скрипт или интерактивный режим\n  {program} --headless [параметры] run-script <файл.py> [аргументы скрипта]\n      выполняет скрипт без окна: загружает модули, выполняет скрипт на новом документе, пишет лог в стандартный вывод\n      --extensions <папка>    ставит модули из подпапок папки; можно несколько раз\n      --profile <файл>        включает модули профиля; без него включаются все установленные модули\n      --journal <файл.slpy>   пишет журнал сессии\n      --log-level <уровень>   trace, debug, info, warning, error, critical или off; без него — настройка log.level\n      --log-file <файл>       пишет лог ещё и в файл\n      код возврата: 0 — успех, n — после sys.exit(n), 1 — ошибка в скрипте, 2 — неверная командная строка\n  {program} --version\n      выводит версию",
+    "diff.absent": "—",
+    "diff.added": "Добавлено: {object}",
+    "diff.changed": "{object}: {changes}",
+    "diff.data.added": "данные добавлены",
+    "diff.data.changed": "данные изменены",
+    "diff.data.removed": "данные удалены",
+    "diff.data.size": {
+      "few": "{before} → {count} записи",
+      "many": "{before} → {count} записей",
+      "one": "{before} → {count} запись",
+      "other": "{before} → {count} записи"
+    },
+    "diff.dependencyAdded": "теперь зависит от: {object}",
+    "diff.dependencyRemoved": "больше не зависит от: {object}",
+    "diff.elementSet.size": {
+      "few": "{before} → {count} элемента",
+      "many": "{before} → {count} элементов",
+      "one": "{before} → {count} элемент",
+      "other": "{before} → {count} элемента"
+    },
+    "diff.false": "нет",
+    "diff.field": "{field} {before} → {after}",
+    "diff.field.unit": "{field} {before} → {after} {unit}",
+    "diff.field.units": "{field} {before} {unitBefore} → {after} {unitAfter}",
+    "diff.mesh.elements": {
+      "few": "перестроена ({before} → {count} элемента)",
+      "many": "перестроена ({before} → {count} элементов)",
+      "one": "перестроена ({before} → {count} элемент)",
+      "other": "перестроена ({before} → {count} элемента)"
+    },
+    "diff.mesh.nodes": {
+      "few": "перестроена ({before} → {count} узла)",
+      "many": "перестроена ({before} → {count} узлов)",
+      "one": "перестроена ({before} → {count} узел)",
+      "other": "перестроена ({before} → {count} узла)"
+    },
+    "diff.mesh.same": "перестроена (число узлов и элементов то же)",
+    "diff.nodeSet.size": {
+      "few": "{before} → {count} узла",
+      "many": "{before} → {count} узлов",
+      "one": "{before} → {count} узел",
+      "other": "{before} → {count} узла"
+    },
+    "diff.object": "{type} {name}",
+    "diff.object.unnamed": "{type} #{id}",
+    "diff.parent": "родитель {before} → {after}",
+    "diff.raw": "{object} (модуль {module} не включён): {before} → {after}",
+    "diff.raw.added": "Добавлено: {object} (модуль {module} не включён) {after}",
+    "diff.raw.removed": "Удалено: {object} (модуль {module} не включён) {before}",
+    "diff.removed": "Удалено: {object}",
+    "diff.renamed": "имя {before} → {after}",
+    "diff.schemaVersion": "версия схемы {before} → {after}",
+    "diff.surface.size": {
+      "few": "{before} → {count} грани",
+      "many": "{before} → {count} граней",
+      "one": "{before} → {count} грань",
+      "other": "{before} → {count} грани"
+    },
+    "diff.true": "да",
+    "diff.type": "тип {before} → {after}",
+    "diff.units": "Единицы: {before} → {after}",
     "extension.crashed": "Модуль «{module}» аварийно завершился и перезапущен. Модель не пострадала: выполнявшаяся команда отменена.",
     "extension.gaveUp": {
       "few": "Модуль «{module}» аварийно завершился {count} раза подряд и больше не перезапускается. Модель не пострадала. Чтобы попробовать снова, выключите и включите модуль.",
@@ -37,6 +98,10 @@
     "form.type.number": "числом",
     "form.type.path": "путём к файлу",
     "form.type.string": "текстом",
+    "model.type.element_set": "Набор элементов",
+    "model.type.mesh": "Сетка",
+    "model.type.node_set": "Набор узлов",
+    "model.type.surface": "Поверхность",
     "quantity.acceleration": "ускорение",
     "quantity.angle": "угол",
     "quantity.area": "площадь",

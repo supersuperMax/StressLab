@@ -1,0 +1,174 @@
+{
+  "objects": [
+    {
+      "data": {
+        "after": {
+          "elements": 61007,
+          "kind": "mesh",
+          "nodes": 12011
+        },
+        "before": {
+          "elements": 48312,
+          "kind": "mesh",
+          "nodes": 9504
+        }
+      },
+      "id": 1,
+      "kind": "changed",
+      "name": "main",
+      "owner": "fem.core",
+      "type": "mesh"
+    },
+    {
+      "data": {
+        "after": {
+          "kind": "node_set",
+          "size": 52
+        },
+        "before": {
+          "kind": "node_set",
+          "size": 40
+        }
+      },
+      "id": 2,
+      "kind": "changed",
+      "name": "root",
+      "owner": "fem.core",
+      "type": "node_set"
+    },
+    {
+      "id": 3,
+      "kind": "changed",
+      "name": "Д16Т",
+      "owner": "test.structural",
+      "properties": [
+        {
+          "after": 71000.0,
+          "before": 72000.0,
+          "pointer": "E"
+        }
+      ],
+      "type": "material"
+    },
+    {
+      "dependencies": {
+        "added": [
+          8
+        ],
+        "removed": [
+          3
+        ]
+      },
+      "id": 4,
+      "kind": "changed",
+      "name": "skin-upper",
+      "owner": "test.structural",
+      "properties": [
+        {
+          "after": 7,
+          "before": 5,
+          "pointer": "integration/points"
+        },
+        {
+          "after": "composite",
+          "before": "shell",
+          "pointer": "kind"
+        },
+        {
+          "before": "draft",
+          "pointer": "note"
+        },
+        {
+          "after": [
+            0.0,
+            1.5
+          ],
+          "before": [
+            0.0,
+            1.0
+          ],
+          "pointer": "offsets"
+        },
+        {
+          "after": 4,
+          "pointer": "plies"
+        },
+        {
+          "after": 3.0,
+          "before": 2.0,
+          "pointer": "thickness"
+        }
+      ],
+      "type": "section"
+    },
+    {
+      "id": 5,
+      "kind": "changed",
+      "name": "gust-1a",
+      "owner": "test.structural",
+      "renamed": {
+        "after": "gust-1a",
+        "before": "gust-1"
+      },
+      "type": "load"
+    },
+    {
+      "id": 6,
+      "kind": "changed",
+      "name": "d1",
+      "owner": "fem.dynamics",
+      "properties": [
+        {
+          "after": 12.0,
+          "before": 10.0,
+          "pointer": "c"
+        }
+      ],
+      "type": "damper"
+    },
+    {
+      "dependencies": [
+        2
+      ],
+      "id": 7,
+      "kind": "removed",
+      "name": "cruise",
+      "owner": "test.structural",
+      "parent": null,
+      "properties": {
+        "magnitude": 0.02
+      },
+      "schemaVersion": 1,
+      "type": "load"
+    },
+    {
+      "dependencies": [],
+      "id": 8,
+      "kind": "added",
+      "name": "КМ-1",
+      "owner": "test.structural",
+      "parent": null,
+      "properties": {
+        "E": 60000.0,
+        "nu": 0.3
+      },
+      "schemaVersion": 1,
+      "type": "material"
+    },
+    {
+      "dependencies": [
+        2
+      ],
+      "id": 9,
+      "kind": "added",
+      "name": "gust-2",
+      "owner": "test.structural",
+      "parent": null,
+      "properties": {
+        "magnitude": 0.08
+      },
+      "schemaVersion": 1,
+      "type": "load"
+    }
+  ]
+}

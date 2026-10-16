@@ -1,0 +1,15 @@
+{
+  "data": {
+    "elements": 48312,
+    "kind": "mesh",
+    "nodes": 9504
+  },
+  "dependencies": [],
+  "id": 1,
+  "name": "main",
+  "owner": "fem.core",
+  "parent": null,
+  "properties": {},
+  "schemaVersion": 1,
+  "type": "mesh"
+}

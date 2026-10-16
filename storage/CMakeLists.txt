@@ -1,4 +1,4 @@
-# Project folder (.slproj), deterministic JSON, blob store and history (tasks 2.1-2.3 of
+# Project folder (.slproj), deterministic JSON, blob store, history and diffs (tasks 2.1-2.4 of
 # docs/plan.md). Must build without Qt GUI and VTK (CLAUDE.md, rule 2).
 add_library(femstorage)
 add_library(fem::storage ALIAS femstorage)
@@ -7,6 +7,7 @@ target_sources(
     femstorage
     PRIVATE src/blob_store.cpp
             src/chunking.cpp
+            src/diff.cpp
             src/error.cpp
             src/garbage.cpp
             src/history.cpp

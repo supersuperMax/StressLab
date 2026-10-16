@@ -117,15 +117,25 @@ TEST_F(RestoreTest, MeshAndItsSetComeBackWithTheirData) {
     EXPECT_EQ(children_of(doc, mesh), std::vector<ObjectId>{set});
 }
 
-TEST_F(RestoreTest, OnlyRemovedObjectsWithIssuedIdsCanBeRestored) {
+TEST_F(RestoreTest, OnlyObjectsThatAreNotThereCanBeRestored) {
     const ObjectId a = edit.create(module_object(module_a, "item", "a"));
     StoredObject present = stored_copy(doc, a);
     EXPECT_MODEL_ERROR(edit.restore(present), ModelErrc::invalid_argument);
-
-    StoredObject never{ObjectId(doc.next_id()), module_object(module_a, "item", "x")};
-    EXPECT_MODEL_ERROR(edit.restore(never), ModelErrc::invalid_argument);
     StoredObject zero{ObjectId{}, module_object(module_a, "item", "x")};
     EXPECT_MODEL_ERROR(edit.restore(zero), ModelErrc::invalid_argument);
+}
+
+TEST_F(RestoreTest, ObjectOfAnotherVariantTakesItsId) {
+    // Made on another variant after this model branched off: this document never issued its id.
+    const ObjectId other(doc.next_id() + 2);
+    edit.restore(StoredObject{other, module_object(module_a, "item", "gust-2")});
+
+    EXPECT_EQ(doc.find_child({}, "item", "gust-2"), other);
+    EXPECT_EQ(doc.next_id(), other.value() + 1);
+    // Like an id `create` took, it is not issued again after undo.
+    ASSERT_TRUE(edit.bus().undo());
+    EXPECT_FALSE(doc.contains(other));
+    EXPECT_GT(edit.create(module_object(module_a, "item", "new")), other);
 }
 
 TEST_F(RestoreTest, ItIsCheckedAsCreateIs) {
