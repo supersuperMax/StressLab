@@ -16,9 +16,10 @@ namespace fem::storage {
 /// was opened or saved (task 2.1). The window (Ctrl/Cmd+S, autosave), `stresslab.project` in
 /// Python and the headless runs use it alike.
 ///
-/// Opening, saving and closing are written to the journal as `stresslab.project.open("...")`,
-/// `stresslab.project.save()`, `stresslab.project.save_as("...")` and `stresslab.project.close()`,
-/// so a journal replays them; `autosave` is not. Like the bus, it is used from one thread.
+/// Opening, saving, cleaning and closing are written to the journal as
+/// `stresslab.project.open("...")`, `stresslab.project.save()`, `stresslab.project.save_as("...")`,
+/// `stresslab.project.clean()` and `stresslab.project.close()`, so a journal replays them;
+/// `autosave` is not. Like the bus, it is used from one thread.
 class ProjectSession {
 public:
     /// The version of an installed module by its id, "" if it is not installed.
@@ -54,6 +55,12 @@ public:
     /// Saves if there is a folder and the model changed, and the bus is idle; true if it saved.
     /// Not written to the journal. Throws as `save` does.
     bool autosave();
+    /// "Clean project": removes the blocks of the project folder that the saved project does not
+    /// refer to (`clean_project`). The document and `is_modified` do not change: unsaved data
+    /// goes to the store on the next save. Throws ProjectError(no_folder) for a project never
+    /// saved, the ProjectErrors of `clean_project` and CommandError(invalid_state) inside a
+    /// command or a transaction.
+    CleanStats clean();
     /// A new empty document in place of this one, without a folder. Throws
     /// CommandError(invalid_state) inside a command or a transaction.
     void close();

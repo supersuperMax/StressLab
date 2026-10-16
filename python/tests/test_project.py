@@ -73,7 +73,7 @@ def test_save_as_then_open_gives_the_same_model(
     assert (target / "project.json").is_file()
     assert (target / "refs" / "blobs.json").is_file()
     project = json.loads((target / "project.json").read_text(encoding="utf-8"))
-    assert project["format"] == 1
+    assert project["format"] == 2
     assert sorted(project["modules"]) == ["fem.core", TEST_OWNER]
 
     stresslab.cmd("model.create", type="part", owner=TEST_OWNER, name="лишняя")
@@ -139,3 +139,50 @@ def test_the_cause_of_the_change_is_load(doc: stresslab.Document, folder: Path) 
     with doc.on_model_changed(lambda change: causes.append(change.cause)):
         stresslab.project.open(folder / "p.slproj")
     assert causes == ["load"]
+
+
+def test_clean_removes_the_data_of_earlier_saves(
+    doc: stresslab.Document, folder: Path, journal: list[str]
+) -> None:
+    """Task 2.2: the blocks of a mesh saved before go, those of the saved project stay."""
+    import numpy as np
+
+    count = 20000
+    xs = np.linspace(0.0, 1.0, count)
+
+    def make(ctx: stresslab.CommandContext) -> int:
+        mesh = stresslab.Mesh(np.arange(1, count + 1), xs, xs * 2.0, xs * 3.0)
+        return ctx.create_object("mesh", "fem.core", name="сетка", data=mesh).id
+
+    def move(ctx: stresslab.CommandContext) -> None:
+        moved = xs.copy()
+        moved[:100] += 0.5
+        ctx.set_data(mesh, stresslab.Mesh(np.arange(1, count + 1), moved, xs * 2.0, xs * 3.0))
+
+    doc.register_command("test.big_mesh", make, owner=TEST_OWNER)
+    doc.register_command("test.move_nodes", move, owner=TEST_OWNER)
+    mesh = stresslab.cmd("test.big_mesh")
+    stresslab.project.save_as(folder / "p")
+    stresslab.cmd("test.move_nodes")
+    stresslab.project.save()
+    journal.clear()
+
+    result = stresslab.project.clean()
+    assert set(result) == {"removed", "freed_bytes", "kept", "kept_bytes"}
+    assert result["removed"] > 0
+    assert result["freed_bytes"] > 0
+    assert result["kept"] > 0
+    assert journal == ["stresslab.project.clean()"]
+    assert stresslab.project.clean()["removed"] == 0
+
+    before = snapshot(doc)
+    stresslab.project.open(folder / "p.slproj")
+    assert snapshot(doc) == before
+    x = doc.objects()[0].data.x
+    assert x[0] == 0.5 and x[100] == xs[100]
+
+
+def test_clean_without_a_folder(doc: stresslab.Document) -> None:
+    with pytest.raises(stresslab.ProjectError) as error:
+        stresslab.project.clean()
+    assert error.value.code == "no_folder"

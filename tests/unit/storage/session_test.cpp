@@ -8,6 +8,7 @@
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -184,6 +185,40 @@ TEST_F(StorageSession, InvalidModelNamesTheFile) {
     // Nothing changed.
     EXPECT_EQ(doc.document.size(), 2U);
     EXPECT_TRUE(session.is_modified());
+}
+
+TEST_F(StorageSession, CleanRemovesTheDataOfEarlierSaves) {
+    EXPECT_EQ(project_error([&] { (void)session.clean(); }).code(), ProjectErrc::no_folder);
+
+    GridMesh grid(30, 30, 10);
+    const ObjectId mesh = doc.edit.create(model::mesh_object("mesh", grid.make()));
+    session.save_as(dir.path() / "p.slproj");
+    grid.move_nodes(0, 100);
+    doc.edit.set_data(mesh, grid.make());
+    session.save();
+    grid.move_nodes(0, 100);
+    doc.edit.set_data(mesh, grid.make());  // Not saved: the folder still has the second mesh.
+    take_journal();
+    const int notices = changes;
+
+    const CleanStats stats = session.clean();
+    EXPECT_GT(stats.removed, 0U);  // The pieces of the first mesh that the second did not keep.
+    EXPECT_GT(stats.kept, 1U);
+    EXPECT_EQ(take_journal(), std::vector<std::string>{"stresslab.project.clean()"});
+    EXPECT_TRUE(session.is_modified());
+    EXPECT_EQ(changes, notices);
+
+    session.save();
+    session.open(dir.path() / "p.slproj");
+    const auto back = std::dynamic_pointer_cast<const model::Mesh>(doc.document.get(mesh).data());
+    ASSERT_NE(back, nullptr);
+    EXPECT_TRUE(std::equal(back->x().begin(), back->x().end(), grid.nodes.x.begin()));
+
+    {
+        auto transaction = doc.bus().begin_transaction("half done");
+        EXPECT_THROW((void)session.clean(), command::CommandError);
+        transaction.commit();
+    }
 }
 
 }  // namespace

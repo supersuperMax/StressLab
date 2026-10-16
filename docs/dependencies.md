@@ -22,6 +22,7 @@
 | Qt Test (qtbase, фича `testlib`) | 6.11.1 | LGPL-3.0-only | vcpkg, фича `gui`, только тесты | `tests/unit/shell/` (с задачи 1.11; клики и клавиши `QTest` — с 1.12) |
 | D-Bus (libdbus) | 1.16.2 | AFL-2.1 OR GPL-2.0-or-later (используем AFL-2.1) | vcpkg, через фичу `dbus` qtbase, только Linux | Qt узнаёт светлую или тёмную тему системы через xdg-desktop-portal (с задачи 1.11) |
 | Qt Advanced Docking System | 4.5.0 | LGPL-2.1-only | vcpkg (порт `qt-advanced-docking-system`), фича `gui` | `shell/` (окно с задачи 1.11) |
+| zstd | 1.5.7 | BSD-3-Clause (двойная лицензия BSD-3-Clause или GPL-2.0-only; используем BSD-3-Clause) | vcpkg (на Windows — `zstd.dll`), линкуется к `femstorage` закрыто (`PRIVATE`), в публичных заголовках не видна | сжатие блоков в `.fem/objects`: `storage/src/zstd_codec.cpp` (с задачи 2.2) |
 
 ## Инструменты разработки (в продукт не входят)
 
@@ -53,8 +54,7 @@
 | Python | PSF-2.0 | встроенный интерпретатор 3.12 | 1.8 |
 | nanobind | BSD-3-Clause | vcpkg | 1.8 |
 | numpy | BSD-3-Clause | pip, в site-packages дистрибутива | 1.8 |
-| HDF5 | BSD-3-Clause (вариант HDF Group) | vcpkg | 2.2 |
-| zstd | BSD-3-Clause | vcpkg | 2.2 |
+| HDF5 | BSD-3-Clause (вариант HDF Group) | vcpkg | кэш результатов и экспорт (2.5 и позже); в блоках хранилища не используется (ADR 0018) |
 | libgit2 | GPL-2.0 с linking exception | vcpkg | 2.3 |
 | Eigen | MPL-2.0 | vcpkg, header-only | по необходимости |
 | VTK 9 | BSD-3-Clause | vcpkg, фича `gui` | 3.7 |

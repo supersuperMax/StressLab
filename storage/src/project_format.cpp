@@ -15,6 +15,7 @@
 #include <optional>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace fem::storage {
 
@@ -181,6 +182,14 @@ void read_project_file(const ProjectFiles& files, LoadedProject& project) {
                                std::to_string(project_format_version),
                            members.file());
     }
+    if (format.get<std::int64_t>() == 1) {
+        // Format 1 (task 2.1) kept bulk data uncompressed and whole; nobody but its developers
+        // had projects in it, so it is not read (docs/adr/0018-blob-store.md).
+        throw ProjectError(ProjectErrc::unsupported_format,
+                           "the project has format 1 of an early development version, which "
+                           "this version does not read",
+                           members.file());
+    }
     if (format.get<std::int64_t>() != project_format_version) {
         members.fail("unknown format " + format.dump());
     }
@@ -294,10 +303,9 @@ private:
         if (const auto it = decoded_.find(ref); it != decoded_.end()) {
             return it->second;
         }
-        const Bytes bytes = blobs_.get(ref);
         std::shared_ptr<const model::ObjectData> data;
         try {
-            data = decode_object_data(bytes);
+            data = get_object_data(ref, blobs_);
         } catch (const ProjectError& error) {
             throw ProjectError(error.code(), ref + ": " + error.what());
         }
@@ -336,6 +344,8 @@ ProjectFiles write_project(const model::Document& document, const ModuleVersions
                            BlobStore& blobs) {
     ProjectFiles files;
     Json refs = Json::object();
+    // Objects that share their data (as after loading) store it once.
+    std::map<const model::ObjectData*, std::string> stored;
     for (const model::Object& object : document.objects()) {
         const std::string path = object_file(object.owner(), object.type(), object.id());
         Json value = {
@@ -355,7 +365,11 @@ ProjectFiles write_project(const model::Document& document, const ModuleVersions
         if (const auto& data = object.data()) {
             try {
                 value["data"] = describe_object_data(*data);
-                refs[std::to_string(object.id().value())] = blobs.put(encode_object_data(*data));
+                auto [it, added] = stored.try_emplace(data.get());
+                if (added) {
+                    it->second = put_object_data(*data, blobs);
+                }
+                refs[std::to_string(object.id().value())] = it->second;
             } catch (const ProjectError& error) {
                 if (!error.file().empty()) {
                     throw;
@@ -385,6 +399,18 @@ ProjectFiles write_project(const model::Document& document, const ModuleVersions
     };
     files.emplace(project_file, canonical(project, std::string(project_file)));
     return files;
+}
+
+std::vector<std::string> read_blob_roots(const ProjectFiles& files) {
+    LoadedProject project;
+    read_project_file(files, project);
+    std::vector<std::string> roots;
+    for (auto& [id, ref] : read_blob_refs(files)) {
+        roots.push_back(std::move(ref));
+    }
+    std::sort(roots.begin(), roots.end());
+    roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
+    return roots;
 }
 
 LoadedProject read_project(const ProjectFiles& files, const BlobStore& blobs) {

@@ -9,6 +9,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // The files of a project folder (docs/architecture.md §3.1, docs/adr/0017-project-folder.md),
 // made from a document and read back into one, in memory: the folder itself is `project.h`.
@@ -22,7 +23,8 @@
 namespace fem::storage {
 
 /// The version of the layout and of the files; a project of a later version is not opened.
-inline constexpr std::int64_t project_format_version = 1;
+/// 2 since task 2.2: bulk data in pieces with zstd (docs/adr/0018-blob-store.md).
+inline constexpr std::int64_t project_format_version = 2;
 
 inline constexpr std::string_view project_file = "project.json";
 inline constexpr std::string_view blob_refs_file = "refs/blobs.json";
@@ -61,5 +63,10 @@ struct LoadedProject {
 /// unsupported_format for a later format, invalid_file with the file and line, and what `blobs`
 /// throws.
 [[nodiscard]] LoadedProject read_project(const ProjectFiles& files, const BlobStore& blobs);
+
+/// The blocks the files refer to (the values of `refs/blobs.json`), sorted, each once: the roots
+/// of the garbage collection. Reads `project.json` first, so that a project of another format,
+/// whose blocks may be laid out otherwise, is not cleaned. Throws as `read_project` does.
+[[nodiscard]] std::vector<std::string> read_blob_roots(const ProjectFiles& files);
 
 }  // namespace fem::storage

@@ -6,8 +6,10 @@
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace fem::storage {
 namespace {
@@ -70,6 +72,7 @@ TEST(StorageBlobs, MemoryStoreKeepsEachContentOnce) {
     const std::string ref = store.put(bytes_of("mesh"));
     EXPECT_EQ(store.put(bytes_of("mesh")), ref);
     EXPECT_EQ(store.size(), 1U);
+    EXPECT_EQ(store.bytes(), 4U);
     EXPECT_TRUE(store.contains(ref));
     const Bytes back = store.get(ref);
     EXPECT_EQ(std::string(reinterpret_cast<const char*>(back.data()), back.size()), "mesh");
@@ -89,7 +92,10 @@ TEST(StorageBlobs, FolderStoreLaysOutBlocksByHash) {
                           "7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
     EXPECT_EQ(store.file_of(ref), file);
     EXPECT_TRUE(fs::is_regular_file(file));
-    EXPECT_EQ(io::read_file(file), "abc");
+    // A zstd frame of the contents; the hash is that of the contents, not of the file.
+    const std::string frame = io::read_file(file).value();
+    ASSERT_GE(frame.size(), 4U);
+    EXPECT_EQ(frame.substr(0, 4), "\x28\xb5\x2f\xfd");
 
     // The same contents again do not touch the file.
     const auto written = fs::last_write_time(file);
@@ -97,23 +103,50 @@ TEST(StorageBlobs, FolderStoreLaysOutBlocksByHash) {
     EXPECT_EQ(fs::last_write_time(file), written);
 
     const Bytes back = store.get(ref);
-    EXPECT_EQ(back.size(), 3U);
+    EXPECT_EQ(std::string(reinterpret_cast<const char*>(back.data()), back.size()), "abc");
     EXPECT_TRUE(store.contains(ref));
     EXPECT_FALSE(store.contains(blob_ref(bytes_of("abd"))));
     EXPECT_FALSE(store.contains("not a ref"));
+}
+
+TEST(StorageBlobs, FolderStoreCompresses) {
+    TempDir dir("blobs-compressed");
+    FolderBlobStore store(dir.path());
+    std::string text;
+    for (int i = 0; i < 10000; ++i) {
+        text += "node " + std::to_string(i % 100) + "\n";
+    }
+    const std::string ref = store.put(bytes_of(text));
+    EXPECT_LT(fs::file_size(store.file_of(ref)), text.size() / 10);
+    const Bytes back = store.get(ref);
+    EXPECT_EQ(std::string(reinterpret_cast<const char*>(back.data()), back.size()), text);
+
+    const std::string empty = store.put({});
+    EXPECT_TRUE(store.get(empty).empty());
 }
 
 TEST(StorageBlobs, FolderStoreFindsDamagedBlocks) {
     TempDir dir("blobs-damaged");
     FolderBlobStore store(dir.path());
     const std::string ref = store.put(bytes_of("abc"));
-    ASSERT_TRUE(io::write_file(store.file_of(ref), "abd"));
-    try {
-        (void)store.get(ref);
-        FAIL();
-    } catch (const ProjectError& error) {
-        EXPECT_EQ(error.code(), ProjectErrc::corrupt_blob);
-    }
+    const std::string frame = io::read_file(store.file_of(ref)).value();
+    const auto expect_corrupt = [&](const std::string& bytes, const char* what) {
+        ASSERT_TRUE(io::write_file(store.file_of(ref), bytes));
+        try {
+            (void)store.get(ref);
+            ADD_FAILURE() << what;
+        } catch (const ProjectError& error) {
+            EXPECT_EQ(error.code(), ProjectErrc::corrupt_blob) << what;
+        }
+    };
+    expect_corrupt("abd", "not zstd");
+    expect_corrupt(frame.substr(0, frame.size() - 1), "a truncated frame");
+    expect_corrupt(frame + frame, "two frames");
+    expect_corrupt(frame + "x", "bytes after the frame");
+    // A whole frame of other contents: zstd is happy, the hash is not.
+    FolderBlobStore other(dir.path() / "other");
+    expect_corrupt(io::read_file(other.file_of(other.put(bytes_of("abd")))).value(),
+                   "other contents");
     fs::remove(store.file_of(ref));
     try {
         (void)store.get(ref);
@@ -121,6 +154,36 @@ TEST(StorageBlobs, FolderStoreFindsDamagedBlocks) {
     } catch (const ProjectError& error) {
         EXPECT_EQ(error.code(), ProjectErrc::missing_blob);
     }
+}
+
+TEST(StorageBlobs, FolderStoreListsItsFiles) {
+    TempDir dir("blobs-files");
+    FolderBlobStore store(dir.path() / "objects");
+    EXPECT_TRUE(store.files().empty());  // No folder yet.
+    const std::string b = store.put(bytes_of("b"));
+    const std::string a = store.put(bytes_of("a"));
+    // Leftovers: a temporary file of a crash and a file that is not where a block would be.
+    fs::path tmp = store.file_of(a);
+    tmp += ".tmp";
+    ASSERT_TRUE(io::write_file(tmp, "half"));
+    const fs::path stray = dir.path() / "objects" / "sha256" / "stray";
+    ASSERT_TRUE(io::write_file(stray, "?"));
+
+    const std::vector<FolderBlobStore::File> files = store.files();
+    ASSERT_EQ(files.size(), 4U);
+    const std::string first = std::min(a, b);
+    const std::string second = std::max(a, b);
+    EXPECT_EQ(files[0].ref, first);
+    EXPECT_EQ(files[1].ref, second);
+    EXPECT_EQ(files[0].path, store.file_of(first));
+    EXPECT_EQ(files[0].size, fs::file_size(store.file_of(first)));
+    EXPECT_TRUE(files[2].ref.empty());
+    EXPECT_TRUE(files[3].ref.empty());
+
+    EXPECT_TRUE(store.remove(store.file_of(a)));
+    EXPECT_FALSE(store.contains(a));
+    EXPECT_FALSE(store.remove(store.file_of(a)));
+    EXPECT_TRUE(store.contains(b));
 }
 
 }  // namespace

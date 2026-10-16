@@ -7,6 +7,7 @@
 #include "fem/storage/project_format.h"
 
 #include "../core/model/model_test_support.h"
+#include "grid_mesh.h"
 #include <gtest/gtest.h>
 
 #include <bit>
@@ -249,7 +250,8 @@ inline std::string describe(const model::Document& document) {
         }
         out += " props " + object.properties().dump();
         if (object.data()) {
-            out += " data " + blob_ref(encode_object_data(*object.data()));
+            MemoryBlobStore blobs;
+            out += " data " + put_object_data(*object.data(), blobs);
         }
         out += "\n";
     }

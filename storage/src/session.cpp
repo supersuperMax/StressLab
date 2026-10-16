@@ -89,6 +89,16 @@ bool ProjectSession::autosave() {
     return true;
 }
 
+CleanStats ProjectSession::clean() {
+    check_idle("cleaning the project");
+    if (!folder_) {
+        throw ProjectError(ProjectErrc::no_folder, "the project has no folder to clean");
+    }
+    const CleanStats stats = clean_project(*folder_);
+    bus_.journal_action("stresslab.project.clean()");
+    return stats;
+}
+
 void ProjectSession::close() {
     check_idle("closing the project");
     bus_.replace_document({}, "stresslab.project.close()");

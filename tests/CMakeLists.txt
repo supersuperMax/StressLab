@@ -77,11 +77,13 @@ target_compile_definitions(
             FEM_TEST_STRESSLAB="$<TARGET_FILE:stresslab>")
 gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
 
-# The project folder (task 2.1): canonical JSON, blocks of bulk data, the files of a project and
-# its session. Like the core, built and run without Qt.
+# The project folder (tasks 2.1, 2.2): canonical JSON, blocks of bulk data and their garbage
+# collection, the files of a project and its session. Like the core, built and run without Qt.
 add_executable(
     fem_storage_tests
     unit/storage/blob_test.cpp
+    unit/storage/chunking_test.cpp
+    unit/storage/garbage_test.cpp
     unit/storage/json_test.cpp
     unit/storage/object_data_codec_test.cpp
     unit/storage/project_folder_test.cpp
@@ -178,6 +180,13 @@ add_executable(fem_model_benchmark benchmark/mesh_benchmark.cpp)
 target_link_libraries(fem_model_benchmark PRIVATE fem::core)
 add_test(NAME ModelBenchmark.MillionNodeMesh COMMAND fem_model_benchmark)
 set_tests_properties(ModelBenchmark.MillionNodeMesh PROPERTIES LABELS benchmark)
+
+# Blob store benchmark (task 2.2): saving, opening and cleaning a mesh of a million nodes in
+# Release (smaller in Debug); fails if a local change of the large mesh adds a tenth of it.
+add_executable(fem_blob_benchmark benchmark/blob_benchmark.cpp)
+target_link_libraries(fem_blob_benchmark PRIVATE fem::storage)
+add_test(NAME StorageBenchmark.MillionNodeMesh COMMAND fem_blob_benchmark)
+set_tests_properties(StorageBenchmark.MillionNodeMesh PROPERTIES LABELS benchmark)
 
 if(FEM_BUILD_GUI)
     # The shell (tasks 1.11-1.14): the window, its zones, themes, workspaces, the brand, what

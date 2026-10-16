@@ -254,11 +254,14 @@ void MainWindow::build_menus() {
         problems_->add(message);
         set_prompt(message);
     });
+    connect(project_, &ProjectActions::message, this,
+            [this](const QString& message) { set_prompt(message); });
     connect(project_, &ProjectActions::opened, this, &MainWindow::check_required_modules);
     file_menu_->addAction(project_->open_action());
     file_menu_->addSeparator();
     file_menu_->addAction(project_->save_action());
     file_menu_->addAction(project_->save_as_action());
+    file_menu_->addAction(project_->clean_action());
     file_menu_->addSeparator();
     file_menu_->addAction(journal_->save_action());
     file_menu_->addSeparator();
@@ -387,7 +390,8 @@ void MainWindow::build_contributions() {
                                   journal_->save_action(),
                                   project_->open_action(),
                                   project_->save_action(),
-                                  project_->save_as_action()};
+                                  project_->save_as_action(),
+                                  project_->clean_action()};
     for (const Zone& zone : zones_) {
         if (QAction* toggle = zone_action(zone.id)) {
             shell_actions.push_back(toggle);
