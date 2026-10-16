@@ -109,6 +109,7 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(c.commands[0].icon, "icons/run.svg");
     ASSERT_TRUE(c.commands[0].enablement.has_value());
     EXPECT_EQ(c.commands[0].enablement->to_string(), "model.hasMesh");
+    EXPECT_TRUE(c.commands[0].snapshot_before);
     const auto& args = c.commands[0].args;
     ASSERT_EQ(args.size(), 6U);
     EXPECT_EQ(args[0].name, "job");
@@ -130,6 +131,7 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(c.commands[1].id, "full.stop");
     EXPECT_TRUE(c.commands[1].args.empty());
     EXPECT_FALSE(c.commands[1].enablement.has_value());
+    EXPECT_FALSE(c.commands[1].snapshot_before);
 
     ASSERT_EQ(c.stages.size(), 2U);
     EXPECT_EQ(c.stages[0].id, "full.optimize");

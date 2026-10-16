@@ -351,6 +351,9 @@ CommandResult CommandBus::execute(std::string_view id, Value::Dict args) {
 
     // Formatting checks that the journal can hold the arguments, before anything changes.
     std::string line = format_call(command->spec, given);
+    if (transactions_.empty()) {
+        before_command_.emit(command->spec);
+    }
     model::ChangeSet changes = editor_.new_changes();
     CommandResult result = run(command, arguments, changes);
     if (!transactions_.empty()) {
@@ -567,6 +570,10 @@ Subscription CommandBus::on_model_changed(std::function<void(const ModelChange&)
 
 Subscription CommandBus::on_journal(std::function<void(std::string_view entry)> listener) {
     return journal_.subscribe(std::move(listener));
+}
+
+Subscription CommandBus::on_before_command(std::function<void(const CommandSpec& spec)> listener) {
+    return before_command_.subscribe(std::move(listener));
 }
 
 }  // namespace fem::command

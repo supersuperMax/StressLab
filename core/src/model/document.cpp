@@ -231,6 +231,47 @@ ObjectId Document::create(NewObject init, ChangeSet& changes) {
     return id;
 }
 
+void Document::restore(StoredObject stored, ChangeSet& changes) {
+    const ObjectId id = stored.id;
+    NewObject& init = stored.init;
+    if (!id.is_valid() || id.value() >= next_id_) {
+        throw ModelError(ModelErrc::invalid_argument,
+                         "only an object with an id the document issued can be restored", id);
+    }
+    if (contains(id)) {
+        throw ModelError(ModelErrc::invalid_argument, "the object is in the document", id);
+    }
+    check_kind(init);
+    if (init.parent.is_valid() && is_opaque(get(init.parent))) {
+        throw ModelError(ModelErrc::opaque_object,
+                         "cannot add a child to an object of a disabled module", init.parent);
+    }
+    check_name(nullptr, init.parent, init.type, init.name);
+    check_properties(init.properties);
+    sort_unique(init.dependencies);
+    for (const ObjectId target : init.dependencies) {
+        if (target == id || !contains(target)) {
+            throw ModelError(ModelErrc::invalid_dependency,
+                             "dependency on itself or on a missing object " + to_string(target),
+                             id);
+        }
+        // Objects that kept a dependency on the removed object can close a cycle through it.
+        if (reaches(target, id)) {
+            throw ModelError(ModelErrc::dependency_cycle,
+                             "dependency on " + to_string(target) + " would close a cycle", id);
+        }
+    }
+    check_data(init.owner, init.type, init.parent, init.data);
+
+    // Siblings are in id order (objects never move), so the object goes back where it was.
+    const std::vector<ObjectId>& list = siblings(init.parent);
+    const auto position =
+        static_cast<std::size_t>(std::lower_bound(list.begin(), list.end(), id) - list.begin());
+    std::map<ObjectId, Object> staging;
+    staging.emplace(id, Object(id, std::move(init)));
+    record(changes, {change::Existence{id, staging.extract(id), position}});
+}
+
 void Document::rename(ObjectId id, std::string name, ChangeSet& changes) {
     const Object& object = get_editable(id);
     if (name == object.name_) {

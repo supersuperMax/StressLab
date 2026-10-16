@@ -121,6 +121,7 @@ private:
     // --- Changes (see DocumentEditor), recorded into `changes` -----------------------------------
 
     ObjectId create(NewObject init, ChangeSet& changes);
+    void restore(StoredObject stored, ChangeSet& changes);
     void rename(ObjectId id, std::string name, ChangeSet& changes);
     void set_properties(ObjectId id, Properties properties, ChangeSet& changes);
     void set_data(ObjectId id, std::shared_ptr<const ObjectData> data, ChangeSet& changes);

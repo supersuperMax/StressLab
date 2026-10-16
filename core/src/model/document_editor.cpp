@@ -10,6 +10,10 @@ ObjectId DocumentEditor::create(NewObject init) {
     return document_.create(std::move(init), changes());
 }
 
+void DocumentEditor::restore(StoredObject stored) {
+    document_.restore(std::move(stored), changes());
+}
+
 void DocumentEditor::rename(ObjectId id, std::string name) {
     document_.rename(id, std::move(name), changes());
 }

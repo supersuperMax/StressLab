@@ -11,6 +11,7 @@ activation = ["onStartup"]
 id = "base.hello"
 title = "Hello"
 args = [{ name = "name", type = "string", default = "world" }]
+snapshotBefore = true
 
 [[contributes.contextKeys]]
 name = "base.ready"

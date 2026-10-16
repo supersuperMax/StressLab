@@ -378,3 +378,47 @@ TEST_F(CommandBusTest, IsIdleOutsideCommandsAndTransactions) {
     create("a");
     EXPECT_TRUE(idle_in_listener);
 }
+
+TEST_F(CommandBusTest, BeforeCommandIsCalledForStepsOfTheirOwnOnly) {
+    bus.register_command({.id = "test.risky", .owner = test_owner, .snapshot_before = true},
+                         [&](CommandContext& context) {
+                             (void)context.execute(mc::create,
+                                                   {{"type", "item"}, {"owner", test_owner}});
+                             return CommandResult{};
+                         });
+    std::vector<std::string> calls;
+    bool idle = false;
+    const fem::Subscription subscription = bus.on_before_command([&](const CommandSpec& spec) {
+        calls.push_back(spec.id + (spec.snapshot_before ? " risky" : ""));
+        idle = bus.is_idle();
+    });
+
+    bus.execute("test.risky");
+    // The command it runs itself is a part of its step.
+    EXPECT_EQ(calls, std::vector<std::string>{"test.risky risky"});
+    EXPECT_TRUE(idle);
+
+    calls.clear();
+    {
+        Transaction transaction = bus.begin_transaction("group");
+        bus.execute("test.risky");
+        transaction.commit();
+    }
+    EXPECT_TRUE(calls.empty());
+
+    // Arguments are checked first: a call that cannot run is not announced.
+    EXPECT_THROW((void)bus.execute(mc::rename, {{"object", "x"}}), CommandError);
+    EXPECT_TRUE(calls.empty());
+}
+
+TEST_F(CommandBusTest, ListenerBeforeACommandMayStopIt) {
+    const fem::Subscription subscription = bus.on_before_command([](const CommandSpec& spec) {
+        if (spec.id == mc::create) {
+            throw std::runtime_error("no snapshot");
+        }
+    });
+    EXPECT_THROW(create("a"), std::runtime_error);
+    EXPECT_TRUE(doc.objects().empty());
+    EXPECT_TRUE(journal.entries().empty());
+    EXPECT_FALSE(bus.can_undo());
+}

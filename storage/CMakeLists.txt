@@ -9,10 +9,13 @@ target_sources(
             src/chunking.cpp
             src/error.cpp
             src/garbage.cpp
+            src/history.cpp
             src/json.cpp
+            src/names.cpp
             src/object_data_codec.cpp
             src/project.cpp
             src/project_format.cpp
+            src/repository.cpp
             src/session.cpp
             src/sha256.cpp
             src/zstd_codec.cpp)
@@ -23,3 +26,8 @@ target_link_libraries(femstorage PUBLIC fem::core)
 # zstd compresses the blocks on disk (task 2.2); it is an implementation detail of the store.
 find_package(zstd CONFIG REQUIRED)
 target_link_libraries(femstorage PRIVATE zstd::libzstd)
+
+# libgit2 keeps the history of the model in .fem/git (task 2.3); like zstd, it is not seen in the
+# public headers.
+find_package(libgit2 CONFIG REQUIRED)
+target_link_libraries(femstorage PRIVATE libgit2::libgit2package)

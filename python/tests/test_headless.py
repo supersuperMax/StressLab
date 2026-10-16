@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -322,3 +323,63 @@ def test_a_script_saves_a_project_that_another_run_opens(headless: Headless) -> 
     assert 'stresslab.project.open("проект вала.slproj")' in journal.read_text(encoding="utf-8")
     assert "cleaned: 0" in opened.stdout
     assert "stresslab.project.clean()" in journal.read_text(encoding="utf-8")
+
+
+WING_HISTORY = """\
+import stresslab
+from stresslab import history
+
+material = stresslab.cmd("model.create", type="material", owner="test.headless", name="Д16Т",
+                         properties={"E": 72000.0})
+skin = stresslab.cmd("model.create", type="part", owner="test.headless", name="skin-upper",
+                     properties={"thickness": 2.0}, dependencies=[material])
+stresslab.project.save_as("крыло")
+history.commit("Обшивка 2 мм")
+history.branch("Композитная обшивка")
+history.checkout("Композитная обшивка")
+stresslab.cmd("model.set_property", object=skin, key="thickness", value=3.0)
+stresslab.cmd("model.set_property", object=material, key="E", value=60000.0)
+history.commit("Обшивка 3 мм, КМ-1")
+history.checkout("main")
+history.restore_object(material, "Композитная обшивка~1")
+history.restore_object(material, "Композитная обшивка")
+history.commit("Материал из варианта")
+doc = stresslab.active_document()
+print("thickness:", doc[skin].properties["thickness"])
+print("E:", doc[material].properties["E"])
+# Versions of two variants made within a second have no order between them: sort.
+print("log:", sorted((v.summary, v.kind) for v in history.log(all=True)))
+"""
+
+
+def test_a_script_keeps_versions_and_its_journal_makes_the_same_history(
+    headless: Headless,
+) -> None:
+    journal = headless.folder / "история.slpy"
+    first = headless.run(
+        "--journal", journal, "run-script", headless.script("история.py", WING_HISTORY)
+    )
+    assert first.returncode == 0, explain(first)
+    assert "thickness: 2.0" in first.stdout
+    assert "E: 60000.0" in first.stdout
+    log = [line for line in first.stdout.splitlines() if line.startswith("log:")]
+    assert len(log) == 1
+    assert "('Материал из варианта', 'manual')" in log[0]
+    assert (headless.folder / "крыло.slproj" / ".fem" / "git").is_dir()
+    assert 'stresslab.history.checkout("main")' in journal.read_text(encoding="utf-8")
+
+    # The journal, run where there is no project yet, makes the same versions and variants.
+    # Git stores its objects read-only; Windows does not remove such files without a change.
+    shutil.rmtree(
+        headless.folder / "крыло.slproj",
+        onexc=lambda function, path, _: (os.chmod(path, stat.S_IWRITE), function(path)),
+    )
+    check = headless.script(
+        "проверка.py",
+        "import runpy\nfrom stresslab import history\n"
+        f"runpy.run_path({str(journal)!r})\n"
+        "print('log:', sorted((v.summary, v.kind) for v in history.log(all=True)))\n",
+    )
+    again = headless.run("run-script", check)
+    assert again.returncode == 0, explain(again)
+    assert [line for line in again.stdout.splitlines() if line.startswith("log:")] == log

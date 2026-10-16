@@ -1076,6 +1076,7 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
         if (const toml::node* args = fields.get("args")) {
             command.args = parse_args(*args, command.id);
         }
+        command.snapshot_before = fields.boolean("snapshotBefore").value_or(false);
         fields.finish();
         out.commands.push_back(std::move(command));
     });
