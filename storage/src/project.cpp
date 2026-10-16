@@ -81,6 +81,9 @@ void write_if_changed(const fs::path& file, const std::string& bytes, SaveStats&
     ++stats.written;
 }
 
+/// Writes `files` into `folder` and removes the files of objects that are gone.
+SaveStats write_files(const fs::path& folder, const ProjectFiles& files);
+
 }  // namespace
 
 bool is_project_folder(const fs::path& folder) {
@@ -90,6 +93,12 @@ bool is_project_folder(const fs::path& folder) {
 
 SaveStats save_project(const fs::path& folder, const model::Document& document,
                        const ModuleVersions& modules) {
+    // Blocks first, so that no file refers to a block that is not there yet.
+    return write_files(folder, store_project(folder, document, modules));
+}
+
+ProjectFiles store_project(const fs::path& folder, const model::Document& document,
+                           const ModuleVersions& modules) {
     check_target(folder);
     std::error_code error;
     const fs::path objects = folder / to_path(objects_folder);
@@ -97,11 +106,19 @@ SaveStats save_project(const fs::path& folder, const model::Document& document,
     if (error) {
         throw_io("cannot create the project folder", folder);
     }
-
-    // Blocks first, so that no file refers to a block that is not there yet.
     FolderBlobStore blobs(objects);
-    const ProjectFiles files = write_project(document, modules, blobs);
+    return write_project(document, modules, blobs);
+}
 
+SaveStats write_project_files(const fs::path& folder, const ProjectFiles& files) {
+    check_target(folder);
+    return write_files(folder, files);
+}
+
+namespace {
+
+SaveStats write_files(const fs::path& folder, const ProjectFiles& files) {
+    std::error_code error;
     SaveStats stats;
     for (const auto& [key, bytes] : files) {
         if (key != project_file) {
@@ -135,6 +152,8 @@ SaveStats save_project(const fs::path& folder, const model::Document& document,
     detail::remove_empty_folders(model);
     return stats;
 }
+
+}  // namespace
 
 CleanStats clean_project(const fs::path& folder, std::span<const std::string> extra_roots) {
     if (!is_project_folder(folder)) {

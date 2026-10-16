@@ -35,6 +35,22 @@ std::string_view to_string(ProjectErrc code) noexcept {
             return "invalid_data";
         case ProjectErrc::no_folder:
             return "no_folder";
+        case ProjectErrc::unknown_version:
+            return "unknown_version";
+        case ProjectErrc::already_exists:
+            return "already_exists";
+        case ProjectErrc::invalid_name:
+            return "invalid_name";
+        case ProjectErrc::uncommitted_changes:
+            return "uncommitted_changes";
+        case ProjectErrc::nothing_to_commit:
+            return "nothing_to_commit";
+        case ProjectErrc::nothing_to_stash:
+            return "nothing_to_stash";
+        case ProjectErrc::detached:
+            return "detached";
+        case ProjectErrc::stash_conflict:
+            return "stash_conflict";
     }
     return "unknown";
 }

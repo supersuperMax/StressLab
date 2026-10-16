@@ -15,9 +15,10 @@ Calls are recorded in the session journal (.slpy) as ``stresslab.cmd(...)`` line
 is a script that rebuilds the same document. Modules are enabled and disabled with
 ``stresslab.extensions.enable("fem.demo")`` and ``disable``, and the document is saved to and
 opened from a project folder with ``stresslab.project.save_as("wing")`` and
-``stresslab.project.open("wing.slproj")``, journaled too. Inside the application
-``stresslab`` works with the application's document; in a plain Python process it makes a
-document of its own.
+``stresslab.project.open("wing.slproj")``, journaled too, and its versions and variants are kept
+with ``stresslab.history.commit("Two ribs")`` and the other calls of ``stresslab.history``.
+Inside the application ``stresslab`` works with the application's document; in a plain Python
+process it makes a document of its own.
 """
 
 from __future__ import annotations
@@ -65,7 +66,7 @@ from _stresslab import (
     set_active_document,
 )
 
-from . import extensions, project
+from . import extensions, history, project
 from ._commands import CommandNamespace, Commands, python_name
 
 __version__: str = _native.__version__
@@ -126,6 +127,7 @@ __all__ = [
     "context",
     "embedded",
     "extensions",
+    "history",
     "journal_header",
     "make_task",
     "new_document",

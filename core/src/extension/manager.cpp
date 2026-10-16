@@ -528,7 +528,10 @@ void ExtensionManager::enable_one(Record& record) {
             keys_.declare(key.spec());
         }
         for (const CommandContribution& command : record.contributions->commands) {
-            bus_.register_command({.id = command.id, .owner = id, .args = command.args},
+            bus_.register_command({.id = command.id,
+                                   .owner = id,
+                                   .args = command.args,
+                                   .snapshot_before = command.snapshot_before},
                                   [this, owner = id](command::CommandContext& context) {
                                       return run_command(owner, context);
                                   });

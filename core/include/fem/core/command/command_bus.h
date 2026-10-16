@@ -166,6 +166,13 @@ public:
     /// Called with every completed journal entry: one line, or several lines for a transaction,
     /// without the final line break. Called before the "model changed" listeners.
     [[nodiscard]] Subscription on_journal(std::function<void(std::string_view entry)> listener);
+    /// Called before a command runs as a step of its own (not inside another command or a
+    /// transaction), after its arguments are checked: the bus is idle, so a listener may write to
+    /// the journal or save the project. The history makes an automatic version here before a
+    /// command with `CommandSpec::snapshot_before`. A listener that throws stops the command,
+    /// which then does not run.
+    [[nodiscard]] Subscription on_before_command(
+        std::function<void(const CommandSpec& spec)> listener);
 
 private:
     friend class CommandContext;
@@ -216,6 +223,7 @@ private:
     int running_ = 0;  // Depth of commands being run.
     Signal<const ModelChange&> model_changed_;
     Signal<std::string_view> journal_;
+    Signal<const CommandSpec&> before_command_;
 };
 
 }  // namespace fem::command

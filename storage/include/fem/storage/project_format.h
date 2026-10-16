@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,5 +69,12 @@ struct LoadedProject {
 /// of the garbage collection. Reads `project.json` first, so that a project of another format,
 /// whose blocks may be laid out otherwise, is not cleaned. Throws as `read_project` does.
 [[nodiscard]] std::vector<std::string> read_blob_roots(const ProjectFiles& files);
+
+/// One object of the files, found by its id, with its bulk data; none if the files do not have it.
+/// Only that object is read and only its data is decoded (restoring one object from an older
+/// version, task 2.3). Throws as `read_project` does about the files it reads.
+[[nodiscard]] std::optional<model::StoredObject> read_object(const ProjectFiles& files,
+                                                             const BlobStore& blobs,
+                                                             model::ObjectId id);
 
 }  // namespace fem::storage

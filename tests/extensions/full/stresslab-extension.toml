@@ -19,6 +19,7 @@ title = "Запустить расчёт"
 category = "Решение"
 icon = "icons/run.svg"
 enablement = "model.hasMesh"
+snapshotBefore = true
 args = [
     { name = "job", type = "string" },
     { name = "threads", type = "integer", default = 0 },

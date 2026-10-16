@@ -36,6 +36,9 @@ struct CommandContribution {
     std::optional<context::WhenExpression> enablement;
     /// Keyword arguments: the Python signature of the command (docs/architecture.md §4.7).
     std::vector<command::ArgSpec> args;
+    /// `snapshotBefore`: a risky operation, before which the project makes an automatic version
+    /// (`command::CommandSpec::snapshot_before`, task 2.3).
+    bool snapshot_before = false;
 };
 
 /// `stages`: a stage of the stage bar, in a slot before or after a standard stage.

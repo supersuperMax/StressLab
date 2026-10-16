@@ -53,6 +53,7 @@ add_executable(
     unit/core/model/mesh_test.cpp
     unit/core/model/opaque_test.cpp
     unit/core/model/quantity_test.cpp
+    unit/core/model/restore_test.cpp
     unit/core/model/units_test.cpp
     unit/core/settings/settings_test.cpp
     unit/core/settings/settings_validation_test.cpp
@@ -84,10 +85,12 @@ add_executable(
     unit/storage/blob_test.cpp
     unit/storage/chunking_test.cpp
     unit/storage/garbage_test.cpp
+    unit/storage/history_test.cpp
     unit/storage/json_test.cpp
     unit/storage/object_data_codec_test.cpp
     unit/storage/project_folder_test.cpp
     unit/storage/project_format_test.cpp
+    unit/storage/repository_test.cpp
     unit/storage/round_trip_property_test.cpp
     unit/storage/session_test.cpp)
 target_link_libraries(fem_storage_tests PRIVATE fem::storage GTest::gtest_main)

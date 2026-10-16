@@ -19,6 +19,15 @@ enum class ProjectErrc {
     corrupt_blob,        ///< A block does not match its hash or cannot be decoded.
     invalid_data,        ///< Data that cannot be saved (a NaN in properties, an unknown data type).
     no_folder,           ///< "Save" for a project that has no folder yet: "Save as" is needed.
+    // The history (task 2.3).
+    unknown_version,      ///< No such version, variant, label or stash.
+    already_exists,       ///< A variant or a label of that name exists.
+    invalid_name,         ///< The name cannot be a variant or a label.
+    uncommitted_changes,  ///< The model differs from its version: commit or put the changes aside.
+    nothing_to_commit,    ///< The model is the same as its version.
+    nothing_to_stash,     ///< No changes to put aside.
+    detached,             ///< A version is viewed on its own: make a variant from it first.
+    stash_conflict,       ///< The variant moved on since the changes were put aside.
 };
 
 [[nodiscard]] std::string_view to_string(ProjectErrc code) noexcept;

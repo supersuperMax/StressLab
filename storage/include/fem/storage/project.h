@@ -35,6 +35,17 @@ struct SaveStats {
 SaveStats save_project(const std::filesystem::path& folder, const model::Document& document,
                        const ModuleVersions& modules);
 
+/// The first half of `save_project`: stores the bulk data of `document` in the blob store of
+/// `folder` and returns the files, without writing them. A version of the history (task 2.3) is
+/// made of these files. Throws as `save_project` does.
+[[nodiscard]] ProjectFiles store_project(const std::filesystem::path& folder,
+                                         const model::Document& document,
+                                         const ModuleVersions& modules);
+/// The second half of `save_project`: makes the files of `folder` be `files`, whose bulk data is
+/// in its blob store already (`store_project`, or a version of the history). Throws as
+/// `save_project` does.
+SaveStats write_project_files(const std::filesystem::path& folder, const ProjectFiles& files);
+
 /// "Clean project": removes the blocks of bulk data in `.fem/objects` that neither
 /// `refs/blobs.json` nor `extra_roots` reach (`collect_garbage`), such as the data of meshes
 /// saved before. The history (task 2.3) and pinned results (2.5) add their blocks as

@@ -2,10 +2,12 @@
 
 #include "fem/core/command/command_bus.h"
 #include "fem/core/signal.h"
+#include "fem/storage/history.h"
 #include "fem/storage/project.h"
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,7 +21,8 @@ namespace fem::storage {
 /// Opening, saving, cleaning and closing are written to the journal as
 /// `stresslab.project.open("...")`, `stresslab.project.save()`, `stresslab.project.save_as("...")`,
 /// `stresslab.project.clean()` and `stresslab.project.close()`, so a journal replays them;
-/// `autosave` is not. Like the bus, it is used from one thread.
+/// `autosave` is not. Like the bus, it is used from one thread. Its history (versions, variants)
+/// is `history()`.
 class ProjectSession {
 public:
     /// The version of an installed module by its id, "" if it is not installed.
@@ -32,7 +35,7 @@ public:
     ProjectSession& operator=(const ProjectSession&) = delete;
     ProjectSession(ProjectSession&&) = delete;
     ProjectSession& operator=(ProjectSession&&) = delete;
-    ~ProjectSession() = default;
+    ~ProjectSession();
 
     /// The project folder; none for a project never saved.
     [[nodiscard]] const std::optional<std::filesystem::path>& folder() const noexcept {
@@ -40,6 +43,10 @@ public:
     }
     /// The model changed since the project was opened, saved or closed.
     [[nodiscard]] bool is_modified() const noexcept { return modified_; }
+
+    /// Versions and variants of the project (task 2.3).
+    [[nodiscard]] ProjectHistory& history() noexcept { return *history_; }
+    [[nodiscard]] const ProjectHistory& history() const noexcept { return *history_; }
 
     /// Opens the project of `folder` in place of the document. Throws ProjectError (the model of
     /// the project is checked too: invalid_model names the file of the object at fault) and
@@ -55,11 +62,11 @@ public:
     /// Saves if there is a folder and the model changed, and the bus is idle; true if it saved.
     /// Not written to the journal. Throws as `save` does.
     bool autosave();
-    /// "Clean project": removes the blocks of the project folder that the saved project does not
-    /// refer to (`clean_project`). The document and `is_modified` do not change: unsaved data
-    /// goes to the store on the next save. Throws ProjectError(no_folder) for a project never
-    /// saved, the ProjectErrors of `clean_project` and CommandError(invalid_state) inside a
-    /// command or a transaction.
+    /// "Clean project": removes the blocks of the project folder that neither the saved project
+    /// nor a version of its history refers to (`clean_project`). The document and `is_modified` do
+    /// not change: unsaved data goes to the store on the next save. Throws ProjectError(no_folder)
+    /// for a project never saved, the ProjectErrors of `clean_project` and
+    /// CommandError(invalid_state) inside a command or a transaction.
     CleanStats clean();
     /// A new empty document in place of this one, without a folder. Throws
     /// CommandError(invalid_state) inside a command or a transaction.
@@ -73,7 +80,11 @@ public:
     [[nodiscard]] static std::filesystem::path with_extension(const std::filesystem::path& path);
 
 private:
+    friend class ProjectHistory;
+
     void check_idle(std::string_view action) const;
+    /// Makes the document hold a project read from files, journaling `entry`.
+    void replace(LoadedProject project, std::string_view entry);
     [[nodiscard]] ModuleVersions module_versions() const;
     void write(const std::filesystem::path& folder);
     void set_state(std::optional<std::filesystem::path> folder, bool modified);
@@ -86,6 +97,7 @@ private:
     ModuleVersions opened_versions_;
     Signal<> changed_;
     Subscription model_changed_;
+    std::unique_ptr<ProjectHistory> history_;
 };
 
 }  // namespace fem::storage

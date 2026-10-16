@@ -23,6 +23,10 @@
 | D-Bus (libdbus) | 1.16.2 | AFL-2.1 OR GPL-2.0-or-later (используем AFL-2.1) | vcpkg, через фичу `dbus` qtbase, только Linux | Qt узнаёт светлую или тёмную тему системы через xdg-desktop-portal (с задачи 1.11) |
 | Qt Advanced Docking System | 4.5.0 | LGPL-2.1-only | vcpkg (порт `qt-advanced-docking-system`), фича `gui` | `shell/` (окно с задачи 1.11) |
 | zstd | 1.5.7 | BSD-3-Clause (двойная лицензия BSD-3-Clause или GPL-2.0-only; используем BSD-3-Clause) | vcpkg (на Windows — `zstd.dll`), линкуется к `femstorage` закрыто (`PRIVATE`), в публичных заголовках не видна | сжатие блоков в `.fem/objects`: `storage/src/zstd_codec.cpp` (с задачи 2.2) |
+| libgit2 | 1.9.4 | GPL-2.0 с linking exception (исключение разрешает линковать в программу под любой лицензией без изменения самой libgit2). Вложенный код — zlib, MIT (обнаружение коллизий SHA-1), BSD (wildmatch); LGPL-определения WinHTTP не собираются: порт удаляет `deps/winhttp`, HTTPS выключен | vcpkg с `"default-features": false` и фичей `pcre2` (без HTTPS и SSH: история только локальная); на Windows — `git2.dll`; линкуется к `femstorage` закрыто (`PRIVATE`) | история проекта в `.fem/git`: `storage/src/repository.cpp` (с задачи 2.3) |
+| PCRE2 | 10.47 | BSD-3-Clause (с исключением PCRE2 для двоичных поставок) | vcpkg, через libgit2 (порт требует внешний движок регулярных выражений); на Windows — `pcre2-*.dll` | внутри libgit2 |
+| http-parser | 2.9.4 | MIT | vcpkg, через libgit2 (порт подключает его всегда, хотя сети мы не используем) | внутри libgit2 |
+| zlib | 1.3.2 | Zlib | vcpkg, через libgit2; на Windows — `z.dll` | сжатие объектов git внутри libgit2 |
 
 ## Инструменты разработки (в продукт не входят)
 
@@ -55,7 +59,6 @@
 | nanobind | BSD-3-Clause | vcpkg | 1.8 |
 | numpy | BSD-3-Clause | pip, в site-packages дистрибутива | 1.8 |
 | HDF5 | BSD-3-Clause (вариант HDF Group) | vcpkg | кэш результатов и экспорт (2.5 и позже); в блоках хранилища не используется (ADR 0018) |
-| libgit2 | GPL-2.0 с linking exception | vcpkg | 2.3 |
 | Eigen | MPL-2.0 | vcpkg, header-only | по необходимости |
 | VTK 9 | BSD-3-Clause | vcpkg, фича `gui` | 3.7 |
 | CalculiX (ccx) | GPL-2.0 | **отдельный процесс**, не линкуется; бинарник и исходники в дистрибутиве | 3.5 |

@@ -59,6 +59,10 @@ struct CommandSpec {
     std::string owner{};
     /// In this order the journal writes them.
     std::vector<ArgSpec> args{};
+    /// A risky operation (rebuilding a mesh, an import over the model, running a solver): the
+    /// project makes an automatic version before it runs (task 2.3,
+    /// `CommandBus::on_before_command`). `snapshotBefore` in the manifest.
+    bool snapshot_before = false;
 
     [[nodiscard]] const ArgSpec* find_arg(std::string_view name) const;
 };

@@ -130,11 +130,18 @@ protected:
     /// update from the thread of the task, which may be after waiters wake: wait for the post too.
     void finish(const std::shared_ptr<Job>& job) {
         ASSERT_TRUE(job->task()->wait_for(timeout));
+        wait_for_post();
+        queue_.drain();
+    }
+
+    /// Waits until something is posted. A job starts on its worker thread before `submit`
+    /// returns, so an event of its task may ask for the update first: it is posted from that
+    /// thread, maybe a moment after `submit` returns.
+    void wait_for_post() {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (queue_.size() == 0 && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        queue_.drain();
     }
 
     ContextKeys keys_;
@@ -160,6 +167,7 @@ TEST_F(JobKeysTest, FollowJobsOnTheThreadOfTheModel) {
     const std::shared_ptr<Job> second = jobs_.submit(spec());
     // Nothing changes until the posted work runs.
     EXPECT_FALSE(running());
+    wait_for_post();
     queue_.drain();
     EXPECT_TRUE(running());
     EXPECT_EQ(active(), 2.0);
@@ -182,6 +190,7 @@ TEST_F(JobKeysTest, AWhenClauseSeesTheJobs) {
     const fem::Subscription watch = keys_.watch(fem::context::WhenExpression::parse("job.running"),
                                                 [&](bool on) { seen.push_back(on); });
     const std::shared_ptr<Job> job = jobs_.submit(spec());
+    wait_for_post();
     queue_.drain();
     gate_->open();
     finish(job);
@@ -193,11 +202,13 @@ TEST_F(JobKeysTest, PostsOneUpdateAtATime) {
     for (int i = 0; i < 5; ++i) {
         (void)jobs_.submit(spec());
     }
+    wait_for_post();
     EXPECT_EQ(queue_.size(), 1U);
     queue_.drain();
     EXPECT_EQ(active(), 5.0);
     // A change after the update asks for another one.
     jobs_.jobs().back()->task()->cancel();
+    wait_for_post();
     EXPECT_EQ(queue_.size(), 1U);
 }
 
@@ -214,6 +225,7 @@ TEST_F(JobKeysTest, WorkPostedBeforeItIsDestroyedDoesNothing) {
     std::optional<JobKeys> tracker;
     tracker.emplace(jobs_, keys_, queue_.post());
     (void)jobs_.submit(spec());
+    wait_for_post();
     ASSERT_EQ(queue_.size(), 1U);
     tracker.reset();
     queue_.drain();

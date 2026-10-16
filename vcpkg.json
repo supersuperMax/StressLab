@@ -7,6 +7,13 @@
   "dependencies": [
     "fmt",
     "gtest",
+    {
+      "name": "libgit2",
+      "default-features": false,
+      "features": [
+        "pcre2"
+      ]
+    },
     "nlohmann-json",
     "spdlog",
     "tomlplusplus",

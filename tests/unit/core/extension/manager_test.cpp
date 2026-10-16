@@ -140,6 +140,7 @@ TEST_F(ExtensionManagerTest, EnablingAddsContributionsAndDisablingRemovesThem) {
     EXPECT_EQ(spec->owner, "test.base");
     ASSERT_EQ(spec->args.size(), 1U);
     EXPECT_EQ(spec->args[0].default_value, Value("world"));
+    EXPECT_TRUE(spec->snapshot_before);
     ASSERT_NE(ws.keys.find("base.ready"), nullptr);
     EXPECT_EQ(ws.keys.find("base.ready")->owner, "test.base");
     EXPECT_EQ(ws.keys.value("base.ready"), ContextValue(false));

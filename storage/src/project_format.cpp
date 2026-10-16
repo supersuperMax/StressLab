@@ -6,6 +6,8 @@
 #include "fem/storage/json.h"
 #include "fem/storage/object_data_codec.h"
 
+#include "names.h"
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -22,49 +24,6 @@ namespace fem::storage {
 namespace {
 
 using Json = nlohmann::json;
-
-// --- Paths ---------------------------------------------------------------------------------------
-
-bool is_plain(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' ||
-           c == '_' || c == '-';
-}
-
-void append_escaped(std::string& out, char c) {
-    constexpr const char* hex = "0123456789ABCDEF";
-    const auto byte = static_cast<unsigned char>(c);
-    out.push_back('%');
-    out.push_back(hex[byte >> 4]);
-    out.push_back(hex[byte & 0xF]);
-}
-
-// Names Windows keeps for devices, with or without an extension.
-bool is_reserved_name(std::string_view segment) {
-    static constexpr std::array<std::string_view, 22> reserved = {
-        "con",  "prn",  "aux",  "nul",  "com1", "com2", "com3", "com4", "com5", "com6", "com7",
-        "com8", "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"};
-    std::string stem(segment.substr(0, segment.find('.')));
-    std::transform(stem.begin(), stem.end(), stem.begin(), [](char c) {
-        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    });
-    return std::find(reserved.begin(), reserved.end(), stem) != reserved.end();
-}
-
-std::string path_segment(std::string_view name) {
-    std::string out;
-    for (std::size_t i = 0; i < name.size(); ++i) {
-        const char c = name[i];
-        // A leading or trailing dot ("..", ".git", "a.") and the first letter of a device name are
-        // escaped as well, so the segment is an ordinary name everywhere.
-        const bool edge_dot = c == '.' && (i == 0 || i + 1 == name.size());
-        if (!is_plain(c) || edge_dot || (i == 0 && is_reserved_name(name))) {
-            append_escaped(out, c);
-        } else {
-            out.push_back(c);
-        }
-    }
-    return out;
-}
 
 // --- Reading -------------------------------------------------------------------------------------
 
@@ -334,9 +293,9 @@ std::string object_file(std::string_view owner, std::string_view type, model::Ob
     std::string path(model_folder);
     path += '/';
     if (owner != model::core_owner) {
-        path += "ext/" + path_segment(owner) + '/';
+        path += "ext/" + detail::path_segment(owner) + '/';
     }
-    path += path_segment(type) + '/' + std::to_string(id.value()) + ".json";
+    path += detail::path_segment(type) + '/' + std::to_string(id.value()) + ".json";
     return path;
 }
 
@@ -411,6 +370,28 @@ std::vector<std::string> read_blob_roots(const ProjectFiles& files) {
     std::sort(roots.begin(), roots.end());
     roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
     return roots;
+}
+
+std::optional<model::StoredObject> read_object(const ProjectFiles& files, const BlobStore& blobs,
+                                               model::ObjectId id) {
+    LoadedProject project;
+    read_project_file(files, project);
+    const std::string prefix = std::string(model_folder) + '/';
+    const std::string name = '/' + std::to_string(id.value()) + ".json";
+    for (const auto& [path, text] : files) {
+        if (path.starts_with(prefix) && path.ends_with(name)) {
+            // Only the data of this object is decoded.
+            ObjectReader reader(blobs, read_blob_refs(files));
+            model::StoredObject stored = reader.read(path, text);
+            if (stored.id != id) {
+                throw ProjectError(ProjectErrc::invalid_file,
+                                   "the file holds object " + std::to_string(stored.id.value()),
+                                   path);
+            }
+            return stored;
+        }
+    }
+    return std::nullopt;
 }
 
 LoadedProject read_project(const ProjectFiles& files, const BlobStore& blobs) {

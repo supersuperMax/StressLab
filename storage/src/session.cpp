@@ -37,7 +37,10 @@ ProjectSession::ProjectSession(command::CommandBus& bus, ModuleVersionLookup ver
             set_state(folder_, true);
         }
     });
+    history_.reset(new ProjectHistory(*this, bus_));
 }
+
+ProjectSession::~ProjectSession() = default;
 
 fs::path ProjectSession::with_extension(const fs::path& path) {
     fs::path result = path.has_filename() ? path : path.parent_path();
@@ -49,16 +52,20 @@ fs::path ProjectSession::with_extension(const fs::path& path) {
 
 void ProjectSession::open(const fs::path& folder) {
     check_idle("opening a project");
-    LoadedProject project = load_project(folder);
+    replace(load_project(folder), journal_call("open", folder));
+    set_state(absolute_path(folder), false);
+    history_->opened(*folder_);
+}
+
+void ProjectSession::replace(LoadedProject project, std::string_view entry) {
     try {
-        bus_.replace_document(std::move(project.contents), journal_call("open", folder));
+        bus_.replace_document(std::move(project.contents), entry);
     } catch (const model::ModelError& error) {
         const auto file = project.files.find(error.object());
         throw ProjectError(ProjectErrc::invalid_model, error.what(),
                            file != project.files.end() ? file->second : std::string());
     }
     opened_versions_ = std::move(project.modules);
-    set_state(absolute_path(folder), false);
 }
 
 void ProjectSession::save() {
@@ -94,7 +101,7 @@ CleanStats ProjectSession::clean() {
     if (!folder_) {
         throw ProjectError(ProjectErrc::no_folder, "the project has no folder to clean");
     }
-    const CleanStats stats = clean_project(*folder_);
+    const CleanStats stats = clean_project(*folder_, history_->blob_roots());
     bus_.journal_action("stresslab.project.clean()");
     return stats;
 }
@@ -104,6 +111,7 @@ void ProjectSession::close() {
     bus_.replace_document({}, "stresslab.project.close()");
     opened_versions_.clear();
     set_state(std::nullopt, false);
+    history_->closed();
 }
 
 Subscription ProjectSession::on_changed(std::function<void()> listener) {
@@ -139,6 +147,7 @@ ModuleVersions ProjectSession::module_versions() const {
 
 void ProjectSession::write(const fs::path& folder) {
     (void)save_project(folder, bus_.document(), module_versions());
+    history_->saved(folder);
 }
 
 void ProjectSession::set_state(std::optional<fs::path> folder, bool modified) {
