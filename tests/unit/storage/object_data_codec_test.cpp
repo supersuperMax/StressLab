@@ -251,5 +251,169 @@ TEST(StorageObjectData, RefusesDamagedPieces) {
     EXPECT_EQ(decode_error(unknown, blobs), ProjectErrc::missing_blob);
 }
 
+// --- Bytes of files (task 2.5) -------------------------------------------------------------------
+
+/// Bytes that do not repeat and do not compress, the same on every computer.
+Bytes noise(std::size_t size, std::uint64_t seed) {
+    Bytes result(size);
+    std::uint64_t state = seed;
+    for (std::byte& value : result) {
+        state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+        value = static_cast<std::byte>(state >> 56);
+    }
+    return result;
+}
+
+/// A source that gives `bytes` at most `step` bytes at a time, as a file read in odd sizes.
+ByteSource source_of(const Bytes& bytes, std::size_t step) {
+    auto position = std::make_shared<std::size_t>(0);
+    return [&bytes, step, position](std::span<std::byte> buffer) {
+        const std::size_t count = std::min({buffer.size(), step, bytes.size() - *position});
+        std::memcpy(buffer.data(), bytes.data() + *position, count);
+        *position += count;
+        return count;
+    };
+}
+
+Bytes read_back(const std::string& ref, const BlobStore& blobs) {
+    Bytes out;
+    const std::uint64_t count = get_byte_data(ref, blobs, [&out](std::span<const std::byte> part) {
+        out.insert(out.end(), part.begin(), part.end());
+    });
+    EXPECT_EQ(count, out.size());
+    return out;
+}
+
+TEST(StorageObjectData, BytesComeBackAsTheyWere) {
+    // Empty, inside the table, just past it, several windows of the stream.
+    for (const std::size_t size : {std::size_t{0}, std::size_t{1}, inline_array_bytes,
+                                   inline_array_bytes + 1, std::size_t{9} * 1024 * 1024 + 7}) {
+        const Bytes original = noise(size, size);
+        MemoryBlobStore blobs;
+        const std::string ref = put_byte_data(source_of(original, 100'003), blobs);
+        EXPECT_EQ(read_back(ref, blobs), original) << size << " bytes";
+        EXPECT_EQ(object_data_pieces(blobs.get(ref)).empty(), size <= inline_array_bytes);
+    }
+}
+
+TEST(StorageObjectData, AStreamIsCutAsTheWholeWouldBe) {
+    const Bytes original = noise(std::size_t{11} * 1024 * 1024, 7);
+    MemoryBlobStore blobs;
+    const std::string ref = put_byte_data(source_of(original, 4093), blobs);
+    std::vector<std::string> expected;
+    std::size_t start = 0;
+    for (const std::size_t end : chunk_ends(original, 1)) {
+        expected.push_back(
+            blob_ref(std::span<const std::byte>(original).subspan(start, end - start)));
+        start = end;
+    }
+    EXPECT_EQ(object_data_pieces(blobs.get(ref)), expected);
+    // The same bytes read in other sizes give the same table.
+    MemoryBlobStore again;
+    EXPECT_EQ(put_byte_data(source_of(original, 1 << 20), again), ref);
+}
+
+TEST(StorageObjectData, AChangeInOnePlaceOfAFileAddsAFewPieces) {
+    const Bytes original = noise(std::size_t{8} * 1024 * 1024, 11);
+    Bytes changed = original;
+    changed[changed.size() / 2] ^= std::byte{0xFF};
+    MemoryBlobStore blobs;
+    (void)put_byte_data(source_of(original, 1 << 16), blobs);
+    const std::size_t before = blobs.size();
+    (void)put_byte_data(source_of(changed, 1 << 16), blobs);
+    // One or two pieces around the change, and the table.
+    EXPECT_LE(blobs.size() - before, 3U);
+}
+
+/// Keeps only the blocks small enough to be tables; counts the rest.
+class CountingStore final : public BlobStore {
+public:
+    std::string put(std::span<const std::byte> bytes) override {
+        std::string ref = blob_ref(bytes);
+        largest = std::max(largest, bytes.size());
+        total += bytes.size();
+        if (bytes.size() <= 1024 * 1024 && !kept_.contains(ref)) {
+            kept_.emplace(ref, Bytes(bytes.begin(), bytes.end()));
+        }
+        return ref;
+    }
+    [[nodiscard]] Bytes get(std::string_view ref) const override {
+        return kept_.at(std::string(ref));
+    }
+    [[nodiscard]] bool contains(std::string_view ref) const override {
+        return kept_.contains(std::string(ref));
+    }
+    std::size_t largest = 0;
+    std::uint64_t total = 0;
+
+private:
+    std::map<std::string, Bytes> kept_;
+};
+
+TEST(StorageObjectData, PiecesOfAFileStaySmallWhateverItsSize) {
+    // A block is read whole and refused above 256 MiB (docs/adr/0018-blob-store.md), and files of
+    // results are larger: no piece may grow with the file. The stream is made as it is read,
+    // never in memory whole; the table grows by 40 bytes a piece, 256 MiB for a file of 400 GiB.
+    constexpr std::uint64_t size = 24ULL * 1024 * 1024 + 5;
+    std::uint64_t given = 0;
+    std::uint64_t state = 3;
+    const ByteSource generated = [&](std::span<std::byte> buffer) {
+        const auto count =
+            static_cast<std::size_t>(std::min<std::uint64_t>(buffer.size(), size - given));
+        for (std::size_t i = 0; i < count; ++i) {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            buffer[i] = static_cast<std::byte>(state >> 56);
+        }
+        given += count;
+        return count;
+    };
+    CountingStore blobs;
+    const std::string ref = put_byte_data(generated, blobs);
+    EXPECT_LE(blobs.largest, ChunkLimits{}.max);
+    const std::size_t pieces = object_data_pieces(blobs.get(ref)).size();
+    EXPECT_EQ(blobs.total - blobs.get(ref).size(), size);
+    EXPECT_GT(pieces, size / ChunkLimits{}.max);
+}
+
+TEST(StorageObjectData, BytesAndObjectDataAreNotTakenForEachOther) {
+    MemoryBlobStore blobs;
+    const Bytes original = noise(100'000, 5);
+    const std::string file = put_byte_data(source_of(original, 1000), blobs);
+    const std::string mesh = put_object_data(*small_mesh(), blobs);
+    EXPECT_PROJECT_ERRC((void)get_object_data(file, blobs), ProjectErrc::corrupt_blob);
+    EXPECT_PROJECT_ERRC((void)read_back(mesh, blobs), ProjectErrc::corrupt_blob);
+
+    // A piece of another size than the table says, from a store that does not check hashes.
+    const std::vector<std::string> pieces = object_data_pieces(blobs.get(file));
+    ASSERT_FALSE(pieces.empty());
+    class Truncating final : public BlobStore {
+    public:
+        Truncating(const MemoryBlobStore& blobs, std::string piece)
+            : blobs_(blobs), piece_(std::move(piece)) {}
+        std::string put(std::span<const std::byte> bytes) override { return blob_ref(bytes); }
+        [[nodiscard]] Bytes get(std::string_view ref) const override {
+            Bytes bytes = blobs_.get(ref);
+            if (ref == piece_) {
+                bytes.pop_back();
+            }
+            return bytes;
+        }
+        [[nodiscard]] bool contains(std::string_view ref) const override {
+            return blobs_.contains(ref);
+        }
+
+    private:
+        const MemoryBlobStore& blobs_;
+        std::string piece_;
+    };
+    EXPECT_PROJECT_ERRC((void)read_back(file, Truncating(blobs, pieces.front())),
+                        ProjectErrc::corrupt_blob);
+
+    // A piece that is not in the store.
+    MemoryBlobStore without_piece;
+    (void)without_piece.put(blobs.get(file));
+    EXPECT_PROJECT_ERRC((void)read_back(file, without_piece), ProjectErrc::missing_blob);
+}
+
 }  // namespace
 }  // namespace fem::storage

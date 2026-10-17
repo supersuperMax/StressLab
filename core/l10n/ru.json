@@ -127,6 +127,8 @@
     "setting.log.level.title": "Подробность журнала работы",
     "setting.project.autosaveInterval": "Через сколько секунд автоматически сохранять проект, у которого есть папка. 0 — не сохранять.",
     "setting.project.autosaveInterval.title": "Автосохранение",
+    "setting.results.cacheLimit": "Сколько мегабайт могут занимать результаты расчётов в кэше проекта; первыми удаляются те, что дольше всего не открывались. Закреплённые результаты остаются в истории при любом лимите. 0 — без ограничения.",
+    "setting.results.cacheLimit.title": "Размер кэша результатов",
     "settings.error.above_maximum": "«{key}» должно быть не больше {maximum}, а не {value}.",
     "settings.error.below_minimum": "«{key}» должно быть не меньше {minimum}, а не {value}.",
     "settings.error.duplicate_setting": "Настройка «{key}» модуля «{owner}» не учитывается: она уже есть у другого модуля.",

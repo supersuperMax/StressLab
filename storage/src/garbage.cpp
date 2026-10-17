@@ -10,7 +10,8 @@
 
 namespace fem::storage {
 
-CleanStats collect_garbage(FolderBlobStore& blobs, std::span<const std::string> roots) {
+std::set<std::string, std::less<>> reachable_blobs(const BlobStore& blobs,
+                                                   std::span<const std::string> roots) {
     std::set<std::string, std::less<>> reachable;
     std::set<std::string, std::less<>> tables;
     for (const std::string& root : roots) {
@@ -23,9 +24,19 @@ CleanStats collect_garbage(FolderBlobStore& blobs, std::span<const std::string> 
                 reachable.insert(std::move(piece));
             }
         } catch (const ProjectError& error) {
-            throw ProjectError(error.code(), "nothing was cleaned: the block " + root +
-                                                 " cannot be read (" + error.what() + ")");
+            throw ProjectError(error.code(),
+                               "the block " + root + " cannot be read (" + error.what() + ")");
         }
+    }
+    return reachable;
+}
+
+CleanStats collect_garbage(FolderBlobStore& blobs, std::span<const std::string> roots) {
+    std::set<std::string, std::less<>> reachable;
+    try {
+        reachable = reachable_blobs(blobs, roots);
+    } catch (const ProjectError& error) {
+        throw ProjectError(error.code(), std::string("nothing was cleaned: ") + error.what());
     }
 
     CleanStats stats;

@@ -123,6 +123,7 @@ public:
 
 private:
     friend class ProjectSession;
+    friend class ResultCache;
 
     ProjectHistory(ProjectSession& session, command::CommandBus& bus);
 
@@ -162,5 +163,10 @@ private:
     Subscription journal_;
     Subscription before_command_;
 };
+
+/// The blocks of bulk data the history `repo` needs: those of every version a variant, a label,
+/// HEAD or a stash reaches, and those of the pinned results (task 2.5). The roots of "Clean
+/// project" and what a package with the history carries.
+[[nodiscard]] std::vector<std::string> history_blob_roots(const Repository& repo);
 
 }  // namespace fem::storage

@@ -19,7 +19,11 @@ namespace {
 
 constexpr std::array<char, 8> magic = {'S', 'L', 'D', 'A', 'T', 'A', '\0', '\0'};
 
-enum class Kind : std::uint32_t { mesh = 1, node_set = 2, element_set = 3, surface = 4 };
+/// `bytes` (task 2.5): one array of bytes, a file of a pinned result, not the data of an object.
+enum class Kind : std::uint32_t { mesh = 1, node_set = 2, element_set = 3, surface = 4, bytes = 5 };
+
+/// How much of a stream `put_byte_data` reads at a time: many pieces, few calls.
+constexpr std::size_t stream_buffer_bytes = 4 * 1024 * 1024;
 
 /// How an array is kept in the table of contents.
 enum class Storage : std::uint32_t { inline_items = 0, pieces = 1 };
@@ -329,6 +333,9 @@ Table read_table(std::span<const std::byte> bytes) {
         case Kind::surface:
             table.arrays.push_back(read_array(in, sizeof(model::Index)));
             break;
+        case Kind::bytes:
+            table.arrays.push_back(read_array(in, 1));
+            break;
         default:
             throw_corrupt("unknown kind of data " +
                           std::to_string(static_cast<std::uint32_t>(table.kind)));
@@ -390,6 +397,8 @@ std::shared_ptr<const model::ObjectData> make_data(const Table& table, const Blo
             }
             return std::make_shared<const model::Surface>(std::move(sides));
         }
+        case Kind::bytes:
+            throw_corrupt("the block holds the bytes of a file, not the data of an object");
     }
     throw_corrupt("unknown kind of data");
 }
@@ -455,6 +464,89 @@ std::vector<std::string> object_data_pieces(std::span<const std::byte> table) {
         }
     }
     return pieces;
+}
+
+std::string put_byte_data(const ByteSource& read, BlobStore& blobs, const ChunkLimits& limits) {
+    // The bytes read and not stored yet start at a cut (or at the start), and a cut depends only
+    // on the bytes since the cut before it: cutting the stream window by window gives the pieces
+    // that cutting it whole would give. Of the pieces of a window all but the last are final; the
+    // last waits for more bytes, unless the stream has ended.
+    struct StoredPiece {
+        std::array<std::byte, digest_size> digest;
+        std::uint64_t size;
+    };
+    std::vector<StoredPiece> pieces;
+    std::uint64_t total = 0;
+    Bytes window;
+    bool ended = false;
+    while (!ended) {
+        while (!ended && window.size() < stream_buffer_bytes) {
+            const std::size_t start = window.size();
+            window.resize(stream_buffer_bytes);
+            const std::size_t got = read(std::span(window).subspan(start));
+            window.resize(start + std::min(got, stream_buffer_bytes - start));
+            ended = got == 0;
+        }
+        if (ended && pieces.empty() && window.size() <= inline_array_bytes) {
+            break;
+        }
+        const std::vector<std::size_t> ends = chunk_ends(window, 1, limits);
+        const std::size_t final_pieces = ended ? ends.size() : ends.size() - 1;
+        std::size_t begin = 0;
+        for (std::size_t i = 0; i < final_pieces; ++i) {
+            const std::span<const std::byte> piece =
+                std::span<const std::byte>(window).subspan(begin, ends[i] - begin);
+            pieces.push_back({digest_of(blobs.put(piece)), piece.size()});
+            total += piece.size();
+            begin = ends[i];
+        }
+        window.erase(window.begin(), window.begin() + static_cast<std::ptrdiff_t>(begin));
+        if (ended) {
+            window.clear();
+        }
+    }
+
+    Writer out;
+    out.raw(std::as_bytes(std::span(magic)));
+    out.scalar(object_data_codec_version);
+    out.scalar(static_cast<std::uint32_t>(Kind::bytes));
+    if (pieces.empty()) {
+        out.scalar(static_cast<std::uint64_t>(window.size()));
+        out.scalar(static_cast<std::uint32_t>(Storage::inline_items));
+        out.raw(window);
+    } else {
+        out.scalar(total);
+        out.scalar(static_cast<std::uint32_t>(Storage::pieces));
+        out.scalar(static_cast<std::uint64_t>(pieces.size()));
+        for (const StoredPiece& piece : pieces) {
+            out.raw(piece.digest);
+            out.scalar(piece.size);
+        }
+    }
+    return blobs.put(out.take());
+}
+
+std::uint64_t get_byte_data(std::string_view ref, const BlobStore& blobs, const ByteSink& write) {
+    const Bytes bytes = blobs.get(ref);
+    const Table table = read_table(bytes);
+    if (table.kind != Kind::bytes) {
+        throw_corrupt("the block " + std::string(ref) + " is the data of an object, not a file");
+    }
+    const ArrayEntry& entry = table.arrays.front();
+    if (entry.pieces.empty()) {
+        write(entry.items);
+        return entry.items.size();
+    }
+    std::uint64_t total = 0;
+    for (const Piece& piece : entry.pieces) {
+        const Bytes piece_bytes = blobs.get(piece.ref);
+        if (piece_bytes.size() != piece.items) {
+            throw_corrupt("the piece " + piece.ref + " has another size than its table says");
+        }
+        write(piece_bytes);
+        total += piece_bytes.size();
+    }
+    return total;
 }
 
 nlohmann::json describe_object_data(const model::ObjectData& data) {

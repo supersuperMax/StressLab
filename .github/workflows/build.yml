@@ -94,6 +94,35 @@ jobs:
       - name: C++ tests
         run: ctest --preset $env:PRESET
 
+      # Task 2.5: packages of the wing made here, for the job "slpack-exchange" of ci.yml to unpack
+      # on the other systems, with the test program that unpacks them there.
+      - name: Pack the wing for the other systems
+        if: inputs.kind == 'core'
+        env:
+          STRESSLAB_SLPACK_EXPORT: ${{ runner.temp }}/slpack
+        run: '& "./build/$env:PRESET/tests/fem_storage_tests" --gtest_filter=StoragePackageExchange.Write'
+
+      - name: Upload the packages of the wing
+        if: inputs.kind == 'core'
+        uses: actions/upload-artifact@v4
+        with:
+          name: slpack-${{ runner.os }}
+          path: ${{ runner.temp }}/slpack
+          if-no-files-found: error
+          retention-days: 5
+
+      - name: Upload the storage tests
+        if: inputs.kind == 'core'
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-tests-${{ runner.os }}
+          path: |
+            build/${{ env.PRESET }}/tests/fem_storage_tests
+            build/${{ env.PRESET }}/tests/fem_storage_tests.exe
+            build/${{ env.PRESET }}/tests/*.dll
+          if-no-files-found: error
+          retention-days: 5
+
       # Pictures of the window for the review, on the platform of the OS (the platform without a
       # screen has no fonts on Windows); Linux has no screen here, its fonts come from fontconfig.
       - name: Screenshots of the window

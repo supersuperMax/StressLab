@@ -4,6 +4,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <set>
 #include <span>
 #include <string>
 
@@ -28,5 +30,11 @@ struct CleanStats {
 /// piece a table lists but the store lacks does not stop it: nothing more is lost by cleaning.
 /// Throws ProjectError(io) if the folder cannot be listed or a file cannot be removed.
 CleanStats collect_garbage(FolderBlobStore& blobs, std::span<const std::string> roots);
+
+/// The blocks `roots` reach: the roots and the pieces their tables list, whether the pieces are
+/// in `blobs` or not. What the garbage collection keeps and a package (task 2.5) carries. Throws
+/// ProjectError (missing_blob, corrupt_blob) if a root is missing or is not a table.
+[[nodiscard]] std::set<std::string, std::less<>> reachable_blobs(
+    const BlobStore& blobs, std::span<const std::string> roots);
 
 }  // namespace fem::storage

@@ -40,6 +40,7 @@ add_library(fem_python_bindings STATIC
     bindings/src/mesh.cpp
     bindings/src/module.cpp
     bindings/src/project.cpp
+    bindings/src/results.cpp
     bindings/src/session.cpp
     bindings/src/tasks.cpp)
 target_include_directories(fem_python_bindings PUBLIC bindings/include)
@@ -85,6 +86,7 @@ set(fem_python_package_files
     stresslab/extensions.py
     stresslab/history.py
     stresslab/project.py
+    stresslab/results.py
     stresslab/py.typed
     stresslab_host/__init__.py
     stresslab_host/__main__.py

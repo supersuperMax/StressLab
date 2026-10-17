@@ -3,7 +3,9 @@
 #include "fem/core/command/command_bus.h"
 #include "fem/core/signal.h"
 #include "fem/storage/history.h"
+#include "fem/storage/package.h"
 #include "fem/storage/project.h"
+#include "fem/storage/result_cache.h"
 
 #include <filesystem>
 #include <functional>
@@ -47,6 +49,9 @@ public:
     /// Versions and variants of the project (task 2.3).
     [[nodiscard]] ProjectHistory& history() noexcept { return *history_; }
     [[nodiscard]] const ProjectHistory& history() const noexcept { return *history_; }
+    /// The cache of results of the project (task 2.5).
+    [[nodiscard]] ResultCache& results() noexcept { return *results_; }
+    [[nodiscard]] const ResultCache& results() const noexcept { return *results_; }
 
     /// Opens the project of `folder` in place of the document. Throws ProjectError (the model of
     /// the project is checked too: invalid_model names the file of the object at fault) and
@@ -68,6 +73,17 @@ public:
     /// for a project never saved, the ProjectErrors of `clean_project` and
     /// CommandError(invalid_state) inside a command or a transaction.
     CleanStats clean();
+    /// Saves the project and packs it into `package` (`pack_project`; ".slpack" is added if the
+    /// name has another extension), with its history or without it. Written to the journal as
+    /// `stresslab.project.pack("...", history=True)`. Throws ProjectError(no_folder) for a project
+    /// never saved, what `save` and `pack_project` throw, and CommandError(invalid_state) inside a
+    /// command or a transaction.
+    PackStats pack(const std::filesystem::path& package, bool with_history = true);
+    /// Unpacks `package` into `folder` (`unpack_project`; ".slproj" is added as `save_as` adds it)
+    /// and opens that project in place of the document. Written to the journal as
+    /// `stresslab.project.unpack("...", "...")`. Throws what `unpack_project` and `open` throw;
+    /// if the project cannot be opened, the folder stays unpacked.
+    PackStats unpack(const std::filesystem::path& package, const std::filesystem::path& folder);
     /// A new empty document in place of this one, without a folder. Throws
     /// CommandError(invalid_state) inside a command or a transaction.
     void close();
@@ -78,9 +94,17 @@ public:
     /// The project folder for `path`: `path` itself if it ends with ".slproj", otherwise `path`
     /// with ".slproj" added.
     [[nodiscard]] static std::filesystem::path with_extension(const std::filesystem::path& path);
+    /// The package for `path`: `path` itself if it ends with ".slpack", otherwise `path` with
+    /// ".slpack" added.
+    [[nodiscard]] static std::filesystem::path with_package_extension(
+        const std::filesystem::path& path);
 
 private:
     friend class ProjectHistory;
+    friend class ResultCache;
+
+    /// Opens the project of `folder`, journaling `entry`.
+    void open_folder(const std::filesystem::path& folder, std::string_view entry);
 
     void check_idle(std::string_view action) const;
     /// Makes the document hold a project read from files, journaling `entry`.
@@ -98,6 +122,7 @@ private:
     Signal<> changed_;
     Subscription model_changed_;
     std::unique_ptr<ProjectHistory> history_;
+    std::unique_ptr<ResultCache> results_;
 };
 
 }  // namespace fem::storage

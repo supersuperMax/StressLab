@@ -39,6 +39,30 @@ void define_project(nb::module_& m) {
         "Removes the blocks of bulk data the saved project no longer refers to (\"Clean "
         "project\"); returns {\"removed\", \"freed_bytes\", \"kept\", \"kept_bytes\"}. Written to "
         "the journal.");
+    const auto stats = [](const storage::PackStats& packed) {
+        nb::dict result;
+        result["files"] = packed.files;
+        result["bytes"] = packed.bytes;
+        result["package_bytes"] = packed.package_bytes;
+        return result;
+    };
+    project_module.def(
+        "pack",
+        [stats](nb::handle package, bool history) {
+            return stats(project().pack(to_path(package), history));
+        },
+        nb::arg("package"), nb::arg("history") = true,
+        "Saves the project and packs it into one .slpack file (\".slpack\" is added to a name "
+        "without it), with its history or without it; returns {\"files\", \"bytes\", "
+        "\"package_bytes\"}. Written to the journal.");
+    project_module.def(
+        "unpack",
+        [stats](nb::handle package, nb::handle folder) {
+            return stats(project().unpack(to_path(package), to_path(folder)));
+        },
+        nb::arg("package"), nb::arg("folder"),
+        "Unpacks a .slpack into a new or empty folder (\".slproj\" is added to a name without it) "
+        "and opens that project in place of the active document. Written to the journal.");
     project_module.def(
         "close", [] { project().close(); },
         "Replaces the active document with a new empty one without a folder. Written to the "

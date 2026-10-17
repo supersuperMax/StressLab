@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -43,9 +44,29 @@ inline constexpr std::size_t inline_array_bytes = 16 * 1024;
 [[nodiscard]] std::shared_ptr<const model::ObjectData> get_object_data(std::string_view ref,
                                                                        const BlobStore& blobs);
 
-/// The pieces a table of contents refers to, in its order, repeats included. Throws
-/// ProjectError(corrupt_blob) if `table` is not a table of contents.
+/// The pieces a table of contents refers to, in its order, repeats included; a table of bytes
+/// (`put_byte_data`) too. Throws ProjectError(corrupt_blob) if `table` is not a table of contents.
 [[nodiscard]] std::vector<std::string> object_data_pieces(std::span<const std::byte> table);
+
+/// Gives the next bytes of a stream: fills the start of the buffer and returns how many bytes it
+/// put there, 0 at the end. It may throw to stop the reading (a cancelled operation).
+using ByteSource = std::function<std::size_t(std::span<std::byte> buffer)>;
+/// Takes the next bytes of a stream.
+using ByteSink = std::function<void(std::span<const std::byte> bytes)>;
+
+/// Stores a stream of bytes of any length (a file of a pinned result, task 2.5) as data of the
+/// kind "bytes": a table of contents with one array of bytes, cut into pieces by `chunk_ends` as
+/// it is read, so the stream is never in memory whole and a file that changes in one place shares
+/// its other pieces with the old one. Returns the reference of the table, a root for the garbage
+/// collection like the data of an object. Throws what `read` and `blobs` throw.
+[[nodiscard]] std::string put_byte_data(const ByteSource& read, BlobStore& blobs,
+                                        const ChunkLimits& limits = {});
+
+/// Gives the bytes whose table is the block `ref` to `write`, piece by piece, and returns how
+/// many there were. Throws ProjectError: missing_blob if the table or a piece is not in `blobs`,
+/// corrupt_blob if the table is not of the kind "bytes" or a piece has another size than the
+/// table says; and what `write` throws.
+std::uint64_t get_byte_data(std::string_view ref, const BlobStore& blobs, const ByteSink& write);
 
 /// What a project file says about the data of an object, so that a diff of versions can show
 /// it without the block: {"kind": "mesh", "nodes": 1234, "elements": 5678}, or

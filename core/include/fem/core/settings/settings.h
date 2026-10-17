@@ -34,6 +34,8 @@ inline constexpr std::string_view undo_limit = "history.undoLimit";
 inline constexpr std::string_view log_level = "log.level";
 /// Seconds between automatic saves of a project that has a folder; 0 turns them off.
 inline constexpr std::string_view autosave_interval = "project.autosaveInterval";
+/// Megabytes the cache of results of a project may take (task 2.5); 0 means no limit.
+inline constexpr std::string_view result_cache_limit = "results.cacheLimit";
 }  // namespace keys
 
 /// The schemas of the settings of the core.

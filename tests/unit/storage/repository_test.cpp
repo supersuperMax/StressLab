@@ -4,11 +4,13 @@
 
 #include "fem/storage/repository.h"
 
+#include "fem/core/io/files.h"
 #include "fem/storage/error.h"
 
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -313,6 +315,54 @@ TEST_F(StorageRepository, ReachableCoversVariantsLabelsStashesAndHead) {
     EXPECT_EQ(ids, (std::set<std::string>{first, second, labelled, stashed, viewed}));
     EXPECT_EQ(found.size(), ids.size());
     EXPECT_FALSE(ids.contains(lost));
+}
+
+// --- Pinned results (task 2.5) -------------------------------------------------------------------
+
+TEST_F(StorageRepository, PinnedResultsAreRecordsUnderTheirKeys) {
+    const std::string key(64, 'c');
+    EXPECT_TRUE(repo.pins().empty());
+    EXPECT_FALSE(repo.pin(key).has_value());
+    repo.set_pin(key, utf8(u8"{\"files\": \"напряжения\"}\n"));
+    repo.set_pin(std::string(64, 'd'), "second");
+    EXPECT_EQ(repo.pin(key), std::optional<std::string>(utf8(u8"{\"files\": \"напряжения\"}\n")));
+    repo.set_pin(key, "replaced");
+    EXPECT_EQ(repo.pins(), (std::map<std::string, std::string>{{key, "replaced"},
+                                                               {std::string(64, 'd'), "second"}}));
+    // A pin is not a version: walks of the history do not see it.
+    EXPECT_TRUE(repo.reachable().empty());
+    EXPECT_TRUE(repo.remove_pin(key));
+    EXPECT_FALSE(repo.remove_pin(key));
+    EXPECT_EQ(repo.pins().size(), 1U);
+    EXPECT_PROJECT_ERROR(repo.set_pin("../heads/main", "x"), ProjectErrc::unknown_result);
+    EXPECT_PROJECT_ERROR((void)repo.pin(std::string(64, 'C')), ProjectErrc::unknown_result);
+}
+
+TEST_F(StorageRepository, AdoptingKeepsHeadVariantsAndPins) {
+    const std::string first = repo.commit(files_with("2.0"), "", note("First"), author, {});
+    repo.set_branch(utf8(u8"Вариант"), first, true);
+    repo.set_pin(std::string(64, 'e'), "record");
+    repo.detach_head(first);
+    // A history unpacked from a package comes without its configuration.
+    fs::remove(dir.path() / ".fem" / "git" / "config");
+
+    Repository::adopt(dir.path());
+    // The configuration of a new history on this computer, ignored case included.
+    TempDir fresh("fresh history");
+    (void)Repository::open_or_create(fresh.path());
+    const auto config = [](const fs::path& folder) {
+        return io::read_file(folder / ".fem" / "git" / "config").value_or("");
+    };
+    EXPECT_EQ(config(dir.path()), config(fresh.path()));
+    EXPECT_NE(config(dir.path()), "");
+    EXPECT_FALSE(fs::exists(dir.path() / ".fem" / "git-probe"));
+    std::optional<Repository> again = Repository::open(dir.path());
+    ASSERT_TRUE(again.has_value());
+    EXPECT_FALSE(again->head().branch.has_value());
+    EXPECT_EQ(again->head().version, std::optional<std::string>(first));
+    EXPECT_EQ(again->branches().at(utf8(u8"Вариант")), first);
+    EXPECT_EQ(again->pin(std::string(64, 'e')), std::optional<std::string>("record"));
+    EXPECT_EQ(again->read(first).files, files_with("2.0"));
 }
 
 }  // namespace fem::storage

@@ -1,0 +1,60 @@
+{
+  "branches": {
+    "main": "b7be2d8ec4b4f499827cf5ea1a58db7f4ab16bfe",
+    "Композитная обшивка": "e2be8148fed9a7234e15b236d7e0f69154dc7ded"
+  },
+  "diff": {
+    "objects": [
+      {
+        "id": 2,
+        "kind": "changed",
+        "name": "skin-upper",
+        "owner": "fem.demo",
+        "properties": [
+          {
+            "after": 3.0,
+            "before": 2.0,
+            "pointer": "thickness"
+          }
+        ],
+        "type": "section"
+      },
+      {
+        "dependencies": [],
+        "id": 4,
+        "kind": "removed",
+        "name": "gust-2",
+        "owner": "fem.demo",
+        "parent": null,
+        "properties": {},
+        "schemaVersion": 1,
+        "type": "load"
+      }
+    ]
+  },
+  "files": {
+    "model/ext/fem.demo/load/4.json": "b53e34b39ec45694dd8450150efdbb3d99056d4d7924565d8de2a94db027aa7b",
+    "model/ext/fem.demo/material/3.json": "149d50cac6f8e8acfbab7bb482975dd53becc119aab2c2e8403645a54f86e7d9",
+    "model/ext/fem.demo/section/2.json": "4f26e31966c829fb275265f3f8f4b6b23fe499e4e73dfb2a3a91f894d4ee9a2b",
+    "model/mesh/1.json": "9f0f502810bb4488aa203196d1ada5053207e426d903a1b2de9136321673e04f",
+    "project.json": "cb32da61732cd0aad8698dffbb336ab101d38da80b17091447dbfc8f02faaf97",
+    "refs/blobs.json": "be47c83dec3879de5944df3a0198ec44f5ce63590b486f1a3a1625b98e523050"
+  },
+  "head": "main",
+  "journal": "16e4a474b61a1b782efccc75bb0275dc044798d272146601041f4ffdee9c75cb",
+  "modelPackage": "df52de82dd8108b6537c69f5f24b07f89a79d72f6a4f9af37dbb0e2a23296acb",
+  "package": "7015abfeec6d6bcfbc5dd09763c971a8cef0382cddb39d7e6208e227c2128843",
+  "result": "8ca2739e10d00d2a90120f9d86f2c765e13cbd2b9d2d41d51c36ac3bb74b65ff",
+  "resultFiles": {
+    "log/solver.dat": "88b75d209dbb2047bbc87456a2b830cd382b11f185b58c68ab17d74b38cd79cb",
+    "напряжения.frd": "fb580c221f8a7925c4c377177f3acd9fa3a82c00ad82cfa7543191019a408144"
+  },
+  "tags": {
+    "Отправлено на согласование 12.10": "304766c69353446a7c005c455e2177613501a540"
+  },
+  "versions": [
+    "b7be2d8ec4b4f499827cf5ea1a58db7f4ab16bfe Порыв gust-2",
+    "e2be8148fed9a7234e15b236d7e0f69154dc7ded Толщина обшивки 3 мм",
+    "304766c69353446a7c005c455e2177613501a540 Крыло: базовый вариант"
+  ]
+}

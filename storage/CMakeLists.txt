@@ -1,5 +1,5 @@
-# Project folder (.slproj), deterministic JSON, blob store, history and diffs (tasks 2.1-2.4 of
-# docs/plan.md). Must build without Qt GUI and VTK (CLAUDE.md, rule 2).
+# Project folder (.slproj), deterministic JSON, blob store, history, diffs, the cache of results
+# and packages (tasks 2.1-2.5 of docs/plan.md). Must build without Qt GUI and VTK (CLAUDE.md, rule 2).
 add_library(femstorage)
 add_library(fem::storage ALIAS femstorage)
 
@@ -14,9 +14,11 @@ target_sources(
             src/json.cpp
             src/names.cpp
             src/object_data_codec.cpp
+            src/package.cpp
             src/project.cpp
             src/project_format.cpp
             src/repository.cpp
+            src/result_cache.cpp
             src/session.cpp
             src/sha256.cpp
             src/zstd_codec.cpp)
@@ -32,3 +34,7 @@ target_link_libraries(femstorage PRIVATE zstd::libzstd)
 # public headers.
 find_package(libgit2 CONFIG REQUIRED)
 target_link_libraries(femstorage PRIVATE libgit2::libgit2package)
+
+# miniz writes and reads the zip of a .slpack (task 2.5); not seen in the public headers either.
+find_package(miniz CONFIG REQUIRED)
+target_link_libraries(femstorage PRIVATE miniz::miniz)

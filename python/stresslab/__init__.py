@@ -16,7 +16,8 @@ is a script that rebuilds the same document. Modules are enabled and disabled wi
 ``stresslab.extensions.enable("fem.demo")`` and ``disable``, and the document is saved to and
 opened from a project folder with ``stresslab.project.save_as("wing")`` and
 ``stresslab.project.open("wing.slproj")``, journaled too, and its versions and variants are kept
-with ``stresslab.history.commit("Two ribs")`` and the other calls of ``stresslab.history``.
+with ``stresslab.history.commit("Two ribs")`` and the other calls of ``stresslab.history``;
+results of calculations are kept in its cache with ``stresslab.results``.
 Inside the application ``stresslab`` works with the application's document; in a plain Python
 process it makes a document of its own.
 """
@@ -66,7 +67,7 @@ from _stresslab import (
     set_active_document,
 )
 
-from . import extensions, history, project
+from . import extensions, history, project, results
 from ._commands import CommandNamespace, Commands, python_name
 
 __version__: str = _native.__version__
@@ -135,6 +136,7 @@ __all__ = [
     "python_name",
     "redo",
     "register_command",
+    "results",
     "run_task",
     "set_active_document",
     "transaction",
