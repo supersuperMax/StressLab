@@ -44,6 +44,8 @@ struct ContributionHosts {
     /// locations go to their end. Menus of modules stand before "help".
     std::map<std::string, QMenu*, std::less<>> shell_menus;
     QToolBar* stage_bar = nullptr;
+    /// Stages go before this action of the stage bar; nullptr: at its end.
+    QAction* stage_bar_end = nullptr;
     QToolBar* activity_bar = nullptr;
     /// The activities of the shell itself (Model, Modules, Settings): first on the activity bar,
     /// before those of modules, kept across rebuilds. They belong to the window.

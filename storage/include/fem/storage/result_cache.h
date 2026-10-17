@@ -43,6 +43,12 @@ struct SolverInfo {
 /// a part of the model): name -> value.
 using ResultInputs = std::map<std::string, std::string, std::less<>>;
 
+/// The key indicators of a result (task 2.6, docs/interface-design.md §12: mass, the largest
+/// stress, the safety factor, the first frequency): the id of an indicator (`resultIndicators` of a
+/// manifest) -> its value in the units of the model. Not a part of the key: they are what the
+/// module that read the result found in it.
+using ResultIndicators = std::map<std::string, double, std::less<>>;
+
 /// The key of the results of `solver` for the model of `files`: 64 hex digits of the SHA-256 of a
 /// canonical text of the files of the model (every file under model/ by the hash of its bytes),
 /// refs/blobs.json (the meshes by the hashes of their data), the units of project.json, the solver
@@ -71,6 +77,7 @@ struct ResultInfo {
     std::int64_t created = 0;       ///< When it was put in the cache: seconds since 1970-01-01 UTC.
     std::int64_t used = 0;          ///< When it was last put or found.
     std::vector<ResultFile> files;  ///< By path.
+    ResultIndicators indicators;    ///< May be empty.
     std::uint64_t bytes = 0;        ///< The size of the files together.
     bool cached = false;            ///< Its files are in the cache.
     bool pinned = false;            ///< It is kept in the history.
@@ -117,11 +124,13 @@ public:
     /// Puts the files of `from` (a folder; all files below it, as they are) in the cache as the
     /// result of `key`, computed from `version` by `solver`, in place of one already there; then
     /// removes the results used longest ago while the cache is larger than its limit (never this
-    /// one). The result is there whole or not at all. Throws ProjectError: no_folder,
-    /// unknown_version, result_mismatch if `key` is not that of the model of `version` with this
-    /// solver and these inputs, io.
+    /// one). The result is there whole or not at all, with its key `indicators`. Throws
+    /// ProjectError: no_folder, unknown_version, result_mismatch if `key` is not that of the model
+    /// of `version` with this solver and these inputs, invalid_data for an indicator without an id
+    /// or with a value that is not finite, io.
     ResultInfo put(std::string_view key, std::string_view version, const SolverInfo& solver,
-                   const ResultInputs& inputs, const std::filesystem::path& from);
+                   const ResultInputs& inputs, const std::filesystem::path& from,
+                   const ResultIndicators& indicators = {});
     /// The result of `key`, which becomes the one used last. A pinned result whose files are not in
     /// the cache any more is brought back to it from the history. None if there is no such result.
     /// Throws ProjectError (io, missing_blob, corrupt_blob) if it cannot be read.

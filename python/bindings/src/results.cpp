@@ -35,6 +35,11 @@ nb::dict to_python(const storage::ResultInfo& info) {
         inputs[to_str(name)] = to_str(value);
     }
     result["inputs"] = inputs;
+    nb::dict indicators;
+    for (const auto& [id, value] : info.indicators) {
+        indicators[to_str(id)] = value;
+    }
+    result["indicators"] = indicators;
     result["created"] = info.created;
     result["used"] = info.used;
     nb::list files;
@@ -72,14 +77,21 @@ void define_results(nb::module_& m) {
         "put",
         [](const std::string& key, nb::handle folder, const std::string& version,
            const std::string& solver, const std::string& solver_version,
-           std::optional<nb::dict> inputs) {
+           std::optional<nb::dict> inputs, std::optional<nb::dict> indicators) {
+            storage::ResultIndicators values;
+            if (indicators) {
+                for (const auto& [id, value] : *indicators) {
+                    values.emplace(to_utf8(id), nb::cast<double>(value));
+                }
+            }
             return to_python(results().put(key, version, {solver, solver_version},
-                                           to_inputs(inputs), to_path(folder)));
+                                           to_inputs(inputs), to_path(folder), values));
         },
         nb::arg("key"), nb::arg("folder"), nb::arg("version"), nb::arg("solver"),
         nb::arg("solver_version") = "", nb::arg("inputs") = nb::none(),
+        nb::arg("indicators") = nb::none(),
         "Puts the files of the folder in the cache as the result of the key, computed from the "
-        "version; returns it as a dict.");
+        "version, with its key indicators; returns it as a dict.");
     module.def(
         "find",
         [](const std::string& key) -> nb::object {

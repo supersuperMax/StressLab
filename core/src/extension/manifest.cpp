@@ -5,6 +5,7 @@
 #include "fem/core/extension/error.h"
 #include "fem/core/form/form.h"
 #include "fem/core/model/object.h"
+#include "fem/core/model/quantity.h"
 
 #include "files.h"
 #include <toml++/toml.hpp>
@@ -1353,6 +1354,28 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
                    fields.finish();
                    out.result_filters.push_back(std::move(filter));
                });
+
+    Seen indicator_ids;
+    each_table(
+        contributes, "resultIndicators", [&](const toml::table& entry, const std::string& where) {
+            Fields fields(*this, entry, where);
+            ResultIndicatorContribution indicator;
+            indicator.owner = owner;
+            indicator.id = id(fields, "id", is_contribution_id, contribution_id_rule);
+            unique(indicator_ids, indicator.id, entry.get("id"), "result indicator id");
+            indicator.title = text(fields, "title", true);
+            if (const auto quantity = fields.text("quantity", false)) {
+                if (model::find_quantity(*quantity) == nullptr) {
+                    error(entry.get("quantity")->source(), "unknown quantity '" + *quantity +
+                                                               "' in " + where +
+                                                               "; see fem/core/model/quantity.h");
+                } else {
+                    indicator.quantity = *quantity;
+                }
+            }
+            fields.finish();
+            out.result_indicators.push_back(std::move(indicator));
+        });
 
     if (const toml::node* settings = contributes.get("settings")) {
         parse_settings(*settings, out);

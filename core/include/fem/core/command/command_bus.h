@@ -133,6 +133,13 @@ public:
     /// How many steps can be undone now.
     [[nodiscard]] std::size_t undo_count() const noexcept { return undo_stack_.size(); }
 
+    /// Makes the document read-only, as while the window shows a version of the history (task
+    /// 2.6): a command that changed the model is reverted and throws CommandError(read_only),
+    /// inside a transaction too, and so do undo and redo. Commands that change nothing still run,
+    /// and `replace_document` (opening a project or another version) is allowed.
+    void set_read_only(bool read_only) noexcept { read_only_ = read_only; }
+    [[nodiscard]] bool is_read_only() const noexcept { return read_only_; }
+
     /// Starts a group of commands that is undone as one step. Transactions nest; while one is
     /// open, undo and redo are refused and nothing is sent to listeners. The label names the
     /// step for undo and in the journal. Throws CommandError(invalid_state) inside a command.
@@ -203,6 +210,8 @@ private:
     CommandResult run(const std::shared_ptr<const Registered>& command, const Arguments& args,
                       model::ChangeSet& changes);
     void complete_step(std::string label, model::ChangeSet changes, const std::string& entry);
+    /// While read-only, reverts `changes` of the command `id` and throws if there are any.
+    void refuse_changes(model::ChangeSet& changes, std::string_view id);
     void check_idle(std::string_view action) const;
     /// Forgets the oldest steps over the undo limit.
     void trim_undo_stack();
@@ -218,6 +227,7 @@ private:
     std::vector<Step> undo_stack_;
     std::vector<Step> redo_stack_;
     std::size_t undo_limit_ = 0;
+    bool read_only_ = false;
     std::vector<OpenTransaction> transactions_;
     std::uint64_t next_transaction_id_ = 1;
     int running_ = 0;  // Depth of commands being run.

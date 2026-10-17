@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <random>
 #include <set>
@@ -127,6 +128,14 @@ nlohmann::json to_json(const ResultInfo& info, const std::map<std::string, std::
                              {"key", info.key},
                              {"solver", {{"id", info.solver.id}, {"version", info.solver.version}}},
                              {"version", info.version}};
+    if (!info.indicators.empty()) {
+        // Only when there are some: records without them stay as they were (task 2.5).
+        nlohmann::json indicators = nlohmann::json::object();
+        for (const auto& [id, value] : info.indicators) {
+            indicators[id] = value;
+        }
+        result["indicators"] = std::move(indicators);
+    }
     if (with_used) {
         result["used"] = info.used;
     }
@@ -176,6 +185,17 @@ Record parse_record(std::string_view text, const std::string& file, bool pinned)
             throw_invalid(file, "an input is not text");
         }
         info.inputs.emplace(name, input.get<std::string>());
+    }
+    if (const auto indicators = value.find("indicators"); indicators != value.end()) {
+        if (!indicators->is_object()) {
+            throw_invalid(file, "'indicators' is not an object");
+        }
+        for (const auto& [id, indicator] : indicators->items()) {
+            if (!indicator.is_number() || !std::isfinite(indicator.get<double>())) {
+                throw_invalid(file, "the indicator '" + id + "' is not a finite number");
+            }
+            info.indicators.emplace(id, indicator.get<double>());
+        }
     }
     if (!is_key(info.key)) {
         throw_invalid(file, "'" + info.key + "' is not a key");
@@ -397,8 +417,14 @@ fs::path ResultCache::cache_folder() const {
 
 ResultInfo ResultCache::put(std::string_view key, std::string_view version,
                             const SolverInfo& solver, const ResultInputs& inputs,
-                            const fs::path& from) {
+                            const fs::path& from, const ResultIndicators& indicators) {
     const fs::path cache = cache_folder();
+    for (const auto& [id, value] : indicators) {
+        if (id.empty() || !std::isfinite(value)) {
+            throw ProjectError(ProjectErrc::invalid_data,
+                               "the indicator '" + id + "' needs an id and a finite value");
+        }
+    }
     const std::optional<Repository> repo = Repository::open(*session_.folder_);
     if (!repo) {
         throw ProjectError(ProjectErrc::unknown_version,
@@ -430,6 +456,7 @@ ResultInfo ResultCache::put(std::string_view key, std::string_view version,
     info.version = id;
     info.solver = solver;
     info.inputs = inputs;
+    info.indicators = indicators;
     info.created = clock_();
     info.used = info.created;
     try {
@@ -464,6 +491,7 @@ ResultInfo ResultCache::put(std::string_view key, std::string_view version,
     info.cached = true;
     info.pinned = repo->pin(info.key).has_value();
     info.folder = cache / to_path(info.key) / to_path(files_folder);
+    session_.history().changed_.emit();
     return info;
 }
 
@@ -648,6 +676,7 @@ void ResultCache::pin(std::string_view key, const Progress& progress) {
     repo->set_pin(key, to_canonical_json(to_json(*info, &data, false)));
     progress.step(1.0);
     session_.bus_.journal_action(call("pin", command::python_string(key)));
+    session_.history().changed_.emit();
 }
 
 void ResultCache::unpin(std::string_view key) {
@@ -659,6 +688,7 @@ void ResultCache::unpin(std::string_view key) {
                            "the result '" + std::string(key) + "' is not pinned");
     }
     session_.bus_.journal_action(call("unpin", command::python_string(key)));
+    session_.history().changed_.emit();
 }
 
 bool ResultCache::remove(std::string_view key) {
@@ -674,6 +704,7 @@ bool ResultCache::remove(std::string_view key) {
         }
     }
     session_.bus_.journal_action(call("remove", command::python_string(key)));
+    session_.history().changed_.emit();
     return removed;
 }
 
@@ -698,6 +729,7 @@ PruneStats ResultCache::prune_inactive() {
         }
     }
     session_.bus_.journal_action(call("prune_inactive"));
+    session_.history().changed_.emit();
     return stats;
 }
 

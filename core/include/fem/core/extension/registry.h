@@ -53,6 +53,7 @@ public:
     [[nodiscard]] std::vector<const BottomPanelTabContribution*> bottom_panel_tabs() const;
     [[nodiscard]] std::vector<const ViewportLayerContribution*> viewport_layers() const;
     [[nodiscard]] std::vector<const ResultFilterContribution*> result_filters() const;
+    [[nodiscard]] std::vector<const ResultIndicatorContribution*> result_indicators() const;
     [[nodiscard]] std::vector<const SettingContribution*> settings() const;
     [[nodiscard]] std::vector<const KeybindingContribution*> keybindings() const;
     [[nodiscard]] std::vector<const IconContribution*> icons() const;

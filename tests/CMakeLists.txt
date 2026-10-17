@@ -214,6 +214,8 @@ if(FEM_BUILD_GUI)
         unit/shell/demo_acceptance_test.cpp
         unit/shell/extensions_panel_test.cpp
         unit/shell/form_widget_test.cpp
+        unit/shell/history_graph_test.cpp
+        unit/shell/history_panel_test.cpp
         unit/shell/icons_test.cpp
         unit/shell/keys_test.cpp
         unit/shell/main_window_test.cpp

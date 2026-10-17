@@ -118,4 +118,32 @@ struct DiffContext {
 /// titles (`x-enumTitles`).
 [[nodiscard]] std::vector<std::string> describe(const ModelDiff& diff, const DiffContext& context);
 
+/// A change as a row of the table of the comparison of versions (task 2.6): what `describe` says
+/// of an object, a field at a time, named and shown the same way.
+struct DiffRow {
+    /// The object; invalid for the units of the model.
+    model::ObjectId id{};
+    ChangeKind kind = ChangeKind::changed;
+    /// The section of the model tree: the owner and type of the object (as it is in the later
+    /// state, or in the earlier one if it was removed) and the title of its type; for the units,
+    /// the core and "units".
+    std::string owner{};
+    std::string type{};
+    std::string section{};
+    /// "Material Д16Т"; empty for the units.
+    std::string object{};
+    /// The title of the field, "Name", "Parent", "Data"...; "Added" or "Removed" for an object
+    /// that is only in one state (then `before` and `after` are empty, but for raw objects).
+    std::string field{};
+    /// The values with their units; "—" for one that is not there.
+    std::string before{};
+    std::string after{};
+    /// The module of the object is disabled or not installed: the values are its raw JSON.
+    bool raw = false;
+};
+
+/// The diff as rows: the units, then the objects by id, each changed object with a row per name,
+/// parent, property (by pointer), dependency and data that differ.
+[[nodiscard]] std::vector<DiffRow> describe_rows(const ModelDiff& diff, const DiffContext& context);
+
 }  // namespace fem::storage

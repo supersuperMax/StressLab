@@ -102,7 +102,8 @@ protected:
     [[nodiscard]] QStringList stages() const {
         QStringList ids;
         for (const QAction* action : bar(zone::stage_bar)->actions()) {
-            if (action->isVisible()) {
+            // Not the switcher of variants at the end of the bar (task 2.6).
+            if (action->isVisible() && action->objectName().startsWith(QStringLiteral("stage."))) {
                 ids.push_back(action->objectName().mid(6));  // Without "stage.".
             }
         }
@@ -203,7 +204,7 @@ TEST_F(ShellContributions, EnablingAModuleAddsItsItemsAndDisablingRemovesThem) {
     EXPECT_TRUE(toolbar().isEmpty());
     EXPECT_FALSE(window_->context_toolbar()->isVisibleTo(window_.get()));
     // Only the activities of the shell are left, without the separator before those of modules.
-    EXPECT_EQ(bar(zone::activity_bar)->actions().size(), 3);
+    EXPECT_EQ(bar(zone::activity_bar)->actions().size(), 4);
     EXPECT_EQ(find_action(bar(zone::activity_bar), QStringLiteral("activity.separator")), nullptr);
     EXPECT_EQ(panel(QStringLiteral("activity:opt.history")), nullptr);
     EXPECT_EQ(panel(QStringLiteral("tab:opt.log")), nullptr);

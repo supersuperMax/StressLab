@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -121,6 +122,13 @@ public:
     void set_author(Author author);
     [[nodiscard]] const Author& author() const noexcept { return author_; }
 
+    /// Called after an action changed the history or where the project is in it (versions,
+    /// variants, labels, changes put aside, HEAD), and after the results of the project changed
+    /// (`ResultCache`): the panel "History" of the window follows it (task 2.6). Not called for
+    /// changes of the model alone, nor when another project is opened (`ProjectSession::on_changed`
+    /// tells that).
+    [[nodiscard]] Subscription on_changed(std::function<void()> listener);
+
 private:
     friend class ProjectSession;
     friend class ResultCache;
@@ -160,6 +168,7 @@ private:
     Author author_;
     /// Journal entries since the last version.
     std::vector<std::string> pending_;
+    Signal<> changed_;
     Subscription journal_;
     Subscription before_command_;
 };

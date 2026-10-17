@@ -75,6 +75,8 @@ class Result:
     solver: str
     solver_version: str
     inputs: dict[str, str]
+    #: Key indicators (``resultIndicators`` of manifests) in the units of the model, by id.
+    indicators: dict[str, float]
     created: datetime
     used: datetime
     files: tuple[ResultFile, ...]
@@ -95,6 +97,7 @@ def _result(data: dict[str, Any]) -> Result:
         solver=data["solver"],
         solver_version=data["solver_version"],
         inputs=dict(data["inputs"]),
+        indicators=dict(data["indicators"]),
         created=datetime.fromtimestamp(data["created"], UTC),
         used=datetime.fromtimestamp(data["used"], UTC),
         files=tuple(
@@ -126,11 +129,13 @@ def put(
     solver: str,
     solver_version: str = "",
     inputs: dict[str, str] | None = None,
+    indicators: dict[str, float] | None = None,
 ) -> Result:
     """Puts the files of ``folder`` in the cache as the result of ``key``, computed by the solver
-    from ``version``; ProjectError with code "result_mismatch" if the key is not that of the model
-    of that version."""
-    return _result(_native.put(key, folder, version, solver, solver_version, inputs))
+    from ``version``, with its key ``indicators`` (id -> value in the units of the model; the
+    comparison of versions shows them); ProjectError with code "result_mismatch" if the key is not
+    that of the model of that version."""
+    return _result(_native.put(key, folder, version, solver, solver_version, inputs, indicators))
 
 
 def find(key: str) -> Result | None:

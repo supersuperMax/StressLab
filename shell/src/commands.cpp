@@ -1,5 +1,6 @@
 #include "fem/shell/commands.h"
 
+#include "fem/core/command/error.h"
 #include "fem/core/log/log.h"
 #include "fem/shell/stages.h"
 #include "fem/shell/strings.h"
@@ -123,6 +124,15 @@ bool Commands::run(std::string_view id) {
     try {
         (void)workbench_.bus.execute(id, std::move(args));
         return true;
+    } catch (const command::CommandError& error) {
+        log->error("command '{}' failed: {}", id, error.what());
+        // A version viewed on its own: say so in words, not in the message for developers.
+        const std::string message = error.code() == command::CommandErrc::read_only
+                                        ? text("prompt.readOnly").toStdString()
+                                        : std::string(error.what());
+        report(text("prompt.commandFailed",
+                    {{"command", title(id).toStdString()}, {"message", message}}));
+        return false;
     } catch (const std::exception& error) {
         log->error("command '{}' failed: {}", id, error.what());
         report(text("prompt.commandFailed", {{"command", title(id).toStdString()},

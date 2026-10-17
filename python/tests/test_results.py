@@ -4,6 +4,7 @@ package that other zip tools read. Folders have Cyrillic letters and spaces."""
 
 from __future__ import annotations
 
+import math
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -87,6 +88,35 @@ def test_put_find_and_pin(doc: stresslab.Document, folder: Path, journal: list[s
     with pytest.raises(stresslab.ProjectError) as error:
         results.unpin(key)
     assert error.value.code == "unknown_result"
+
+
+def test_key_indicators(doc: stresslab.Document, folder: Path) -> None:
+    wing(folder)
+    version = history.snapshot("Before solving")
+    key = results.key("calculix")
+    put = results.put(
+        key,
+        solver_output(folder, "1"),
+        version,
+        "calculix",
+        indicators={"structural.mass": 412.5, "structural.safety": 2},
+    )
+    assert put.indicators == {"structural.mass": 412.5, "structural.safety": 2.0}
+    found = results.find(key)
+    assert found is not None and found.indicators == put.indicators
+    plain = results.put(
+        results.key("calculix", inputs={"threads": "2"}),
+        solver_output(folder, "2"),
+        version,
+        "calculix",
+        inputs={"threads": "2"},
+    )
+    assert plain.indicators == {}
+    with pytest.raises(stresslab.ProjectError) as error:
+        results.put(
+            key, solver_output(folder, "3"), version, "calculix", indicators={"m": math.inf}
+        )
+    assert error.value.code == "invalid_data"
 
 
 def test_a_result_belongs_to_the_model_of_its_version(

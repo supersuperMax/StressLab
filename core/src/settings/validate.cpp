@@ -88,6 +88,7 @@ std::vector<Schema> core_schemas() {
         // Megabytes: 20 GiB by default, up to 1 PiB.
         core_schema(keys::result_cache_limit, Type::integer,
                     {{"default", 20480}, {"minimum", 0}, {"maximum", 1073741824}}),
+        core_schema(keys::git_terms, Type::boolean, {{"default", false}}),
     };
 }
 

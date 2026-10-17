@@ -70,7 +70,8 @@ protected:
     [[nodiscard]] QStringList stages() const {
         QStringList ids;
         for (const QAction* action : bar(zone::stage_bar)->actions()) {
-            if (action->isVisible()) {
+            // Not the switcher of variants at the end of the bar (task 2.6).
+            if (action->isVisible() && action->objectName().startsWith(QStringLiteral("stage."))) {
                 ids.push_back(action->objectName().mid(6));  // Without "stage.".
             }
         }

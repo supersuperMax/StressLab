@@ -7,8 +7,11 @@
 #include "fem/shell/brand.h"
 #include "fem/shell/command_palette.h"
 #include "fem/shell/commands.h"
+#include "fem/shell/comparison_view.h"
 #include "fem/shell/contribution_ui.h"
 #include "fem/shell/extensions_panel.h"
+#include "fem/shell/history_controller.h"
+#include "fem/shell/history_panel.h"
 #include "fem/shell/icons.h"
 #include "fem/shell/journal_panel.h"
 #include "fem/shell/keys.h"
@@ -20,6 +23,7 @@
 #include "fem/shell/required_modules_bar.h"
 #include "fem/shell/settings_panel.h"
 #include "fem/shell/strings.h"
+#include "fem/shell/version_bar.h"
 
 #include <DockAreaWidget.h>
 #include <DockManager.h>
@@ -34,6 +38,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QRegularExpression>
+#include <QStackedWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -129,6 +134,9 @@ void MainWindow::build_zones() {
 
     docks_ = new ads::CDockManager(this);
     docks_->setObjectName(QStringLiteral("dockManager"));
+    // The history of the project, which the bar over the 3D view, the panel "History", the
+    // switcher of variants and the comparison show.
+    history_ = new HistoryController(workbench_, this);
 
     const auto add_dock = [this](std::string_view id, std::string_view title_key,
                                  QWidget* content) {
@@ -155,14 +163,24 @@ void MainWindow::build_zones() {
     required_ = new RequiredModulesBar(workbench_, viewport_content);
     required_->set_report([this](const QString& message) { set_prompt(message); });
     viewport_layout->addWidget(required_);
+    // The bar "You are looking at the version of…", hidden until a version is viewed.
+    version_bar_ = new VersionBar(*history_, viewport_content);
+    viewport_layout->addWidget(version_bar_);
     context_toolbar_ = new QToolBar(viewport_content);
     context_toolbar_->setObjectName(QStringLiteral("contextToolbar"));
     viewport_layout->addWidget(context_toolbar_);
-    QLabel* viewport_stub = make_placeholder(viewport_content);
+    // The 3D view, or the screen "Compare" in its place.
+    viewport_stack_ = new QStackedWidget(viewport_content);
+    viewport_stack_->setObjectName(QStringLiteral("viewportStack"));
+    QLabel* viewport_stub = make_placeholder(viewport_stack_);
     QFont font = viewport_stub->font();
     font.setPointSizeF(font.pointSizeF() * 1.6);
     viewport_stub->setFont(font);
-    viewport_layout->addWidget(viewport_stub, 1);
+    viewport_stack_->addWidget(viewport_stub);
+    comparison_ = new ComparisonView(*history_, viewport_stack_);
+    viewport_stack_->addWidget(comparison_);
+    connect(comparison_, &ComparisonView::closed, this, &MainWindow::close_comparison);
+    viewport_layout->addWidget(viewport_stack_, 1);
     ads::CDockWidget* viewport = add_dock(zone::viewport, "zone.viewport", viewport_content);
     zones_.back().placeholder = viewport_stub;
     viewport->setFeature(ads::CDockWidget::NoTab, true);
@@ -178,6 +196,12 @@ void MainWindow::build_zones() {
     ads::CDockWidget* extensions = add_dock(zone::extensions, "zone.extensions", extensions_);
     docks_->addDockWidgetTabToArea(extensions, left);
     extensions->toggleView(false);
+    // The history: a tab next to the tree too, closed until its activity is clicked.
+    history_panel_ = new HistoryPanel(*history_);
+    ads::CDockWidget* history = add_dock(zone::history, "zone.history", history_panel_);
+    docks_->addDockWidgetTabToArea(history, left);
+    history->toggleView(false);
+    connect(history_panel_, &HistoryPanel::compare_requested, this, &MainWindow::show_comparison);
     left->setCurrentDockWidget(tree);
     properties_ = new PropertyPanel(workbench_);
     ads::CDockWidget* properties = add_dock(zone::properties, "zone.properties", properties_);
@@ -217,6 +241,12 @@ void MainWindow::build_zones() {
     docks_->addDockWidgetTabToArea(add_dock(zone::problems, "zone.problems", problems_), bottom);
     connect(problems_, &ProblemsPanel::changed, this, &MainWindow::retranslate);
     bottom->setCurrentDockWidget(journal);
+    connect(history_, &HistoryController::problem, this, [this](const QString& message) {
+        problems_->add(message);
+        set_prompt(message);
+    });
+    connect(history_, &HistoryController::message, this,
+            [this](const QString& message) { set_prompt(message); });
 
     // The style sheet of ADS draws splitters, side bar lines and the labels of inactive tabs in
     // palette(dark): a heavy line on the light theme and unreadable text on the dark one. Its rules
@@ -261,7 +291,17 @@ void MainWindow::build_menus() {
     file_menu_->addSeparator();
     file_menu_->addAction(project_->save_action());
     file_menu_->addAction(project_->save_as_action());
+    // "Commit version" (Ctrl/Cmd+Shift+S) opens its form in the panel "History".
+    file_menu_->addAction(history_panel_->commit_action());
+    connect(history_panel_->commit_action(), &QAction::triggered, this, &MainWindow::show_history);
     file_menu_->addAction(project_->clean_action());
+    // The title shows the variant too.
+    const auto follow_history = [this] {
+        project_->set_variant(history_->current_title());
+        update_history();
+    };
+    connect(history_, &HistoryController::changed, this, follow_history);
+    project_->set_variant(history_->current_title());
     file_menu_->addSeparator();
     file_menu_->addAction(journal_->save_action());
     file_menu_->addSeparator();
@@ -336,8 +376,8 @@ void MainWindow::build_contributions() {
     // The activities of the shell open and close their panels.
     QList<QAction*> shell_activities;
     for (const auto& [id, icon] :
-         {std::pair{zone::model_tree, "model"}, std::pair{zone::extensions, "extensions"},
-          std::pair{zone::settings, "settings"}}) {
+         {std::pair{zone::model_tree, "model"}, std::pair{zone::history, "history"},
+          std::pair{zone::extensions, "extensions"}, std::pair{zone::settings, "settings"}}) {
         QAction* toggle = dock(id)->toggleViewAction();
         toggle->setIcon(tinted_svg_icon_file(QStringLiteral(":/stresslab/icons/") +
                                              QString::fromLatin1(icon) + QStringLiteral(".svg")));
@@ -352,6 +392,23 @@ void MainWindow::build_contributions() {
              },
          .show_settings = [this](const std::string& owner) { show_settings_of(owner); },
          .report = [this](const QString& message) { set_prompt(message); }});
+    // The name of the current variant at the end of the stage bar; stages of modules go before it.
+    QToolBar* stage_bar = find_zone(zone::stage_bar)->bar;
+    auto* stage_spacer = new QWidget(stage_bar);
+    stage_spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    QAction* stage_bar_end = stage_bar->addWidget(stage_spacer);
+    stage_bar_end->setObjectName(QStringLiteral("stageBar.spacer"));
+    variant_switcher_ = new VariantSwitcher(*history_, stage_bar);
+    QAction* switcher = stage_bar->addWidget(variant_switcher_);
+    switcher->setObjectName(QStringLiteral("stageBar.variant"));
+    // A widget of a tool bar shows and hides with its action; without a folder there is no variant.
+    const auto follow_folder = [this, switcher] {
+        switcher->setVisible(history_->state().has_folder);
+    };
+    connect(history_, &HistoryController::changed, this, follow_folder);
+    follow_folder();
+    connect(variant_switcher_, &VariantSwitcher::history_requested, this,
+            &MainWindow::show_history);
     ContributionHosts hosts{
         .window = this,
         .menu_bar = menuBar(),
@@ -359,7 +416,8 @@ void MainWindow::build_contributions() {
                         {"edit", edit_menu_},
                         {"view", view_menu_},
                         {"help", help_menu_}},
-        .stage_bar = find_zone(zone::stage_bar)->bar,
+        .stage_bar = stage_bar,
+        .stage_bar_end = stage_bar_end,
         .activity_bar = find_zone(zone::activity_bar)->bar,
         .shell_activities = std::move(shell_activities),
         .context_toolbar = context_toolbar_,
@@ -391,6 +449,7 @@ void MainWindow::build_contributions() {
                                   project_->open_action(),
                                   project_->save_action(),
                                   project_->save_as_action(),
+                                  history_panel_->commit_action(),
                                   project_->clean_action()};
     for (const Zone& zone : zones_) {
         if (QAction* toggle = zone_action(zone.id)) {
@@ -419,10 +478,11 @@ void MainWindow::update_history() {
     const auto label = [this](std::string_view step) {
         return commands_->title(step).toStdString();
     };
-    undo_->setEnabled(bus.can_undo());
+    // A version viewed on its own is read-only: nothing to undo there.
+    undo_->setEnabled(bus.can_undo() && !bus.is_read_only());
     undo_->setText(bus.can_undo() ? text("action.undoStep", {{"step", label(bus.undo_label())}})
                                   : text("action.undo"));
-    redo_->setEnabled(bus.can_redo());
+    redo_->setEnabled(bus.can_redo() && !bus.is_read_only());
     redo_->setText(bus.can_redo() ? text("action.redoStep", {{"step", label(bus.redo_label())}})
                                   : text("action.redo"));
 }
@@ -468,6 +528,26 @@ void MainWindow::show_extensions() {
     extensions->toggleView(true);
     extensions->setAsCurrentTab();
     extensions->raise();
+}
+
+void MainWindow::show_history() {
+    ads::CDockWidget* history = find_zone(zone::history)->dock;
+    history->toggleView(true);
+    history->setAsCurrentTab();
+    history->raise();
+}
+
+void MainWindow::show_comparison(const QString& before, const QString& after) {
+    viewport_stack_->setCurrentWidget(comparison_);
+    comparison_->compare(before, after);
+}
+
+void MainWindow::close_comparison() {
+    viewport_stack_->setCurrentIndex(0);
+}
+
+bool MainWindow::is_comparing() const {
+    return viewport_stack_->currentWidget() == comparison_;
 }
 
 void MainWindow::check_required_modules() {

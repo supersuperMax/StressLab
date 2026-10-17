@@ -168,6 +168,9 @@ std::vector<ContributionLine> contribution_lines(const ExtensionInfo& extension,
     for (const extension::ResultFilterContribution& filter : c.result_filters) {
         items.push_back(title(filter.title));
     }
+    for (const extension::ResultIndicatorContribution& indicator : c.result_indicators) {
+        items.push_back(title(indicator.title));
+    }
     add("contributes.viewport", std::exchange(items, {}));
     for (const extension::SettingContribution& setting : c.settings) {
         const auto it = setting.schema.find("title");
