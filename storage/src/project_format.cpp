@@ -196,12 +196,15 @@ std::map<model::ObjectId, std::string> read_blob_refs(const ProjectFiles& files)
 
 class ObjectReader {
 public:
-    ObjectReader(const BlobStore& blobs, std::map<model::ObjectId, std::string> refs)
+    /// Without `blobs`, the data of objects is not decoded.
+    ObjectReader(const BlobStore* blobs, std::map<model::ObjectId, std::string> refs)
         : blobs_(blobs), refs_(std::move(refs)) {}
 
-    model::StoredObject read(const std::string& path, const std::string& text) {
+    ObjectRecord read(const std::string& path, const std::string& text) {
         Members members(parse_json(text, path), path);
-        model::StoredObject stored;
+        ObjectRecord record;
+        record.file = path;
+        model::StoredObject& stored = record.object;
         stored.id = model::ObjectId(members.take_count("id", 1));
         const std::string expected = std::to_string(stored.id.value()) + ".json";
         const std::string_view name = std::string_view(path).substr(path.rfind('/') + 1);
@@ -241,14 +244,18 @@ public:
                                      : "refs/blobs.json has a block for an object without data");
         }
         if (description) {
-            init.data = decode(ref->second);
-            if (describe_object_data(*init.data) != *description) {
-                members.fail("\"data\" does not describe the block " + ref->second);
+            if (blobs_ != nullptr) {
+                init.data = decode(ref->second);
+                if (describe_object_data(*init.data) != *description) {
+                    members.fail("\"data\" does not describe the block " + ref->second);
+                }
             }
+            record.data = *description;
+            record.blob = ref->second;
             refs_.erase(ref);
         }
         members.finish();
-        return stored;
+        return record;
     }
 
     /// Blocks no object claimed.
@@ -264,7 +271,7 @@ private:
         }
         std::shared_ptr<const model::ObjectData> data;
         try {
-            data = get_object_data(ref, blobs_);
+            data = get_object_data(ref, *blobs_);
         } catch (const ProjectError& error) {
             throw ProjectError(error.code(), ref + ": " + error.what());
         }
@@ -272,7 +279,7 @@ private:
         return data;
     }
 
-    const BlobStore& blobs_;
+    const BlobStore* blobs_;
     std::map<model::ObjectId, std::string> refs_;
     std::map<std::string, std::shared_ptr<const model::ObjectData>> decoded_;
 };
@@ -381,8 +388,8 @@ std::optional<model::StoredObject> read_object(const ProjectFiles& files, const 
     for (const auto& [path, text] : files) {
         if (path.starts_with(prefix) && path.ends_with(name)) {
             // Only the data of this object is decoded.
-            ObjectReader reader(blobs, read_blob_refs(files));
-            model::StoredObject stored = reader.read(path, text);
+            ObjectReader reader(&blobs, read_blob_refs(files));
+            model::StoredObject stored = std::move(reader.read(path, text).object);
             if (stored.id != id) {
                 throw ProjectError(ProjectErrc::invalid_file,
                                    "the file holds object " + std::to_string(stored.id.value()),
@@ -394,17 +401,49 @@ std::optional<model::StoredObject> read_object(const ProjectFiles& files, const 
     return std::nullopt;
 }
 
-LoadedProject read_project(const ProjectFiles& files, const BlobStore& blobs) {
+ProjectRecords read_project_records(const ProjectFiles& files) {
     LoadedProject project;
     read_project_file(files, project);
-    ObjectReader reader(blobs, read_blob_refs(files));
+    ProjectRecords records;
+    records.units = project.contents.units;
+    records.modules = std::move(project.modules);
+    records.next_id = project.contents.next_id;
+    ObjectReader reader(nullptr, read_blob_refs(files));
 
     const std::string prefix = std::string(model_folder) + '/';
     for (const auto& [path, text] : files) {
         if (!path.starts_with(prefix) || !path.ends_with(".json")) {
             continue;
         }
-        model::StoredObject stored = reader.read(path, text);
+        ObjectRecord record = reader.read(path, text);
+        const model::ObjectId id = record.object.id;
+        if (const auto [it, added] = records.objects.emplace(id, std::move(record)); !added) {
+            throw ProjectError(
+                ProjectErrc::invalid_file,
+                "object " + std::to_string(id.value()) + " is also in " + it->second.file, path);
+        }
+    }
+    if (!reader.unclaimed().empty()) {
+        throw ProjectError(ProjectErrc::invalid_file,
+                           "there is no object " +
+                               std::to_string(reader.unclaimed().begin()->first.value()) +
+                               " with data",
+                           std::string(blob_refs_file));
+    }
+    return records;
+}
+
+LoadedProject read_project(const ProjectFiles& files, const BlobStore& blobs) {
+    LoadedProject project;
+    read_project_file(files, project);
+    ObjectReader reader(&blobs, read_blob_refs(files));
+
+    const std::string prefix = std::string(model_folder) + '/';
+    for (const auto& [path, text] : files) {
+        if (!path.starts_with(prefix) || !path.ends_with(".json")) {
+            continue;
+        }
+        model::StoredObject stored = std::move(reader.read(path, text).object);
         if (!project.files.emplace(stored.id, path).second) {
             throw ProjectError(ProjectErrc::invalid_file,
                                "object " + std::to_string(stored.id.value()) + " is also in " +

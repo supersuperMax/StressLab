@@ -4,6 +4,7 @@
 #include "fem/core/context/context_keys.h"
 #include "fem/core/context/core_keys.h"
 #include "fem/core/extension/manager.h"
+#include "fem/core/l10n/localization.h"
 #include "fem/core/model/document.h"
 #include "fem/storage/session.h"
 
@@ -136,11 +137,13 @@ public:
 
     /// Python works with the document of `bus` and with `keys` until `detach`; the document becomes
     /// the active one. `extensions`, if given, is what `stresslab.extensions` enables and disables
-    /// modules with, and `project` what `stresslab.project` opens and saves the document with.
+    /// modules with, `project` what `stresslab.project` opens and saves the document with, and
+    /// `localization` the strings and language text for users is made in (`localization()`).
     /// They must outlive the attachment. Replaces an earlier attachment.
     void attach(command::CommandBus& bus, context::ContextKeys& keys,
                 extension::ExtensionManager* extensions = nullptr,
-                storage::ProjectSession* project = nullptr);
+                storage::ProjectSession* project = nullptr,
+                const l10n::Localization* localization = nullptr);
     /// Takes back what `attach` lent: releases what Python keeps in them and closes the handles
     /// Python has to the document. Does nothing if nothing is attached.
     void detach() noexcept;
@@ -169,6 +172,11 @@ public:
     /// The Extension Manager the application lent; throws ExtensionError(invalid_state) if none:
     /// outside the application modules are not managed from Python.
     [[nodiscard]] extension::ExtensionManager& extensions();
+    /// The modules the application enabled, or nullptr outside the application.
+    [[nodiscard]] const extension::ContributionRegistry* registry() const noexcept;
+    /// What text for users (a diff of versions) is made with: the strings and the language of the
+    /// application, or else the strings of the core in English.
+    [[nodiscard]] const l10n::Localization& localization();
     /// What Python keeps outside documents (watches on context keys, listeners of tasks);
     /// released when the context keys change hands and when Python shuts down.
     [[nodiscard]] PythonResources& resources() noexcept { return resources_; }
@@ -185,6 +193,8 @@ private:
     std::shared_ptr<DocumentHandle> attached_;
     context::ContextKeys* attached_keys_ = nullptr;
     extension::ExtensionManager* attached_extensions_ = nullptr;
+    const l10n::Localization* attached_localization_ = nullptr;
+    std::unique_ptr<l10n::Localization> own_localization_;
     std::unique_ptr<context::ContextKeys> own_keys_;
     std::unique_ptr<context::CoreKeys> core_keys_;
     PythonResources resources_;

@@ -103,6 +103,87 @@ def test_the_wing_scenario_without_merging(
     ]
 
 
+def test_comparing_variants_and_restoring_only_materials(
+    doc: stresslab.Document, folder: Path, journal: list[str]
+) -> None:
+    material, skin = wing(folder)
+    history.commit("Обшивка 2 мм")
+    history.branch("Композитная обшивка")
+    history.checkout("Композитная обшивка")
+    set_thickness(skin, 3.0)
+    stresslab.cmd("model.set_property", object=material, key="E", value=60000.0)
+    gust = stresslab.cmd(
+        "model.create",
+        type="load",
+        owner=TEST_OWNER,
+        name="gust-2",
+        properties={"magnitude": 0.08},
+    )
+    history.commit("Обшивка 3 мм, КМ-1, порыв")
+    history.checkout("main")
+    journal.clear()
+
+    # Compare the variants in the terms of the model (task 2.4).
+    diff = history.diff("main", "Композитная обшивка")
+    assert isinstance(diff, history.Diff)
+    assert not diff.empty and diff.units is None
+    assert [(change.id, change.kind) for change in diff.objects] == [
+        (material, "changed"),
+        (skin, "changed"),
+        (gust, "added"),
+    ]
+    change = diff.find(skin)
+    assert change is not None and change.type == "section" and change.name == "skin-upper"
+    assert change.properties == (history.PropertyChange("thickness", 2.0, 3.0, True, True),)
+    assert diff.find(gust).details["properties"] == {"magnitude": 0.08}
+    # Outside the application there are no titles of modules: types and properties by their ids.
+    assert diff.lines == (
+        "material Д16Т: E 72000 → 60000",
+        "section skin-upper: thickness 2 → 3",
+        "Added: load gust-2",
+    )
+    assert str(diff) == "; ".join(diff.lines)
+    assert history.diff("main").empty
+
+    # Only the materials of the variant.
+    assert history.restore("Композитная обшивка", types=["material"]) == [material]
+    assert doc[material].properties == {"E": 60000.0}
+    assert thickness(skin) == 2.0
+    assert gust not in doc
+    assert [change.id for change in history.diff("main").objects] == [material]
+    stresslab.undo()
+    assert history.diff("main").empty
+
+    # The load made in the variant comes over with its id; one object by itself.
+    assert history.restore("Композитная обшивка", types=[f"{TEST_OWNER}/load"]) == [gust]
+    assert doc[gust].name == "gust-2"
+    assert history.restore("Композитная обшивка", objects=[skin]) == [skin]
+    assert thickness(skin) == 3.0
+
+    # Comparing is not journaled; restoring is a command.
+    assert journal == [
+        'stresslab.cmd("history.restore_objects", version="Композитная обшивка", '
+        'types=["material"])',
+        "stresslab.undo()",
+        'stresslab.cmd("history.restore_objects", version="Композитная обшивка", '
+        f'types=["{TEST_OWNER}/load"])',
+        'stresslab.cmd("history.restore_objects", version="Композитная обшивка", '
+        f"objects=[{skin}])",
+    ]
+
+
+def test_restoring_a_part_needs_a_part(doc: stresslab.Document, folder: Path) -> None:
+    wing(folder)
+    history.commit("Первая")
+    with pytest.raises(stresslab.ModelError):
+        history.restore("main")
+    with pytest.raises(stresslab.ModelError):
+        history.restore("main", objects=[999])
+    with pytest.raises(stresslab.ProjectError) as error:
+        history.diff("нет такой")
+    assert error.value.code == "unknown_version"
+
+
 def test_versions_tell_what_and_when(doc: stresslab.Document, folder: Path) -> None:
     _, skin = wing(folder)
     history.set_author("Инженер", "engineer@example.com")
@@ -205,6 +286,9 @@ def test_the_journal_replays_into_the_same_history(
     history.commit("Вторая")
     history.checkout("main")
     history.restore_object(material, "вариант")
+    history.restore("main~0", objects=[skin])
+    set_thickness(skin, 4.0)
+    history.restore("вариант", types=["section"])
     history.tag("метка", "вариант")
     expected = snapshot(doc)
     expected_log = sorted((v.summary, v.kind) for v in history.log(all=True))

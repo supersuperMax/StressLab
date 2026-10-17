@@ -432,6 +432,203 @@ TEST_F(StorageHistory, RestoringAMeshBringsItsData) {
     EXPECT_EQ(doc.document.data<model::Mesh>(mesh)->node_count(), 5U);
 }
 
+TEST_F(StorageHistory, RestoringOnlyMaterialsIsOneStepOfUndo) {
+    const ObjectId steel = add("material", "steel");
+    set(steel, 1.0);
+    const ObjectId aluminium = add("material", "aluminium");
+    const ObjectId skin = add("section", "skin", {steel});
+    set(skin, 2.0);
+    session.save_as(folder());
+    (void)history.commit("First");
+    set(steel, 5.0);
+    bus().execute(mc::remove, {{"object", aluminium}});
+    const ObjectId titanium = add("material", "titanium");
+    set(skin, 3.0);
+    (void)history.commit("Second");
+    take_journal();
+
+    const Value result = bus()
+                             .execute(std::string(ProjectHistory::restore_objects_command),
+                                      {{"version", "main~1"}, {"types", Value::List{"material"}}})
+                             .value;
+    // Changed materials are as they were, removed ones are back with their ids, new ones are
+    // gone; the section stays as it is.
+    EXPECT_EQ(result, Value(Value::List{steel, aluminium, titanium}));
+    EXPECT_EQ(thickness(steel), 1.0);
+    EXPECT_EQ(doc.document.get(aluminium).name(), "aluminium");
+    EXPECT_FALSE(doc.document.contains(titanium));
+    EXPECT_EQ(thickness(skin), 3.0);
+    EXPECT_EQ(take_journal(),
+              std::vector<std::string>{"stresslab.cmd(\"history.restore_objects\", "
+                                       "version=\"main~1\", types=[\"material\"])"});
+    EXPECT_TRUE(history.diff("main~1").find(steel) == nullptr);
+
+    ASSERT_TRUE(bus().undo());
+    EXPECT_EQ(thickness(steel), 5.0);
+    EXPECT_FALSE(doc.document.contains(aluminium));
+    EXPECT_TRUE(doc.document.contains(titanium));
+
+    // A type of one owner, and single objects.
+    bus().execute(
+        std::string(ProjectHistory::restore_objects_command),
+        {{"version", "main~1"}, {"types", Value::List{std::string(module) + "/section"}}});
+    EXPECT_EQ(thickness(skin), 2.0);
+    EXPECT_EQ(thickness(steel), 5.0);
+    bus().execute(std::string(ProjectHistory::restore_objects_command),
+                  {{"version", "main~1"}, {"objects", Value::List{titanium}}});
+    EXPECT_FALSE(doc.document.contains(titanium));
+    EXPECT_TRUE(doc.document.contains(steel));
+    // What is as in the version is left alone.
+    EXPECT_EQ(bus()
+                  .execute(std::string(ProjectHistory::restore_objects_command),
+                           {{"version", "main~1"}, {"types", Value::List{"section"}}})
+                  .value,
+              Value(Value::List{}));
+}
+
+TEST_F(StorageHistory, RestoringObjectsFailsAsAWhole) {
+    const ObjectId steel = add("material", "steel");
+    set(steel, 1.0);
+    session.save_as(folder());
+    (void)history.commit("First");
+    set(steel, 5.0);
+    // An object made since the version by a module that is now disabled cannot be removed.
+    doc.document.set_owner_enabled("test.other", true);
+    const ObjectId rib = ObjectId(static_cast<std::uint64_t>(
+        bus().execute(mc::create, {{"type", "rib"}, {"owner", "test.other"}}).value.as_integer()));
+    doc.document.set_owner_enabled("test.other", false);
+    take_journal();
+
+    const std::string id(ProjectHistory::restore_objects_command);
+    try {
+        bus().execute(id, {{"version", "main"}, {"types", Value::List{"material", "rib"}}});
+        ADD_FAILURE() << "expected ModelError";
+    } catch (const model::ModelError& error) {
+        EXPECT_EQ(error.code(), model::ModelErrc::removal_blocked);
+        EXPECT_EQ(error.object(), rib);
+    }
+    // The material restored before it is as it was: nothing changed, nothing journaled.
+    EXPECT_EQ(thickness(steel), 5.0);
+    EXPECT_TRUE(take_journal().empty());
+
+    EXPECT_THROW(bus().execute(id, {{"version", "main"}}), model::ModelError);
+    EXPECT_THROW(bus().execute(id, {{"version", "main"}, {"objects", Value::List{99}}}),
+                 model::ModelError);
+    EXPECT_PROJECT_ERROR(
+        bus().execute(id, {{"version", "nowhere"}, {"types", Value::List{"material"}}}),
+        ProjectErrc::unknown_version);
+}
+
+TEST_F(StorageHistory, RestoredChildrenNeedTheirParents) {
+    const ObjectId mesh = doc.edit.create(model::mesh_object("wing", model::testing::small_mesh()));
+    const ObjectId root = doc.edit.create(model::node_set_object(
+        mesh, "root", std::make_shared<const model::NodeSet>(std::vector<model::Index>{0, 1})));
+    session.save_as(folder());
+    (void)history.commit("Mesh with a set");
+    bus().execute(mc::remove, {{"object", mesh}});
+    (void)history.commit("No mesh");
+
+    const std::string id(ProjectHistory::restore_objects_command);
+    EXPECT_THROW(bus().execute(id, {{"version", "main~1"}, {"types", Value::List{"node_set"}}}),
+                 model::ModelError);
+    EXPECT_FALSE(doc.document.contains(root));
+    bus().execute(id, {{"version", "main~1"}, {"types", Value::List{"mesh", "node_set"}}});
+    EXPECT_EQ(doc.document.get(root).parent(), mesh);
+    EXPECT_EQ(doc.document.data<model::Mesh>(mesh)->node_count(), 5U);
+    EXPECT_TRUE(history.diff("main~1").empty());
+}
+
+TEST_F(StorageHistory, ObjectsOfAnotherVariantComeWithTheirIds) {
+    (void)saved_project();
+    (void)history.commit("Base");
+    history.branch("gusts");
+    history.checkout("gusts");
+    const ObjectId gust = add("load", "gust-2");
+    (void)history.commit("A gust");
+    history.checkout("main");
+    ASSERT_LE(doc.document.next_id(), gust.value());
+
+    bus().execute(std::string(ProjectHistory::restore_objects_command),
+                  {{"version", "gusts"}, {"types", Value::List{"load"}}});
+    EXPECT_EQ(doc.document.get(gust).name(), "gust-2");
+    // The id is taken here too: a new object gets another one.
+    EXPECT_NE(add("load", "gust-3"), gust);
+}
+
+// --- Comparing -----------------------------------------------------------------------------------
+
+TEST_F(StorageHistory, DiffOfVersionsAndOfTheModelNow) {
+    const ObjectId material = add("material", "steel");
+    set(material, 1.0);
+    const ObjectId skin = add("section", "skin", {material});
+    set(skin, 2.0);
+    session.save_as(folder());
+    (void)history.commit("First");
+    set(skin, 3.0);
+    const ObjectId gust = add("load", "gust-2");
+    (void)history.commit("Second");
+    set(material, 5.0);  // Not in the history yet.
+    take_journal();
+
+    const ModelDiff versions = history.diff("main~1", "main");
+    ASSERT_EQ(versions.objects.size(), 2U);
+    EXPECT_EQ(versions.objects[0].id, skin);
+    EXPECT_EQ(versions.objects[1].id, gust);
+    EXPECT_EQ(versions.objects[1].kind, ChangeKind::added);
+
+    l10n::Localization localization;
+    EXPECT_EQ(describe(versions, {.localization = localization}),
+              (std::vector<std::string>{"section skin: thickness 2 → 3", "Added: load gust-2"}));
+    // Without `to`: the model now, with what is not in the history.
+    EXPECT_EQ(describe(history.diff("main"), {.localization = localization}),
+              std::vector<std::string>{"material steel: thickness 1 → 5"});
+    EXPECT_EQ(history.diff("main~1").objects.size(), 3U);
+    EXPECT_TRUE(history.diff("main", "main").empty());
+    // Comparing is reading: nothing is journaled, no version is made.
+    EXPECT_TRUE(take_journal().empty());
+    EXPECT_EQ(history.log().size(), 2U);
+    EXPECT_PROJECT_ERROR((void)history.diff("nowhere"), ProjectErrc::unknown_version);
+}
+
+TEST_F(StorageHistory, DiffOfVariants) {
+    const ObjectId skin = saved_project();
+    (void)history.commit("Aluminium skin");
+    const std::string variant = utf8(u8"Композитная обшивка");
+    history.branch(variant);
+    history.checkout(variant);
+    set(skin, 3.0);
+    (void)history.commit("Composite skin");
+
+    const ModelDiff diff = history.diff("main", variant);
+    ASSERT_EQ(diff.objects.size(), 1U);
+    ASSERT_EQ(diff.objects[0].properties.size(), 1U);
+    EXPECT_EQ(diff.objects[0].properties[0].pointer, "thickness");
+    EXPECT_EQ(*diff.objects[0].properties[0].before, 2.0);
+    EXPECT_EQ(*diff.objects[0].properties[0].after, 3.0);
+}
+
+TEST_F(StorageHistory, DiffShowsARebuiltMesh) {
+    const ObjectId mesh = doc.edit.create(model::mesh_object("wing", model::testing::small_mesh()));
+    session.save_as(folder());
+    (void)history.commit("Fine mesh");
+    doc.edit.set_data(mesh, model::testing::tiny_mesh());
+    (void)history.commit("Coarse mesh");
+
+    const ModelDiff diff = history.diff("main~1", "main");
+    ASSERT_EQ(diff.objects.size(), 1U);
+    EXPECT_TRUE(diff.objects[0].data);
+    l10n::Localization localization;
+    // small_mesh has 3 elements, tiny_mesh none.
+    EXPECT_EQ(describe(diff, {.localization = localization}),
+              std::vector<std::string>{"Mesh wing: rebuilt (3 → 0 elements)"});
+}
+
+TEST_F(StorageHistory, DiffNeedsVersions) {
+    EXPECT_PROJECT_ERROR((void)history.diff("main"), ProjectErrc::unknown_version);
+    (void)saved_project();
+    EXPECT_PROJECT_ERROR((void)history.diff("main"), ProjectErrc::unknown_version);
+}
+
 // --- Automatic versions --------------------------------------------------------------------------
 
 TEST_F(StorageHistory, RiskyCommandGetsAnAutomaticVersionBeforeIt) {

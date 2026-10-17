@@ -1,0 +1,21 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "load.magnitude": "Давление",
+    "material.E": "Модуль Юнга",
+    "material.nu": "Коэффициент Пуассона",
+    "section.integration": "Интегрирование",
+    "section.kind": "Тип",
+    "section.kind.composite": "Композит",
+    "section.kind.shell": "Оболочка",
+    "section.note": "Примечание",
+    "section.offsets": "Смещения",
+    "section.plies": "Слои",
+    "section.points": "Точки интегрирования",
+    "section.thickness": "Толщина",
+    "type.load": "Нагрузка",
+    "type.material": "Материал",
+    "type.section": "Сечение"
+  }
+}

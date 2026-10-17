@@ -43,8 +43,10 @@ public:
     /// Puts back a removed object with the id it had, as undoing its removal would: restoring an
     /// object from an older version of the project (task 2.3). It is the same object, not a reuse
     /// of its id, so the objects that depend on it see it again. Checks it as `create` does, and
-    /// the id must be one the document issued and holds no object now; it takes its place among
-    /// its siblings by id. Its dependencies must exist and must not close a cycle.
+    /// no object of the document may have the id now; it takes its place among its siblings by
+    /// id. An id the document has not issued (an object made on another variant, task 2.4) is
+    /// taken: the next id becomes greater than it. Its dependencies must exist and must not close
+    /// a cycle.
     void restore(StoredObject stored);
     void rename(ObjectId id, std::string name);
     void set_properties(ObjectId id, Properties properties);

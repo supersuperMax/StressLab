@@ -1,0 +1,13 @@
+{
+  "dependencies": [],
+  "id": 3,
+  "name": "Д16Т",
+  "owner": "test.structural",
+  "parent": null,
+  "properties": {
+    "E": 71000.0,
+    "nu": 0.33
+  },
+  "schemaVersion": 1,
+  "type": "material"
+}

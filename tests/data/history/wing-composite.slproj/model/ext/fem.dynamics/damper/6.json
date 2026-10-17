@@ -1,0 +1,12 @@
+{
+  "dependencies": [],
+  "id": 6,
+  "name": "d1",
+  "owner": "fem.dynamics",
+  "parent": null,
+  "properties": {
+    "c": 12.0
+  },
+  "schemaVersion": 1,
+  "type": "damper"
+}

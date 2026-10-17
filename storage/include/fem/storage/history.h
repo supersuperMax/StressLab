@@ -3,6 +3,7 @@
 #include "fem/core/command/command_bus.h"
 #include "fem/core/model/object_id.h"
 #include "fem/core/signal.h"
+#include "fem/storage/diff.h"
 #include "fem/storage/repository.h"
 
 #include <cstddef>
@@ -30,14 +31,17 @@ class ProjectSession;
 ///
 /// Actions are written to the journal as `stresslab.history.commit("...")` and so on, with the
 /// names and versions as they were given; restoring one object is the command
-/// "history.restore_object" of the bus, one step of undo. Actions are refused inside a command or
-/// a transaction (CommandError(invalid_state)) and need a project folder
+/// "history.restore_object" of the bus, one step of undo; restoring a part of the model (only the
+/// materials, only the loads, a few objects) is "history.restore_objects". Actions are refused
+/// inside a command or a transaction (CommandError(invalid_state)) and need a project folder
 /// (ProjectError(no_folder)). Merging is not done (docs/plan.md, section 5).
 class ProjectHistory {
 public:
     /// The id of the command that restores one object.
     static constexpr std::string_view restore_object_command = "history.restore_object";
-    /// The owner of that command.
+    /// The id of the command that restores a part of the model (task 2.4).
+    static constexpr std::string_view restore_objects_command = "history.restore_objects";
+    /// The owner of those commands.
     static constexpr std::string_view owner = "fem.history";
 
     ProjectHistory(const ProjectHistory&) = delete;
@@ -69,6 +73,12 @@ public:
     [[nodiscard]] std::map<std::string, std::string> tags() const;
     /// Changes put aside, newest first.
     [[nodiscard]] std::vector<VersionInfo> stashes() const;
+    /// How the model of `to` differs from that of `from` (task 2.4), versions named as `resolve`
+    /// names them; without `to`, the model now, with its changes not in the history yet (its bulk
+    /// data is saved to the project folder to compare it, as `has_changes` does). Not written to
+    /// the journal. Throws ProjectError(unknown_version).
+    [[nodiscard]] ModelDiff diff(std::string_view from,
+                                 std::optional<std::string_view> to = {}) const;
     /// The blocks of bulk data every version needs: roots for "Clean project".
     [[nodiscard]] std::vector<std::string> blob_roots() const;
 
@@ -141,6 +151,7 @@ private:
                       std::optional<std::uint64_t> next_id = {});
     void forget_pending();
     command::CommandResult restore_object(command::CommandContext& context);
+    command::CommandResult restore_objects(command::CommandContext& context);
     void check_idle(std::string_view action) const;
 
     ProjectSession& session_;

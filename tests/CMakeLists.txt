@@ -84,6 +84,7 @@ add_executable(
     fem_storage_tests
     unit/storage/blob_test.cpp
     unit/storage/chunking_test.cpp
+    unit/storage/diff_test.cpp
     unit/storage/garbage_test.cpp
     unit/storage/history_test.cpp
     unit/storage/json_test.cpp

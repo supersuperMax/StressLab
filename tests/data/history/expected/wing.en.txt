@@ -1,0 +1,9 @@
+Mesh main: rebuilt (48312 → 61007 elements)
+Node set root: 40 → 52 nodes
+Material Д16Т: Young's modulus 72000 → 71000 MPa
+Section skin-upper: Integration points 5 → 7, Kind Shell → Composite, Note "draft" → —, Offsets [0.0,1.0] → [0.0,1.5], Plies — → 4, Thickness 2 → 3 mm, now depends on Material КМ-1, no longer depends on Material Д16Т
+Load gust-1a: name gust-1 → gust-1a
+damper d1 (module fem.dynamics is not enabled): {"properties":{"c":10.0}} → {"properties":{"c":12.0}}
+Removed: Load cruise
+Added: Material КМ-1
+Added: Load gust-2

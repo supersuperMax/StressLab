@@ -1,0 +1,15 @@
+{
+  "format": 2,
+  "modules": {
+    "fem.core": "0.1.0",
+    "fem.dynamics": "0.3.0",
+    "test.structural": "1.0.0"
+  },
+  "nextObjectId": 10,
+  "units": {
+    "length": "mm",
+    "mass": "t",
+    "temperature": "degC",
+    "time": "s"
+  }
+}

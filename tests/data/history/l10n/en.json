@@ -1,0 +1,21 @@
+{
+  "format": "stresslab.l10n",
+  "formatVersion": 1,
+  "strings": {
+    "load.magnitude": "Pressure",
+    "material.E": "Young's modulus",
+    "material.nu": "Poisson's ratio",
+    "section.integration": "Integration",
+    "section.kind": "Kind",
+    "section.kind.composite": "Composite",
+    "section.kind.shell": "Shell",
+    "section.note": "Note",
+    "section.offsets": "Offsets",
+    "section.plies": "Plies",
+    "section.points": "Integration points",
+    "section.thickness": "Thickness",
+    "type.load": "Load",
+    "type.material": "Material",
+    "type.section": "Section"
+  }
+}

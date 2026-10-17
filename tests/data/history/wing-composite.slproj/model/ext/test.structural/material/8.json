@@ -1,0 +1,13 @@
+{
+  "dependencies": [],
+  "id": 8,
+  "name": "КМ-1",
+  "owner": "test.structural",
+  "parent": null,
+  "properties": {
+    "E": 60000.0,
+    "nu": 0.3
+  },
+  "schemaVersion": 1,
+  "type": "material"
+}

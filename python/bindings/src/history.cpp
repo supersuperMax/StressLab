@@ -92,6 +92,20 @@ void define_history(nb::module_& m) {
     module.def(
         "stashes", [] { return to_python(history().stashes()); },
         "Changes put aside, newest first, as dicts.");
+    module.def(
+        "diff",
+        [](const std::string& from, std::optional<std::string> to) {
+            const storage::ModelDiff diff =
+                history().diff(from, to ? std::optional<std::string_view>(*to) : std::nullopt);
+            Session& session = Session::instance();
+            nlohmann::json result = storage::to_json(diff);
+            result["lines"] = storage::describe(
+                diff, {.localization = session.localization(), .registry = session.registry()});
+            return from_json(result);
+        },
+        nb::arg("from_version"), nb::arg("to_version") = nb::none(),
+        "How the model of `to` (the model now if None) differs from that of `from`, as a dict "
+        "with its lines in words.");
 
     module.def(
         "commit", [](const std::string& message) { return history().commit(message); },
