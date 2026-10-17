@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- The activity "History": a clock with a branch. Monochrome: the shell tints it to the theme. -->
+  <path fill-rule="evenodd" d="M10 2.2a7.8 7.8 0 1 1 0 15.6a7.8 7.8 0 1 1 0-15.6z M10 3.9a6.1 6.1 0 1 0 0 12.2a6.1 6.1 0 1 0 0-12.2z"/>
+  <path d="M9.2 5.6h1.6v4l2.6 1.6-.8 1.4-3.4-2.1z"/>
+  <path d="M17.6 12.8a1.9 1.9 0 1 1 0 3.8a1.9 1.9 0 1 1 0-3.8z M17.6 19.4a1.9 1.9 0 1 1 0 3.8a1.9 1.9 0 1 1 0-3.8z M21.2 15.2a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6z M16.8 14.7h1.6v6.6h-1.6z M17.2 19.6l3.5-2.8 1 1.2-3.5 2.8z"/>
+</svg>

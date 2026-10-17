@@ -12,6 +12,7 @@
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -350,6 +351,62 @@ TEST_F(StorageDiff, SetsAndPluralsInRussian) {
                                         "Набор узлов root: 40 → 41 узел"}));
     EXPECT_EQ(text(diff, "en"), (std::vector<std::string>{"Mesh main: rebuilt (9504 → 9505 nodes)",
                                                           "Node set root: 40 → 41 nodes"}));
+}
+
+// --- Rows of the table of the comparison (task 2.6) ----------------------------------------------
+
+namespace {
+
+/// The rows as lines "<section> | <object> | <field> | <before> → <after>" (without the values
+/// if both are empty), with " | raw" at the end of a row of a disabled module.
+std::vector<std::string> row_lines(const std::vector<DiffRow>& rows) {
+    std::vector<std::string> lines;
+    for (const DiffRow& row : rows) {
+        std::string line = row.section + " | " + row.object + " | " + row.field;
+        if (!row.before.empty() || !row.after.empty()) {
+            line += " | " + row.before + " → " + row.after;
+        }
+        lines.push_back(line + (row.raw ? " | raw" : ""));
+    }
+    return lines;
+}
+
+}  // namespace
+
+TEST_F(StorageDiff, WingVariantsAsRowsInRussian) {
+    localization.set_language("ru");
+    const std::vector<DiffRow> rows = describe_rows(
+        diff_files(main, composite), {.localization = localization, .registry = &registry});
+    EXPECT_EQ(row_lines(rows), lines_of(read_text(data_dir() / "expected" / "wing.rows.ru.txt")));
+    // Each row knows its object and the section of the tree it is in.
+    ASSERT_FALSE(rows.empty());
+    EXPECT_EQ(rows.front().owner, "fem.core");
+    EXPECT_EQ(rows.front().type, "mesh");
+    EXPECT_EQ(rows.front().kind, ChangeKind::changed);
+    EXPECT_EQ(rows.back().kind, ChangeKind::added);
+    EXPECT_EQ(rows.back().owner, structural);
+    EXPECT_EQ(rows.back().type, "load");
+    EXPECT_TRUE(rows.back().before.empty());
+}
+
+TEST_F(StorageDiff, RowsOfUnitsAndOfDisabledModules) {
+    edit_file(composite, "project.json", [](Json& value) { value["units"]["length"] = "m"; });
+    extension::ContributionRegistry empty;
+    localization.set_language("en");
+    const std::vector<DiffRow> rows = describe_rows(
+        diff_files(main, composite), {.localization = localization, .registry = &empty});
+    ASSERT_GE(rows.size(), 2U);
+    EXPECT_EQ(rows[0].section, "Units");
+    EXPECT_FALSE(rows[0].id.is_valid());
+    EXPECT_NE(rows[0].before, rows[0].after);
+    // A raw object has a row per member of its JSON that differs.
+    const auto damper = std::find_if(rows.begin(), rows.end(),
+                                     [](const DiffRow& row) { return row.type == "damper"; });
+    ASSERT_NE(damper, rows.end());
+    EXPECT_TRUE(damper->raw);
+    EXPECT_EQ(damper->field, "properties");
+    EXPECT_EQ(damper->before, R"({"c":10.0})");
+    EXPECT_EQ(damper->after, R"({"c":12.0})");
 }
 
 }  // namespace fem::storage

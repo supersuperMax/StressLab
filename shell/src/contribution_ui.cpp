@@ -473,7 +473,8 @@ void ContributionUi::build_stages() {
         connect(action, &QAction::triggered, this, [this, id = entry.id] {
             workbench_.keys.set(stage_key, context::ContextValue(id));
         });
-        hosts_.stage_bar->addAction(action);
+        // Before what the window keeps at the end of the bar (the switcher of variants).
+        hosts_.stage_bar->insertAction(hosts_.stage_bar_end, action);
         stages_.push_back(
             {.id = entry.id,
              .when = entry.contribution != nullptr ? entry.contribution->when : std::nullopt,

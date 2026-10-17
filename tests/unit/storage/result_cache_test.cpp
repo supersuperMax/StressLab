@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
@@ -379,6 +380,56 @@ TEST_F(StorageResultCache, APinnedResultOutlivesTheSessionAndItsVersion) {
     for (const std::string& root : read_blob_roots(files)) {
         EXPECT_NO_THROW((void)get_object_data(root, blobs));
     }
+}
+
+TEST_F(StorageResultCache, KeyIndicatorsGoWithTheResult) {
+    (void)committed_project();
+    const std::string version = history().snapshot("Before solving");
+    const std::string key = results().key(solver);
+    const fs::path out = solver_output("out", {{"a.frd", "a"}});
+    const ResultIndicators indicators{{"structural.mass", 412.5}, {utf8(u8"запас"), 1.25}};
+    const ResultInfo put = results().put(key, version, solver, {}, out, indicators);
+    EXPECT_EQ(put.indicators, indicators);
+    EXPECT_EQ(results().find(key)->indicators, indicators);
+    // In the history too, when pinned, and back from it.
+    results().pin(key);
+    EXPECT_TRUE(results().remove(key));
+    EXPECT_EQ(results().find(key)->indicators, indicators);
+    // A result without them has none; its record is as it was before indicators.
+    const std::string other = results().key(solver, {{"threads", "2"}});
+    const ResultInfo plain = results().put(other, version, solver, {{"threads", "2"}}, out);
+    EXPECT_TRUE(plain.indicators.empty());
+    const std::optional<std::string> entry =
+        io::read_file(folder() / fs::path(u8".fem/cache/results") / other / "entry.json");
+    ASSERT_TRUE(entry.has_value());
+    EXPECT_EQ(entry->find("indicators"), std::string::npos);
+
+    EXPECT_PROJECT_ERRC((void)results().put(key, version, solver, {}, out, {{"", 1.0}}),
+                        ProjectErrc::invalid_data);
+    EXPECT_PROJECT_ERRC((void)results().put(key, version, solver, {}, out,
+                                            {{"mass", std::numeric_limits<double>::quiet_NaN()}}),
+                        ProjectErrc::invalid_data);
+    EXPECT_EQ(results().find(key)->indicators, indicators);
+}
+
+TEST_F(StorageResultCache, ChangesOfResultsAreTold) {
+    (void)committed_project();
+    int told = 0;
+    const Subscription subscription = history().on_changed([&told] { ++told; });
+    const ResultInfo put = put_result({{"a.frd", "a"}});
+    EXPECT_GE(told, 1);  // The snapshot made a version, the result was put.
+    told = 0;
+    results().pin(put.key);
+    EXPECT_EQ(told, 1);
+    results().unpin(put.key);
+    EXPECT_EQ(told, 2);
+    (void)results().remove(put.key);
+    EXPECT_EQ(told, 3);
+    (void)results().prune_inactive();
+    EXPECT_EQ(told, 4);
+    // Finding changes nothing the history shows.
+    (void)results().find(put.key);
+    EXPECT_EQ(told, 4);
 }
 
 TEST_F(StorageResultCache, PinRefusals) {

@@ -109,6 +109,15 @@ when = "stage == 'results'"
 id = "full.safety"
 title = "Safety factor"
 
+[[contributes.resultIndicators]]
+id = "full.mass"
+title = "Масса"
+quantity = "mass"
+
+[[contributes.resultIndicators]]
+id = "full.cycles"
+title = "Cycles"
+
 [contributes.settings]
 "full.executable" = { type = "path", default = "", scope = "user", description = "Путь к решателю" }
 "full.threads" = { type = "integer", default = 0, minimum = 0, maximum = 256 }

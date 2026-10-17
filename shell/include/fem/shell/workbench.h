@@ -24,6 +24,10 @@ class ConsoleEngine;
 /// What to do with unsaved changes of the project before it is closed.
 enum class UnsavedChanges : std::uint8_t { save, discard, cancel };
 
+/// What to do with changes not in the history before another variant or version opens (task
+/// 2.6): commit them as a version, put them aside, or stay.
+enum class PendingChanges : std::uint8_t { commit, stash, cancel };
+
 /// What the window works with: the parts of the application it shows and drives. All of them
 /// outlive the window. The localization has the catalogs of the shell (`add_shell_catalogs`) and,
 /// like the settings, follows the enabled modules (`fem::bind_catalogs`).
@@ -58,6 +62,16 @@ struct Workbench {
     /// Asks what to do with the unsaved changes of the project of this name (parent, name).
     /// Empty: a message box of the system; tests give their own.
     std::function<UnsavedChanges(QWidget*, const QString&)> ask_unsaved = {};
+    /// Asks what to do with the changes not in the history before another variant or version
+    /// opens (parent, the message of a version to commit them as, which the answer may change).
+    /// Empty: a dialog of the shell; tests give their own.
+    std::function<PendingChanges(QWidget*, QString& message)> ask_pending = {};
+    /// Asks for a name: of a new variant, of a label (parent, title, label of the field, the text
+    /// it starts with); an empty answer is "cancelled". Empty: an input dialog; tests give their
+    /// own.
+    std::function<QString(QWidget*, const QString& title, const QString& label,
+                          const QString& text)>
+        ask_name = {};
 };
 
 }  // namespace fem::shell

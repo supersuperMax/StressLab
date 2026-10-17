@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fem::storage {
@@ -716,6 +717,43 @@ TEST_F(StorageHistory, ActionsAreJournaledAsTheyWereGiven) {
                          "stresslab.history.stash_pop()",
                          "stresslab.history.snapshot(\"Before solving\")",
                      }));
+}
+
+TEST_F(StorageHistory, ActionsOfTheHistoryAreTold) {
+    const ObjectId skin = saved_project();
+    int told = 0;
+    const Subscription subscription = history.on_changed([&told] { ++told; });
+    const auto changed = [&told] { return std::exchange(told, 0) > 0; };
+
+    const std::string first = history.commit("First");
+    EXPECT_TRUE(changed());
+    history.branch(utf8(u8"Композит"));
+    EXPECT_TRUE(changed());
+    history.tag("v1");
+    EXPECT_TRUE(changed());
+    set(skin, 3.0);
+    EXPECT_FALSE(changed());  // A change of the model alone is not.
+    history.stash();
+    EXPECT_TRUE(changed());
+    history.stash_pop();
+    EXPECT_TRUE(changed());
+    (void)history.snapshot("Before solving");
+    EXPECT_TRUE(changed());
+    (void)history.snapshot("Nothing new");
+    EXPECT_FALSE(changed());  // The same model: no version.
+    history.checkout(first);
+    EXPECT_TRUE(changed());
+    history.checkout("main");
+    EXPECT_TRUE(changed());
+    (void)history.restore_version(first);
+    EXPECT_TRUE(changed());
+    set(skin, 5.0);
+    history.stash();
+    history.stash_drop();
+    EXPECT_TRUE(changed());
+    // What fails tells nothing.
+    EXPECT_THROW(history.branch(utf8(u8"Композит")), ProjectError);
+    EXPECT_FALSE(changed());
 }
 
 }  // namespace fem::storage

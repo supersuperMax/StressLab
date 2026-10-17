@@ -106,6 +106,7 @@ TEST(ContributionRegistry, ApplicationWideIdsAreUniqueAcrossModules) {
         {"submenu", "[[contributes.submenus]]\nid = \"x\"\ntitle = \"T\"\n"},
         {"viewport layer", "[[contributes.viewportLayers]]\nid = \"x\"\ntitle = \"T\"\n"},
         {"result filter", "[[contributes.resultFilters]]\nid = \"x\"\ntitle = \"T\"\n"},
+        {"result indicator", "[[contributes.resultIndicators]]\nid = \"x\"\ntitle = \"T\"\n"},
         {"icon", "[[contributes.icons]]\nid = \"x\"\npath = \"x.svg\"\n"},
         {"setting", "[contributes.settings]\n\"x\" = { type = \"boolean\" }\n"},
         {"context key", "[[contributes.contextKeys]]\nname = \"x\"\ntype = \"boolean\"\n"},

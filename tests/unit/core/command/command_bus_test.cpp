@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -421,4 +422,45 @@ TEST_F(CommandBusTest, ListenerBeforeACommandMayStopIt) {
     EXPECT_TRUE(doc.objects().empty());
     EXPECT_TRUE(journal.entries().empty());
     EXPECT_FALSE(bus.can_undo());
+}
+
+TEST_F(CommandBusTest, ReadOnlyDocumentRefusesChangesButRunsTheRest) {
+    register_echo();
+    const ObjectId kept = create("kept");
+    bus.set_read_only(true);
+    EXPECT_TRUE(bus.is_read_only());
+    const std::size_t entries = journal.entries().size();
+
+    // A command that changes the model is reverted and refused; nothing is journaled.
+    EXPECT_COMMAND_ERROR(create("lost"), CommandErrc::read_only);
+    EXPECT_COMMAND_ERROR((void)bus.execute(mc::rename, {{"object", Value(kept)}, {"name", "x"}}),
+                         CommandErrc::read_only);
+    EXPECT_EQ(std::ranges::distance(doc.objects()), 1);
+    EXPECT_EQ(doc.get(kept).name(), "kept");
+    EXPECT_EQ(journal.entries().size(), entries);
+    // So is undo; the step stays to be undone later.
+    EXPECT_COMMAND_ERROR((void)bus.undo(), CommandErrc::read_only);
+    EXPECT_TRUE(bus.can_undo());
+
+    // A command that changes nothing runs and is journaled.
+    EXPECT_EQ(bus.execute("test.echo", {{"text", "hi"}}).value.as_dict().at("text").as_string(),
+              "hi");
+    EXPECT_EQ(journal.entries().size(), entries + 1);
+
+    // Inside a transaction too: the refused command leaves the transaction as it was.
+    {
+        Transaction transaction = bus.begin_transaction("group");
+        EXPECT_COMMAND_ERROR(create("lost"), CommandErrc::read_only);
+        transaction.commit();
+    }
+    EXPECT_EQ(std::ranges::distance(doc.objects()), 1);
+
+    bus.set_read_only(false);
+    (void)create("now");
+    EXPECT_EQ(std::ranges::distance(doc.objects()), 2);
+    EXPECT_TRUE(bus.undo());
+    EXPECT_TRUE(bus.undo());
+    EXPECT_TRUE(doc.objects().empty());
+    bus.set_read_only(true);
+    EXPECT_COMMAND_ERROR((void)bus.redo(), CommandErrc::read_only);
 }
