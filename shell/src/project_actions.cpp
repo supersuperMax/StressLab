@@ -217,8 +217,20 @@ QString ProjectActions::window_title() const {
     if (workbench_.project == nullptr) {
         return to_qstring(kProductName);
     }
+    if (!variant_.isEmpty() && workbench_.project->folder()) {
+        return text("project.windowTitleVariant", {{"project", project_name().toStdString()},
+                                                   {"variant", variant_.toStdString()},
+                                                   {"product", std::string(kProductName)}});
+    }
     return text("project.windowTitle", {{"project", project_name().toStdString()},
                                         {"product", std::string(kProductName)}});
+}
+
+void ProjectActions::set_variant(const QString& variant) {
+    if (variant != variant_) {
+        variant_ = variant;
+        update_state();
+    }
 }
 
 void ProjectActions::retranslate() {

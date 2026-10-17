@@ -189,6 +189,11 @@ TEST(Manifest, ReadsEveryContributionPoint) {
     EXPECT_EQ(c.viewport_layers[0].id, "full.modes");
     ASSERT_EQ(c.result_filters.size(), 1U);
     EXPECT_EQ(c.result_filters[0].id, "full.safety");
+    ASSERT_EQ(c.result_indicators.size(), 2U);
+    EXPECT_EQ(c.result_indicators[0].id, "full.mass");
+    EXPECT_EQ(c.result_indicators[0].title, utf8(u8"Масса"));
+    EXPECT_EQ(c.result_indicators[0].quantity, "mass");
+    EXPECT_TRUE(c.result_indicators[1].quantity.empty());
 
     // Settings are a TOML table, so they come in the order of their keys.
     ASSERT_EQ(c.settings.size(), 3U);
@@ -226,13 +231,13 @@ TEST(Manifest, ReadsEveryContributionPoint) {
 
     // Every record knows its module.
     for (const auto* owner :
-         {&c.stages[0].owner, &c.tree_node_types[0].owner, &c.menus[0].owner,
-          &c.context_menus[0].owner, &c.submenus[0].owner, &c.context_toolbar[0].owner,
-          &c.property_schemas[0].owner, &c.file_formats[0].owner, &c.solvers[0].owner,
-          &c.meshers[0].owner, &c.activity_bar[0].owner, &c.bottom_panel_tabs[0].owner,
-          &c.viewport_layers[0].owner, &c.result_filters[0].owner, &c.settings[0].owner,
-          &c.keybindings[0].owner, &c.icons[0].owner, &c.localization[0].owner,
-          &c.context_keys[0].owner}) {
+         {&c.stages[0].owner,           &c.tree_node_types[0].owner, &c.menus[0].owner,
+          &c.context_menus[0].owner,    &c.submenus[0].owner,        &c.context_toolbar[0].owner,
+          &c.property_schemas[0].owner, &c.file_formats[0].owner,    &c.solvers[0].owner,
+          &c.meshers[0].owner,          &c.activity_bar[0].owner,    &c.bottom_panel_tabs[0].owner,
+          &c.viewport_layers[0].owner,  &c.result_filters[0].owner,  &c.result_indicators[0].owner,
+          &c.settings[0].owner,         &c.keybindings[0].owner,     &c.icons[0].owner,
+          &c.localization[0].owner,     &c.context_keys[0].owner}) {
         EXPECT_EQ(*owner, "test.full");
     }
 }
@@ -489,6 +494,10 @@ TEST(Manifest, ReportsErrorsWithTheirPosition) {
         {"setting title not text",
          with_header("[contributes.settings]\n\"case.x\" = { type = \"string\", title = 5 }\n"), 9,
          39, "'title' in setting 'case.x' must be text"},
+        {"unknown quantity of a result indicator",
+         with_header("[[contributes.resultIndicators]]\nid = \"case.mass\"\ntitle = \"M\"\n"
+                     "quantity = \"weight\"\n"),
+         11, 12, "unknown quantity 'weight' in [[contributes.resultIndicators]]"},
         {"unknown quantity in a property schema",
          with_header("[[contributes.propertySchemas]]\ntype = \"material\"\nschema = { type = "
                      "\"object\", properties = { E = { type = \"number\", x-quantity = "

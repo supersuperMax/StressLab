@@ -29,6 +29,7 @@ std::vector<GlobalId> global_ids(const Contributions& c) {
     add("submenu", c.submenus, &SubmenuContribution::id);
     add("viewport layer", c.viewport_layers, &ViewportLayerContribution::id);
     add("result filter", c.result_filters, &ResultFilterContribution::id);
+    add("result indicator", c.result_indicators, &ResultIndicatorContribution::id);
     add("icon", c.icons, &IconContribution::id);
     add("setting", c.settings, &SettingContribution::key);
     add("context key", c.context_keys, &ContextKeyContribution::name);
@@ -164,6 +165,10 @@ std::vector<const ViewportLayerContribution*> ContributionRegistry::viewport_lay
 
 std::vector<const ResultFilterContribution*> ContributionRegistry::result_filters() const {
     return collect(&Contributions::result_filters);
+}
+
+std::vector<const ResultIndicatorContribution*> ContributionRegistry::result_indicators() const {
+    return collect(&Contributions::result_indicators);
 }
 
 std::vector<const SettingContribution*> ContributionRegistry::settings() const {

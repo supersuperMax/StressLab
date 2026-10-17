@@ -18,6 +18,7 @@ class QActionGroup;
 class QCloseEvent;
 class QLabel;
 class QMenu;
+class QStackedWidget;
 class QToolBar;
 
 namespace ads {
@@ -30,8 +31,11 @@ namespace fem::shell {
 class AboutDialog;
 class CommandPalette;
 class Commands;
+class ComparisonView;
 class ContributionUi;
 class ExtensionsPanel;
+class HistoryController;
+class HistoryPanel;
 class JournalPanel;
 class ModelTreePanel;
 class ProblemsPanel;
@@ -40,6 +44,8 @@ class PropertyPanel;
 class PythonConsolePanel;
 class RequiredModulesBar;
 class SettingsPanel;
+class VariantSwitcher;
+class VersionBar;
 
 /// Ids of the zones of the window (docs/interface-design.md §4): the object names of their
 /// widgets. Saved layouts refer to the zones by them, so they never change.
@@ -54,6 +60,9 @@ inline constexpr std::string_view properties = "properties";
 inline constexpr std::string_view settings = "settings";
 /// The module manager: a tab next to the model tree, opened by the activity "Modules".
 inline constexpr std::string_view extensions = "extensions";
+/// The history of the project (task 2.6): a tab next to the model tree, opened by the activity
+/// "History".
+inline constexpr std::string_view history = "history";
 inline constexpr std::string_view prompt_line = "promptLine";
 // The bottom panel: one tab each.
 inline constexpr std::string_view journal = "journal";
@@ -93,6 +102,11 @@ inline constexpr std::string_view problems = "problems";
 ///
 /// Task 2.1 (docs/adr/0017-project-folder.md) adds opening and saving the project folder to the
 /// "File" menu (`ProjectActions`); the window asks about unsaved changes before it closes.
+///
+/// Task 2.6 (docs/adr/0022-history-ui.md) adds the history of the project: the panel "History"
+/// next to the model tree, "Commit version" (Ctrl/Cmd+Shift+S) in the "File" menu, the bar over
+/// the 3D view while a version is viewed, the name of the current variant in its colour at the end
+/// of the stage bar and in the title, and the screen "Compare" in place of the 3D view.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -168,6 +182,20 @@ public:
     [[nodiscard]] ProjectActions& project() const noexcept { return *project_; }
     /// The action "Save journal as script…" of the "File" menu.
     [[nodiscard]] QAction* save_journal_action() const noexcept;
+    /// The history of the project in the window and what shows it (task 2.6).
+    [[nodiscard]] HistoryController& history() const noexcept { return *history_; }
+    [[nodiscard]] HistoryPanel& history_panel() const noexcept { return *history_panel_; }
+    [[nodiscard]] VersionBar& version_bar() const noexcept { return *version_bar_; }
+    [[nodiscard]] VariantSwitcher& variant_switcher() const noexcept { return *variant_switcher_; }
+    [[nodiscard]] ComparisonView& comparison() const noexcept { return *comparison_; }
+    /// Opens the panel "History" and brings it to the front.
+    void show_history();
+    /// Shows the screen "Compare" in place of the 3D view, comparing two states (versions by id,
+    /// variants or labels; empty is the current model).
+    void show_comparison(const QString& before, const QString& after);
+    /// Shows the 3D view again.
+    void close_comparison();
+    [[nodiscard]] bool is_comparing() const;
     /// The commands of modules as the window runs them.
     [[nodiscard]] Commands& commands() const noexcept { return *commands_; }
     /// Opens the context menu of a location ("tree", "viewport") of modules at a point of a
@@ -232,6 +260,12 @@ private:
     ExtensionsPanel* extensions_ = nullptr;
     RequiredModulesBar* required_ = nullptr;
     ProjectActions* project_ = nullptr;
+    HistoryController* history_ = nullptr;
+    HistoryPanel* history_panel_ = nullptr;
+    VersionBar* version_bar_ = nullptr;
+    VariantSwitcher* variant_switcher_ = nullptr;
+    ComparisonView* comparison_ = nullptr;
+    QStackedWidget* viewport_stack_ = nullptr;
     std::unique_ptr<Commands> commands_;
     std::unique_ptr<ContributionUi> contributions_;
     CommandPalette* palette_ = nullptr;

@@ -63,6 +63,28 @@
     "diff.raw.removed": "Удалено: {object} (модуль {module} не включён) {before}",
     "diff.removed": "Удалено: {object}",
     "diff.renamed": "имя {before} → {after}",
+    "diff.row.added": "Добавлено",
+    "diff.row.data": "Данные",
+    "diff.row.dependency": "Зависит от",
+    "diff.row.mesh": {
+      "few": "{nodes} узл., {count} элемента",
+      "many": "{nodes} узл., {count} элементов",
+      "one": "{nodes} узл., {count} элемент",
+      "other": "{nodes} узл., {count} элемента"
+    },
+    "diff.row.name": "Имя",
+    "diff.row.otherData": "{value}, другие данные",
+    "diff.row.parent": "Родитель",
+    "diff.row.removed": "Удалено",
+    "diff.row.schemaVersion": "Версия схемы",
+    "diff.row.size": {
+      "few": "{count} записи",
+      "many": "{count} записей",
+      "one": "{count} запись",
+      "other": "{count} записи"
+    },
+    "diff.row.type": "Тип",
+    "diff.row.units": "Единицы",
     "diff.schemaVersion": "версия схемы {before} → {after}",
     "diff.surface.size": {
       "few": "{before} → {count} грани",
@@ -121,6 +143,8 @@
     "quantity.volume": "объём",
     "setting.general.language": "Язык интерфейса. Пусто — язык системы.",
     "setting.general.language.title": "Язык",
+    "setting.history.gitTerms": "Показывать историю проекта в терминах git: commit, branch, tag, stash, checkout.",
+    "setting.history.gitTerms.title": "Термины git в истории",
     "setting.history.undoLimit": "Сколько шагов можно отменить. 0 — без ограничения.",
     "setting.history.undoLimit.title": "Шагов отмены",
     "setting.log.level": "Самые незначительные сообщения, которые попадают в журнал работы.",

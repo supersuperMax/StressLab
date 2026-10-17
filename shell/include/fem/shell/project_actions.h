@@ -65,8 +65,11 @@ public:
     bool confirm_close();
 
     /// The title of the window: "<project>[*] — StressLab", with "[*]" for QWidget's mark of
-    /// unsaved changes; the product name alone without a project session.
+    /// unsaved changes, or "<project> (<variant>)[*] — StressLab" with a variant (task 2.6); the
+    /// product name alone without a project session.
     [[nodiscard]] QString window_title() const;
+    /// The variant (or "Version of …") the title names; empty: none.
+    void set_variant(const QString& variant);
     /// The name the project is shown with: its folder without ".slproj", or "Untitled".
     [[nodiscard]] QString project_name() const;
 
@@ -94,6 +97,7 @@ private:
     QAction* save_as_ = nullptr;
     QAction* clean_ = nullptr;
     QTimer* autosave_ = nullptr;
+    QString variant_;
     Subscription project_changed_;
     Subscription settings_changed_;
 };

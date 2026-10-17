@@ -36,6 +36,7 @@ namespace {
 
 namespace zone = fem::shell::zone;
 using fem::shell::MainWindow;
+using fem::shell::testing::find_action;
 
 // The zones shown when the window opens; the settings are closed until opened.
 const std::vector<std::string_view> all_zones{
@@ -174,23 +175,30 @@ TEST_F(ShellWindow, PanelsAndBarsCanBeMoved) {
 
 TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
     // Commands come from modules: the shell adds none (CLAUDE.md, rule 4). The activity bar has
-    // only the activities of the shell: Model, Modules, Settings (docs/interface-design.md §4).
+    // only the activities of the shell: Model, History, Modules, Settings (docs/interface-design.md
+    // §4, §12).
     QStringList activities;
     for (QAction* action :
          qobject_cast<QToolBar*>(window_->zone_widget(zone::activity_bar))->actions()) {
         activities.push_back(action->objectName());
         EXPECT_FALSE(action->icon().isNull()) << action->objectName().toStdString();
     }
-    EXPECT_EQ(activities, QStringList({"view.modelTree", "view.extensions", "view.settings"}));
+    EXPECT_EQ(activities,
+              QStringList({"view.modelTree", "view.history", "view.extensions", "view.settings"}));
     EXPECT_FALSE(window_->context_toolbar()->isVisibleTo(window_.get()));
-    // The stage bar has the standard stages, in their order.
+    // The stage bar has the standard stages, in their order, then the variant (task 2.6), which
+    // shows with a project folder.
     QStringList stages;
     for (QAction* action :
          qobject_cast<QToolBar*>(window_->zone_widget(zone::stage_bar))->actions()) {
         stages.push_back(action->objectName());
     }
-    EXPECT_EQ(stages, QStringList({"stage.geometry", "stage.mesh", "stage.materials", "stage.steps",
-                                   "stage.solve", "stage.results"}));
+    EXPECT_EQ(stages,
+              QStringList({"stage.geometry", "stage.mesh", "stage.materials", "stage.steps",
+                           "stage.solve", "stage.results", "stageBar.spacer", "stageBar.variant"}));
+    EXPECT_FALSE(
+        find_action(window_->zone_widget(zone::stage_bar), QStringLiteral("stageBar.variant"))
+            ->isVisible());
     std::set<QString> named;
     for (QAction* top : window_->menuBar()->actions()) {
         ASSERT_NE(top->menu(), nullptr);
@@ -214,11 +222,13 @@ TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
                                "menu.help",
                                "app.about",
                                "view.extensions",
+                               "view.history",
                                "journal.saveAsScript",
                                "project.clean",
                                "project.open",
                                "project.save",
-                               "project.saveAs"};
+                               "project.saveAs",
+                               "history.commitVersion"};
     for (const std::string_view id : all_zones) {
         if (id != zone::viewport) {
             expected.insert("view." + q(id));

@@ -322,6 +322,7 @@ std::string ProjectHistory::commit(std::string_view message) {
     bus_.journal_action(call("commit", quoted(message)));
     forget_pending();
     session_.set_state(session_.folder_, false);
+    changed_.emit();
     return id;
 }
 
@@ -366,6 +367,7 @@ std::string ProjectHistory::snapshot(std::string_view reason, std::string_view b
     if (id != head.version) {
         forget_pending();
         session_.set_state(session_.folder_, false);
+        changed_.emit();
     }
     return id;
 }
@@ -384,6 +386,7 @@ void ProjectHistory::branch(std::string_view name, std::optional<std::string_vie
     }
     repo.set_branch(name, id, true);
     bus_.journal_action(call("branch", quoted(name) + (at ? ", at=" + quoted(*at) : "")));
+    changed_.emit();
 }
 
 void ProjectHistory::checkout(std::string_view target) {
@@ -410,6 +413,7 @@ void ProjectHistory::checkout(std::string_view target) {
     }
     forget_pending();
     session_.set_state(session_.folder_, false);
+    changed_.emit();
 }
 
 void ProjectHistory::tag(std::string_view name, std::optional<std::string_view> at) {
@@ -426,6 +430,7 @@ void ProjectHistory::tag(std::string_view name, std::optional<std::string_view> 
     }
     repo.create_tag(name, id);
     bus_.journal_action(call("tag", quoted(name) + (at ? ", at=" + quoted(*at) : "")));
+    changed_.emit();
 }
 
 void ProjectHistory::stash(std::string_view message) {
@@ -453,6 +458,7 @@ void ProjectHistory::stash(std::string_view message) {
                call("stash", message.empty() ? std::string() : quoted(message)));
     forget_pending();
     session_.set_state(session_.folder_, false);
+    changed_.emit();
 }
 
 void ProjectHistory::stash_pop(std::size_t index) {
@@ -483,6 +489,7 @@ void ProjectHistory::stash_pop(std::size_t index) {
     pending_ = journal_entries(version.journal);
     saved(folder());
     session_.set_state(session_.folder_, false);
+    changed_.emit();
 }
 
 void ProjectHistory::stash_drop(std::size_t index) {
@@ -493,6 +500,7 @@ void ProjectHistory::stash_drop(std::size_t index) {
     }
     found->drop_stash(index);
     bus_.journal_action(call("stash_drop", index == 0 ? "" : std::to_string(index)));
+    changed_.emit();
 }
 
 std::string ProjectHistory::restore_version(std::string_view target) {
@@ -528,11 +536,16 @@ std::string ProjectHistory::restore_version(std::string_view target) {
     }
     forget_pending();
     session_.set_state(session_.folder_, false);
+    changed_.emit();
     return result;
 }
 
 void ProjectHistory::set_author(Author author) {
     author_ = std::move(author);
+}
+
+Subscription ProjectHistory::on_changed(std::function<void()> listener) {
+    return changed_.subscribe(std::move(listener));
 }
 
 // --- Restoring objects ---------------------------------------------------------------------------

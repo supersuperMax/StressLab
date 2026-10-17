@@ -356,6 +356,7 @@ CommandResult CommandBus::execute(std::string_view id, Value::Dict args) {
     }
     model::ChangeSet changes = editor_.new_changes();
     CommandResult result = run(command, arguments, changes);
+    refuse_changes(changes, command->spec.id);
     if (!transactions_.empty()) {
         OpenTransaction& transaction = transactions_.back();
         transaction.changes.append(std::move(changes));
@@ -397,6 +398,14 @@ void CommandBus::complete_step(std::string label, model::ChangeSet changes,
     redo_stack_.clear();
     trim_undo_stack();
     model_changed_.emit(change);
+}
+
+void CommandBus::refuse_changes(model::ChangeSet& changes, std::string_view id) {
+    if (read_only_ && !changes.empty()) {
+        editor_.rollback(changes);
+        fail(CommandErrc::read_only,
+             "command '" + std::string(id) + "' would change a document that is read-only");
+    }
 }
 
 // --- History -------------------------------------------------------------------------------------
@@ -465,6 +474,9 @@ void CommandBus::trim_undo_stack() {
 
 bool CommandBus::undo() {
     check_idle("undo");
+    if (read_only_ && !undo_stack_.empty()) {
+        fail(CommandErrc::read_only, "undo is not allowed while the document is read-only");
+    }
     if (undo_stack_.empty()) {
         return false;
     }
@@ -480,6 +492,9 @@ bool CommandBus::undo() {
 
 bool CommandBus::redo() {
     check_idle("redo");
+    if (read_only_ && !redo_stack_.empty()) {
+        fail(CommandErrc::read_only, "redo is not allowed while the document is read-only");
+    }
     if (redo_stack_.empty()) {
         return false;
     }

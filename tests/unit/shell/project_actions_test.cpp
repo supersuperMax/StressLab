@@ -95,7 +95,8 @@ TEST_F(ShellProject, FileMenuHasTheProjectActions) {
     EXPECT_EQ(items[0]->objectName(), QStringLiteral("project.open"));
     EXPECT_EQ(items[2]->objectName(), QStringLiteral("project.save"));
     EXPECT_EQ(items[3]->objectName(), QStringLiteral("project.saveAs"));
-    EXPECT_EQ(items[4]->objectName(), QStringLiteral("project.clean"));
+    EXPECT_EQ(items[4]->objectName(), QStringLiteral("history.commitVersion"));
+    EXPECT_EQ(items[5]->objectName(), QStringLiteral("project.clean"));
     EXPECT_EQ(actions().clean_action()->text(), QStringLiteral("Clean Project"));
     EXPECT_EQ(actions().save_action()->shortcut(), QKeySequence(QKeySequence::Save));
     EXPECT_EQ(actions().open_action()->shortcut(), QKeySequence(QKeySequence::Open));
@@ -113,7 +114,8 @@ TEST_F(ShellProject, TitleShowsTheProjectAndUnsavedChanges) {
     actions().save_action()->trigger();  // No folder yet: asks for one.
     EXPECT_EQ(suggested_, QStringLiteral("Untitled.slproj"));
     EXPECT_TRUE(fem::storage::is_project_folder(folder_ / fs::path(u8"крыло.slproj")));
-    EXPECT_EQ(window_->windowTitle(), q(utf8(u8"крыло[*] — StressLab")));
+    // With a folder the title names the variant too (task 2.6).
+    EXPECT_EQ(window_->windowTitle(), q(utf8(u8"крыло — Main variant[*] — StressLab")));
     EXPECT_FALSE(window_->isWindowModified());
 }
 

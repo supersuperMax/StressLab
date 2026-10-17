@@ -166,6 +166,19 @@ struct ResultFilterContribution {
     std::string title;
 };
 
+/// `resultIndicators`: a key indicator of results, such as the mass or the largest stress (task
+/// 2.6, docs/interface-design.md §12): the comparison of versions shows its value in the results
+/// of each (`ResultInfo::indicators` of the storage, by `id`). Not in the table of
+/// docs/architecture.md §4.2; see docs/adr/0022-history-ui.md.
+struct ResultIndicatorContribution {
+    std::string owner;
+    std::string id;
+    std::string title;
+    /// A quantity of `fem/core/model/quantity.h` ("mass", "pressure"): the value is in the units of
+    /// the model and shown with them. Empty for a number without a unit.
+    std::string quantity;
+};
+
 /// `settings`: a setting of the module; `fem::settings::Settings` checks values against it.
 struct SettingContribution {
     enum class Type : std::uint8_t { boolean, integer, number, string, path };
@@ -248,6 +261,7 @@ struct Contributions {
     std::vector<BottomPanelTabContribution> bottom_panel_tabs;
     std::vector<ViewportLayerContribution> viewport_layers;
     std::vector<ResultFilterContribution> result_filters;
+    std::vector<ResultIndicatorContribution> result_indicators;
     std::vector<SettingContribution> settings;
     std::vector<KeybindingContribution> keybindings;
     std::vector<IconContribution> icons;

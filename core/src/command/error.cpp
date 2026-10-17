@@ -24,6 +24,8 @@ std::string_view to_string(CommandErrc code) noexcept {
             return "journal_replay";
         case CommandErrc::journal_io:
             return "journal_io";
+        case CommandErrc::read_only:
+            return "read_only";
     }
     return "unknown";
 }

@@ -301,7 +301,165 @@ public:
         return out;
     }
 
+    std::vector<DiffRow> rows() const {
+        std::vector<DiffRow> out;
+        if (diff_.units_changed()) {
+            out.push_back({.owner = std::string(model::core_owner),
+                           .type = "units",
+                           .section = core("diff.row.units"),
+                           .field = core("diff.row.units"),
+                           .before = model::to_string(diff_.units_before),
+                           .after = model::to_string(diff_.units_after)});
+        }
+        for (const ObjectChange& change : diff_.objects) {
+            object_rows(change, out);
+        }
+        return out;
+    }
+
 private:
+    void object_rows(const ObjectChange& change, std::vector<DiffRow>& out) const {
+        const ObjectRecord& current = change.current();
+        const std::string& owner = current.object.init.owner;
+        const std::string& type = current.object.init.type;
+        DiffRow row{.id = change.id,
+                    .kind = change.kind,
+                    .owner = owner,
+                    .type = type,
+                    .section = type_title(owner, type),
+                    .object = object_name(label_of(current), change.id)};
+        const auto add = [&out, &row](std::string field, std::string before, std::string after) {
+            DiffRow added = row;
+            added.field = std::move(field);
+            added.before = std::move(before);
+            added.after = std::move(after);
+            out.push_back(std::move(added));
+        };
+        if (is_raw(owner) || (change.type && is_raw(change.before->object.init.owner))) {
+            row.raw = true;
+            raw_rows(change, add);
+            return;
+        }
+        switch (change.kind) {
+            case ChangeKind::added:
+                add(core("diff.row.added"), {}, {});
+                return;
+            case ChangeKind::removed:
+                add(core("diff.row.removed"), {}, {});
+                return;
+            case ChangeKind::changed:
+                break;
+        }
+        const model::NewObject& old = change.before->object.init;
+        const model::NewObject& now = change.after->object.init;
+        if (change.type) {
+            add(core("diff.row.type"), old.owner + '/' + old.type, now.owner + '/' + now.type);
+        }
+        if (change.name) {
+            add(core("diff.row.name"), shown_name(old.name), shown_name(now.name));
+        }
+        if (change.parent) {
+            add(core("diff.row.parent"), referenced_name(old.parent), referenced_name(now.parent));
+        }
+        if (change.schema_version) {
+            add(core("diff.row.schemaVersion"), std::to_string(old.schema_version),
+                std::to_string(now.schema_version));
+        }
+        const form::PropertyForm* form = forms_.find(now.owner, now.type);
+        for (const PropertyChange& property : change.properties) {
+            const form::Field* field =
+                form != nullptr ? form::find_field(form->form, property.pointer) : nullptr;
+            std::string title = property.pointer;
+            if (field != nullptr && !field->title.empty()) {
+                title = l10n_.manifest_text(now.owner, field->title);
+            }
+            add(std::move(title),
+                value_with_unit(property.before, field, now.owner, diff_.units_before),
+                value_with_unit(property.after, field, now.owner, diff_.units_after));
+        }
+        for (const ObjectId id : change.dependencies_added) {
+            add(core("diff.row.dependency"), core("diff.absent"), referenced_name(id));
+        }
+        for (const ObjectId id : change.dependencies_removed) {
+            add(core("diff.row.dependency"), referenced_name(id), core("diff.absent"));
+        }
+        if (change.data) {
+            const std::string before = data_text(change.before->data);
+            std::string after = data_text(change.after->data);
+            if (before == after) {
+                after = core("diff.row.otherData", {{"value", after}});
+            }
+            add(core("diff.row.data"), before, after);
+        }
+    }
+
+    template <typename Add>
+    void raw_rows(const ObjectChange& change, const Add& add) const {
+        if (change.kind == ChangeKind::added) {
+            add(core("diff.row.added"), {}, record_json(*change.after).dump());
+            return;
+        }
+        if (change.kind == ChangeKind::removed) {
+            add(core("diff.row.removed"), record_json(*change.before).dump(), {});
+            return;
+        }
+        const Json old = record_json(*change.before);
+        const Json now = record_json(*change.after);
+        std::set<std::string> keys;
+        for (auto it = old.begin(); it != old.end(); ++it) {
+            keys.insert(it.key());
+        }
+        for (auto it = now.begin(); it != now.end(); ++it) {
+            keys.insert(it.key());
+        }
+        const auto shown = [this](const Json& object, const std::string& key) {
+            const auto it = object.find(key);
+            return it == object.end() ? core("diff.absent") : it->dump();
+        };
+        for (const std::string& key : keys) {
+            const auto was = old.find(key);
+            const auto is = now.find(key);
+            const bool differs = was == old.end() || is == now.end() || !same(*was, *is);
+            if (differs || (key == "data" && change.data)) {
+                std::string after = shown(now, key);
+                if (!differs) {
+                    // The same description of another block.
+                    after = core("diff.row.otherData", {{"value", after}});
+                }
+                add(key, shown(old, key), std::move(after));
+            }
+        }
+        if (change.type) {
+            add(core("diff.row.type"),
+                change.before->object.init.owner + '/' + change.before->object.init.type,
+                change.after->object.init.owner + '/' + change.after->object.init.type);
+        }
+    }
+
+    [[nodiscard]] std::string value_with_unit(const std::optional<Json>& value,
+                                              const form::Field* field, const std::string& owner,
+                                              const model::UnitSystem& units) const {
+        std::string text = this->value(value, field, owner);
+        if (value && value->is_number() && field != nullptr && field->quantity != nullptr) {
+            text += ' ';
+            text += unit(*field->quantity, units);
+        }
+        return text;
+    }
+
+    /// What data an object has: "61007 elements", "120 items".
+    [[nodiscard]] std::string data_text(const Json& data) const {
+        if (data.is_null()) {
+            return core("diff.absent");
+        }
+        const std::string kind = data.value("kind", "");
+        if (kind == "mesh") {
+            return core("diff.row.mesh", {{"nodes", data.value("nodes", std::int64_t{0})},
+                                          {"count", data.value("elements", std::int64_t{0})}});
+        }
+        return core("diff.row.size", {{"count", data.value("size", std::int64_t{0})}});
+    }
+
     [[nodiscard]] std::string core(std::string_view key, const l10n::Args& args = {}) const {
         return l10n_.text(model::core_owner, key, args);
     }
@@ -566,6 +724,10 @@ private:
 
 std::vector<std::string> describe(const ModelDiff& diff, const DiffContext& context) {
     return Describer(diff, context).lines();
+}
+
+std::vector<DiffRow> describe_rows(const ModelDiff& diff, const DiffContext& context) {
+    return Describer(diff, context).rows();
 }
 
 }  // namespace fem::storage

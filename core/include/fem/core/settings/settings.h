@@ -36,6 +36,9 @@ inline constexpr std::string_view log_level = "log.level";
 inline constexpr std::string_view autosave_interval = "project.autosaveInterval";
 /// Megabytes the cache of results of a project may take (task 2.5); 0 means no limit.
 inline constexpr std::string_view result_cache_limit = "results.cacheLimit";
+/// The panel "History" says "commit", "branch" and "merge" instead of "version", "variant" and
+/// "bring over changes" (task 2.6, docs/interface-design.md §12).
+inline constexpr std::string_view git_terms = "history.gitTerms";
 }  // namespace keys
 
 /// The schemas of the settings of the core.

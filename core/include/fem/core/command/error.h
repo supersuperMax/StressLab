@@ -19,6 +19,7 @@ enum class CommandErrc {
     journal_syntax,     ///< The journal is not in the format the core writes.
     journal_replay,     ///< A statement of the journal failed when it was replayed.
     journal_io,         ///< The journal file cannot be created.
+    read_only,          ///< A change of a document that is read-only (`set_read_only`).
 };
 
 [[nodiscard]] std::string_view to_string(CommandErrc code) noexcept;
