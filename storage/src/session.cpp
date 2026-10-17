@@ -38,6 +38,7 @@ ProjectSession::ProjectSession(command::CommandBus& bus, ModuleVersionLookup ver
         }
     });
     history_.reset(new ProjectHistory(*this, bus_));
+    results_.reset(new ResultCache(*this));
 }
 
 ProjectSession::~ProjectSession() = default;
@@ -50,9 +51,21 @@ fs::path ProjectSession::with_extension(const fs::path& path) {
     return result;
 }
 
+fs::path ProjectSession::with_package_extension(const fs::path& path) {
+    fs::path result = path.has_filename() ? path : path.parent_path();
+    if (result.extension() != fs::path(package_extension)) {
+        result += fs::path(package_extension);
+    }
+    return result;
+}
+
 void ProjectSession::open(const fs::path& folder) {
     check_idle("opening a project");
-    replace(load_project(folder), journal_call("open", folder));
+    open_folder(folder, journal_call("open", folder));
+}
+
+void ProjectSession::open_folder(const fs::path& folder, std::string_view entry) {
+    replace(load_project(folder), entry);
     set_state(absolute_path(folder), false);
     history_->opened(*folder_);
 }
@@ -103,6 +116,30 @@ CleanStats ProjectSession::clean() {
     }
     const CleanStats stats = clean_project(*folder_, history_->blob_roots());
     bus_.journal_action("stresslab.project.clean()");
+    return stats;
+}
+
+PackStats ProjectSession::pack(const fs::path& package, bool with_history) {
+    check_idle("packing the project");
+    if (!folder_) {
+        throw ProjectError(ProjectErrc::no_folder,
+                           "the project has no folder yet: save it with save_as to pack it");
+    }
+    const fs::path target = with_package_extension(package);
+    write(*folder_);
+    set_state(folder_, false);
+    const PackStats stats = pack_project(*folder_, target, {.history = with_history});
+    bus_.journal_action("stresslab.project.pack(" + command::python_string(io::display(target)) +
+                        ", history=" + (with_history ? "True" : "False") + ")");
+    return stats;
+}
+
+PackStats ProjectSession::unpack(const fs::path& package, const fs::path& folder) {
+    check_idle("unpacking a project");
+    const fs::path target = with_extension(folder);
+    const PackStats stats = unpack_project(package, target);
+    open_folder(target, "stresslab.project.unpack(" + command::python_string(io::display(package)) +
+                            ", " + command::python_string(io::display(target)) + ")");
     return stats;
 }
 

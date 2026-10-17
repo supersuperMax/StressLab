@@ -27,6 +27,7 @@
 | PCRE2 | 10.47 | BSD-3-Clause (с исключением PCRE2 для двоичных поставок) | vcpkg, через libgit2 (порт требует внешний движок регулярных выражений); на Windows — `pcre2-*.dll` | внутри libgit2 |
 | http-parser | 2.9.4 | MIT | vcpkg, через libgit2 (порт подключает его всегда, хотя сети мы не используем) | внутри libgit2 |
 | zlib | 1.3.2 | Zlib | vcpkg, через libgit2; на Windows — `z.dll` | сжатие объектов git внутри libgit2 |
+| miniz | 3.1.2 | MIT | vcpkg, без зависимостей (свой deflate); на Windows — `miniz.dll`; линкуется к `femstorage` закрыто (`PRIVATE`), тестам `storage` — для сборки повреждённых и злонамеренных пакетов | zip пакетов `.slpack`: `storage/src/package.cpp` (с задачи 2.5) |
 
 ## Инструменты разработки (в продукт не входят)
 

@@ -59,4 +59,9 @@ CleanStats clean_project(const std::filesystem::path& folder,
 /// project.json, io if a file cannot be read, and what `read_project` throws.
 [[nodiscard]] LoadedProject load_project(const std::filesystem::path& folder);
 
+/// The files of the project of `folder` as they are, without reading them as a model:
+/// project.json, refs/blobs.json if there is one, every `.json` under model/. Throws ProjectError:
+/// not_a_project without project.json, io if a file cannot be read.
+[[nodiscard]] ProjectFiles read_project_files(const std::filesystem::path& folder);
+
 }  // namespace fem::storage

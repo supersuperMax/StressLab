@@ -158,6 +158,25 @@ public:
     /// Forgets the stash at `index` of `stashes()`. Throws ProjectError(unknown_version).
     void drop_stash(std::size_t index);
 
+    // --- Pinned results (task 2.5) ---------------------------------------------------------------
+    // A pinned result is a git blob with its record (`result_cache.h`) under
+    // `refs/results/<key>`: it goes wherever the history goes, without being a version.
+
+    /// The records of the pinned results by their keys.
+    [[nodiscard]] std::map<std::string, std::string> pins() const;
+    /// The record of the pinned result of `key`; none if it is not pinned.
+    [[nodiscard]] std::optional<std::string> pin(std::string_view key) const;
+    /// Keeps `record` as the pinned result of `key` (64 hex digits), in place of one there.
+    void set_pin(std::string_view key, std::string_view record);
+    /// Forgets the pinned result of `key`; false if there was none.
+    bool remove_pin(std::string_view key);
+
+    /// Makes the history of a project folder unpacked from a package (task 2.5) one of this
+    /// computer: writes the configuration of the repository, which a package does not carry
+    /// (whether the file system ignores case, has symbolic links and file modes), as a new history
+    /// gets it. HEAD, variants and versions stay. Throws ProjectError(io).
+    static void adopt(const std::filesystem::path& project_folder);
+
 private:
     struct State;
     explicit Repository(std::unique_ptr<State> state);

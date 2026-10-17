@@ -24,4 +24,19 @@ namespace fem::storage::detail {
 /// hex digits.
 [[nodiscard]] std::optional<std::string> unescape_segment(std::string_view segment);
 
+/// True for well-formed UTF-8 (RFC 3629: no overlong forms, no surrogates, nothing above
+/// U+10FFFF).
+[[nodiscard]] bool is_utf8(std::string_view text) noexcept;
+
+/// True if `path` (from a package or a record of another computer, task 2.5) names a file inside
+/// a folder on every OS: UTF-8 segments joined by '/', none empty, "." or "..", none ending with a
+/// dot or a space (Windows drops them), none a name Windows keeps for a device ("con", "aux.txt"),
+/// no control characters, ':' or '\\'.
+[[nodiscard]] bool is_portable_relative_path(std::string_view path) noexcept;
+
+/// The text with Latin and Cyrillic capitals made small: file systems of Windows and macOS do not
+/// tell "Вариант" from "вариант", so neither do the history and packages, on any system. Other
+/// scripts are compared as they are. `text` is valid UTF-8.
+[[nodiscard]] std::string fold_case(std::string_view text);
+
 }  // namespace fem::storage::detail

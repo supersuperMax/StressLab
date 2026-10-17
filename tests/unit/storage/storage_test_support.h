@@ -3,6 +3,7 @@
 #include "fem/core/model/document.h"
 #include "fem/core/model/mesh.h"
 #include "fem/storage/blob_store.h"
+#include "fem/storage/error.h"
 #include "fem/storage/object_data_codec.h"
 #include "fem/storage/project_format.h"
 
@@ -23,6 +24,19 @@
 #include <system_error>
 #include <utility>
 #include <vector>
+
+/// Expects `statement` to throw ProjectError with the code `expected`.
+#define EXPECT_PROJECT_ERRC(statement, expected)                                              \
+    do {                                                                                      \
+        try {                                                                                 \
+            statement;                                                                        \
+            ADD_FAILURE() << "Expected ProjectError " << ::fem::storage::to_string(expected); \
+        } catch (const ::fem::storage::ProjectError& error) {                                 \
+            EXPECT_EQ(::fem::storage::to_string(error.code()),                                \
+                      ::fem::storage::to_string(expected))                                    \
+                << error.what();                                                              \
+        }                                                                                     \
+    } while (false)
 
 namespace fem::storage::testing {
 

@@ -28,6 +28,11 @@ enum class ProjectErrc {
     nothing_to_stash,     ///< No changes to put aside.
     detached,             ///< A version is viewed on its own: make a variant from it first.
     stash_conflict,       ///< The variant moved on since the changes were put aside.
+    // The cache of results and packages (task 2.5).
+    unknown_result,   ///< No such result in the cache or among the pinned ones.
+    result_mismatch,  ///< The key of a result is not that of the model of its version.
+    invalid_archive,  ///< A .slpack is not a zip, is damaged or holds what a project cannot.
+    cancelled,        ///< A long operation was cancelled; nothing was changed.
 };
 
 [[nodiscard]] std::string_view to_string(ProjectErrc code) noexcept;

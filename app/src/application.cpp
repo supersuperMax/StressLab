@@ -32,6 +32,21 @@ void log_scan(const extension::ScanReport& report, const std::string& category) 
     }
 }
 
+/// The size of the cache of results follows the setting "results.cacheLimit" (megabytes; the core
+/// does not know the storage, so the binding lives here).
+Subscription bind_result_cache_limit(settings::Settings& settings, storage::ResultCache& results) {
+    const auto apply = [&settings, &results] {
+        const auto megabytes = settings.get<std::int64_t>(settings::keys::result_cache_limit);
+        results.set_limit(megabytes <= 0 ? 0 : static_cast<std::uint64_t>(megabytes) * 1024 * 1024);
+    };
+    apply();
+    return settings.on_changed([apply](std::string_view key) {
+        if (key == settings::keys::result_cache_limit) {
+            apply();
+        }
+    });
+}
+
 }  // namespace
 
 Application::Application(const Environment& environment, std::string log_category)
@@ -49,6 +64,7 @@ Application::Application(const Environment& environment, std::string log_categor
     bindings_.push_back(bind_catalogs(manager_, localization_));
     bindings_.push_back(bind_language(settings_, localization_, environment.system_language));
     bindings_.push_back(bind_undo_limit(settings_, bus_));
+    bindings_.push_back(bind_result_cache_limit(settings_, project_.results()));
     if (environment.user_settings) {
         try {
             (void)settings_.load_file(settings::Level::user, *environment.user_settings);

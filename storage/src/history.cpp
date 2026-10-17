@@ -9,6 +9,7 @@
 #include "fem/storage/error.h"
 #include "fem/storage/object_data_codec.h"
 #include "fem/storage/project.h"
+#include "fem/storage/result_cache.h"
 #include "fem/storage/session.h"
 
 #include <nlohmann/json.hpp>
@@ -270,15 +271,19 @@ ModelDiff ProjectHistory::diff(std::string_view from, std::optional<std::string_
 
 std::vector<std::string> ProjectHistory::blob_roots() const {
     const std::optional<Repository> repo = repository();
-    if (!repo) {
-        return {};
-    }
+    return repo ? history_blob_roots(*repo) : std::vector<std::string>{};
+}
+
+std::vector<std::string> history_blob_roots(const Repository& repo) {
     // Versions share their refs/blobs.json while the bulk data does not change: read each once.
     std::set<std::string> seen;
     std::set<std::string> roots;
-    for (const std::string& id : repo->reachable()) {
-        std::optional<std::string> refs = repo->read_file(id, blob_refs_file);
-        std::optional<std::string> project = repo->read_file(id, project_file);
+    for (std::string& root : pinned_result_roots(repo)) {
+        roots.insert(std::move(root));
+    }
+    for (const std::string& id : repo.reachable()) {
+        std::optional<std::string> refs = repo.read_file(id, blob_refs_file);
+        std::optional<std::string> project = repo.read_file(id, project_file);
         if (!refs || !project || !seen.insert(*refs).second) {
             continue;
         }

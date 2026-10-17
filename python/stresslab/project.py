@@ -7,11 +7,13 @@
     stresslab.project.save()                    # only the files that changed
     stresslab.project.open("wing.slproj")       # in place of the document
     stresslab.project.clean()                   # removes blocks of data saved before
+    stresslab.project.pack("for a colleague")   # one file: for a colleague.slpack
+    stresslab.project.unpack("wing.slpack", "wing")  # into wing.slproj, and opens it
 
-Opening, saving, cleaning and closing are written to the session journal as these same calls, so a
-journal replays them; they are refused inside a command or a transaction. Errors of the folder
-raise `stresslab.ProjectError`, whose `code` says what went wrong ("not_a_project",
-"invalid_file"...) and `file` and `line` where.
+Opening, saving, cleaning, packing, unpacking and closing are written to the session journal as
+these same calls, so a journal replays them; they are refused inside a command or a transaction.
+Errors of the folder raise `stresslab.ProjectError`, whose `code` says what went wrong
+("not_a_project", "invalid_file"...) and `file` and `line` where.
 """
 
 from __future__ import annotations
@@ -24,7 +26,18 @@ from _stresslab import ProjectError
 
 _native = _stresslab.project
 
-__all__ = ["ProjectError", "clean", "close", "folder", "is_modified", "open", "save", "save_as"]
+__all__ = [
+    "ProjectError",
+    "clean",
+    "close",
+    "folder",
+    "is_modified",
+    "open",
+    "pack",
+    "save",
+    "save_as",
+    "unpack",
+]
 
 
 def open(folder: str | os.PathLike[str]) -> None:  # noqa: A001 - the name of the action
@@ -48,6 +61,22 @@ def clean() -> dict[str, int]:
     ``{"removed": files, "freed_bytes": ..., "kept": blocks, "kept_bytes": ...}``; ProjectError
     with code "no_folder" for a project never saved."""
     return _native.clean()
+
+
+def pack(package: str | os.PathLike[str], history: bool = True) -> dict[str, int]:
+    """Saves the project and packs it into one file to send (".slpack" is added if missing): a
+    zip of the project folder, with its versions, variants, labels and pinned results, or with
+    ``history=False`` the model alone; never the cache of results. Returns ``{"files": ...,
+    "bytes": ..., "package_bytes": ...}``; ProjectError with code "no_folder" for a project never
+    saved."""
+    return _native.pack(package, history)
+
+
+def unpack(package: str | os.PathLike[str], folder: str | os.PathLike[str]) -> dict[str, int]:
+    """Unpacks a .slpack into ``folder`` (".slproj" is added if missing), which must be new or
+    empty, and opens that project in place of the active document. ProjectError with code
+    "invalid_archive" for a file that is not a package of a project or is damaged."""
+    return _native.unpack(package, folder)
 
 
 def close() -> None:

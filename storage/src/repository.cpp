@@ -23,6 +23,7 @@ namespace fs = std::filesystem;
 constexpr std::string_view heads_prefix = "refs/heads/";
 constexpr std::string_view tags_prefix = "refs/tags/";
 constexpr std::string_view stashes_prefix = "refs/stashes/";
+constexpr std::string_view results_prefix = "refs/results/";
 constexpr std::string_view trailer_prefix = "StressLab-";
 constexpr std::string_view service_prefix = ".fem/";
 /// Variants and labels are files named by their escaped names: the names are short enough for a
@@ -116,36 +117,7 @@ bool is_hex(std::string_view text) {
     });
 }
 
-/// The name with Latin and Cyrillic capitals made small: file systems of Windows and macOS do not
-/// tell "Вариант" from "вариант", so neither does the history, on any system. Other scripts are
-/// compared as they are. `name` is valid UTF-8.
-std::string fold_case(std::string_view name) {
-    std::string out;
-    for (std::size_t i = 0; i < name.size();) {
-        const auto byte = static_cast<unsigned char>(name[i]);
-        const std::size_t length = byte < 0x80 ? 1 : byte < 0xE0 ? 2 : byte < 0xF0 ? 3 : 4;
-        if (length == 1) {
-            out.push_back(byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a')
-                                                     : static_cast<char>(byte));
-        } else if (length == 2) {
-            std::uint32_t code =
-                ((byte & 0x1FU) << 6U) | (static_cast<unsigned char>(name[i + 1]) & 0x3FU);
-            if (code >= 0x410 && code <= 0x42F) {
-                code += 0x20;  // А-Я
-            } else if (code >= 0x400 && code <= 0x40F) {
-                code += 0x50;  // Ѐ-Џ, Ё among them
-            } else if (code >= 0xC0 && code <= 0xDE && code != 0xD7) {
-                code += 0x20;  // Latin-1 capitals
-            }
-            out.push_back(static_cast<char>(0xC0U | (code >> 6U)));
-            out.push_back(static_cast<char>(0x80U | (code & 0x3FU)));
-        } else {
-            out.append(name.substr(i, length));
-        }
-        i += length;
-    }
-    return out;
-}
+using detail::fold_case;
 
 // --- Names ---------------------------------------------------------------------------------------
 
@@ -829,6 +801,101 @@ void Repository::drop_stash(std::size_t index) {
           "cannot read the changes put aside");
     const ReferencePtr owned(found);
     check(git_reference_delete(found), "cannot forget the changes put aside");
+}
+
+namespace {
+
+/// The reference of the pinned result of `key`. Throws ProjectError(unknown_result) for a key
+/// that is not 64 lower-case hex digits.
+std::string pin_reference(std::string_view key) {
+    if (key.size() != 64 || !std::all_of(key.begin(), key.end(), [](char c) {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        })) {
+        throw ProjectError(ProjectErrc::unknown_result,
+                           "'" + std::string(key) + "' is not the key of a result");
+    }
+    return std::string(results_prefix) + std::string(key);
+}
+
+std::string read_blob(git_repository* repo, const git_oid& oid, const std::string& what) {
+    git_blob* blob = nullptr;
+    check(git_blob_lookup(&blob, repo, &oid), "cannot read " + what);
+    const BlobPtr owned(blob);
+    return {static_cast<const char*>(git_blob_rawcontent(blob)),
+            static_cast<std::size_t>(git_blob_rawsize(blob))};
+}
+
+}  // namespace
+
+std::map<std::string, std::string> Repository::pins() const {
+    std::map<std::string, std::string> result;
+    for (const auto& [reference, id] : state_->references(std::string(results_prefix) + "*")) {
+        const git_oid oid = to_oid(id);
+        result.emplace(reference.substr(results_prefix.size()),
+                       read_blob(state_->get(), oid, "the pinned result " + reference));
+    }
+    return result;
+}
+
+std::optional<std::string> Repository::pin(std::string_view key) const {
+    const std::string reference = pin_reference(key);
+    git_reference* found = nullptr;
+    const int result = git_reference_lookup(&found, state_->get(), reference.c_str());
+    if (result == GIT_ENOTFOUND) {
+        return std::nullopt;
+    }
+    check(result, "cannot read the reference " + reference);
+    const ReferencePtr owned(found);
+    const git_oid* oid = git_reference_target(found);
+    if (oid == nullptr) {
+        return std::nullopt;
+    }
+    return read_blob(state_->get(), *oid, "the pinned result " + reference);
+}
+
+void Repository::set_pin(std::string_view key, std::string_view record) {
+    const std::string reference = pin_reference(key);
+    git_oid oid;
+    check(git_blob_create_from_buffer(&oid, state_->get(), record.data(), record.size()),
+          "cannot store the pinned result " + std::string(key));
+    git_reference* created = nullptr;
+    check(git_reference_create(&created, state_->get(), reference.c_str(), &oid, 1, nullptr),
+          "cannot write the reference " + reference);
+    git_reference_free(created);
+}
+
+bool Repository::remove_pin(std::string_view key) {
+    const std::string reference = pin_reference(key);
+    git_reference* found = nullptr;
+    const int result = git_reference_lookup(&found, state_->get(), reference.c_str());
+    if (result == GIT_ENOTFOUND) {
+        return false;
+    }
+    check(result, "cannot read the reference " + reference);
+    const ReferencePtr owned(found);
+    check(git_reference_delete(found), "cannot forget the pinned result " + std::string(key));
+    return true;
+}
+
+void Repository::adopt(const fs::path& project_folder) {
+    use_library();
+    // The configuration a new history gets here, probed by libgit2 on the same file system (case,
+    // links, modes): initialising the unpacked repository again would not probe the case.
+    const fs::path folder = project_folder / fs::path(std::u8string(u8".fem/git"));
+    const fs::path probe = project_folder / fs::path(std::u8string(u8".fem/git-probe"));
+    std::error_code ignored;
+    fs::remove_all(probe, ignored);
+    git_repository_init_options options = GIT_REPOSITORY_INIT_OPTIONS_INIT;
+    options.flags = GIT_REPOSITORY_INIT_BARE | GIT_REPOSITORY_INIT_MKPATH;
+    git_repository* repo = nullptr;
+    const int result = git_repository_init_ext(&repo, utf8(probe).c_str(), &options);
+    git_repository_free(repo);
+    const std::optional<std::string> config =
+        result < 0 ? std::nullopt : io::read_file(probe / "config");
+    fs::remove_all(probe, ignored);
+    if (!config || !io::write_file(folder / "config", *config)) {
+        fail(ProjectErrc::io, "cannot set up the history in " + io::display(folder));
+    }
 }
 
 }  // namespace fem::storage

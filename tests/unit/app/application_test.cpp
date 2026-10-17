@@ -86,4 +86,16 @@ TEST(ApplicationProject, SavesTheVersionsOfInstalledModules) {
     fs::remove_all(root, ignored);
 }
 
+TEST(ApplicationProject, TheCacheOfResultsFollowsItsSetting) {
+    Application application(Environment{}, "test");
+    fem::storage::ResultCache& results = application.project().results();
+    EXPECT_EQ(results.limit(), 20480ULL * 1024 * 1024);
+    application.settings().set(fem::settings::Level::user, fem::settings::keys::result_cache_limit,
+                               100);
+    EXPECT_EQ(results.limit(), 100ULL * 1024 * 1024);
+    application.settings().set(fem::settings::Level::user, fem::settings::keys::result_cache_limit,
+                               0);
+    EXPECT_EQ(results.limit(), 0U);
+}
+
 }  // namespace

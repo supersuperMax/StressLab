@@ -40,6 +40,50 @@ jobs:
     with:
       kind: core
 
+  # Task 2.5: each system unpacks the packages of the wing the other two made in "core", with the
+  # storage tests built there: the packages and the test program are artifacts, nothing is built.
+  slpack-exchange:
+    if: github.event.action != 'labeled'
+    needs: core
+    name: slpack exchange (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      # The Debug test program needs the debug runtime of MSVC.
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Download the packages of every system
+        uses: actions/download-artifact@v4
+        with:
+          pattern: slpack-*
+          path: ${{ runner.temp }}/slpack
+
+      - name: Download the storage tests of this system
+        uses: actions/download-artifact@v4
+        with:
+          name: storage-tests-${{ runner.os }}
+          path: ${{ runner.temp }}/tests
+
+      - name: Unpack the packages of the other systems
+        env:
+          STRESSLAB_SLPACK_IMPORT: ${{ runner.temp }}/slpack
+        run: |
+          Remove-Item -Recurse -Force "$env:STRESSLAB_SLPACK_IMPORT/slpack-${{ runner.os }}"
+          Get-ChildItem -Recurse -File "$env:STRESSLAB_SLPACK_IMPORT" | ForEach-Object { $_.FullName }
+          $tests = Join-Path "${{ runner.temp }}" "tests/fem_storage_tests"
+          # Artifacts do not keep the modes of files.
+          if (-not $IsWindows) { chmod +x $tests }
+          & $tests --gtest_filter=StoragePackageExchange.Read
+          exit $LASTEXITCODE
+
   # Everything including the Qt shell: push to main, manual run, or a PR labelled "ci:full".
   full:
     if: >-

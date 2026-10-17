@@ -113,6 +113,8 @@
     "setting.log.level.title": "Log level",
     "setting.project.autosaveInterval": "Seconds between automatic saves of a project that has a folder. 0 turns them off.",
     "setting.project.autosaveInterval.title": "Autosave interval",
+    "setting.results.cacheLimit": "How many megabytes the results of calculations may take in the cache of a project; the ones used longest ago are removed first. Pinned results stay in the history whatever the limit. 0 means no limit.",
+    "setting.results.cacheLimit.title": "Result cache size",
     "settings.error.above_maximum": "“{key}” must be at most {maximum}, not {value}.",
     "settings.error.below_minimum": "“{key}” must be at least {minimum}, not {value}.",
     "settings.error.duplicate_setting": "The setting “{key}” of module “{owner}” is ignored: another module already has it.",

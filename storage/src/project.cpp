@@ -177,6 +177,12 @@ CleanStats clean_project(const fs::path& folder, std::span<const std::string> ex
 }
 
 LoadedProject load_project(const fs::path& folder) {
+    const ProjectFiles files = read_project_files(folder);
+    const FolderBlobStore blobs(folder / to_path(objects_folder));
+    return read_project(files, blobs);
+}
+
+ProjectFiles read_project_files(const fs::path& folder) {
     if (!is_project_folder(folder)) {
         throw ProjectError(ProjectErrc::not_a_project, "the folder has no project.json",
                            io::display(folder));
@@ -196,8 +202,7 @@ LoadedProject load_project(const fs::path& folder) {
     for (const fs::path& file : files_below(folder / to_path(model_folder), ".json")) {
         read(file);
     }
-    const FolderBlobStore blobs(folder / to_path(objects_folder));
-    return read_project(files, blobs);
+    return files;
 }
 
 }  // namespace fem::storage

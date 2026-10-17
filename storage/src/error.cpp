@@ -1,5 +1,7 @@
 #include "fem/storage/error.h"
 
+#include "fem/storage/progress.h"
+
 #include <utility>
 
 namespace fem::storage {
@@ -51,6 +53,14 @@ std::string_view to_string(ProjectErrc code) noexcept {
             return "detached";
         case ProjectErrc::stash_conflict:
             return "stash_conflict";
+        case ProjectErrc::unknown_result:
+            return "unknown_result";
+        case ProjectErrc::result_mismatch:
+            return "result_mismatch";
+        case ProjectErrc::invalid_archive:
+            return "invalid_archive";
+        case ProjectErrc::cancelled:
+            return "cancelled";
     }
     return "unknown";
 }
@@ -60,5 +70,11 @@ ProjectError::ProjectError(ProjectErrc code, const std::string& message, std::st
       code_(code),
       file_(std::move(file)),
       line_(line) {}
+
+void Progress::check() const {
+    if (cancelled && cancelled()) {
+        throw ProjectError(ProjectErrc::cancelled, "the operation was cancelled");
+    }
+}
 
 }  // namespace fem::storage
