@@ -1,6 +1,9 @@
 find_package(GTest CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 include(GoogleTest)
+# Listing the tests of a Debug executable once took longer than the default 5 s on a Windows
+# runner (task 3.2, CI of PR #25), and then no test ran; the listing is quick, the start is not.
+set(fem_discovery_timeout 60)
 
 add_executable(
     fem_core_tests
@@ -79,7 +82,7 @@ target_compile_definitions(
             FEM_TEST_PYTHON="${Python_EXECUTABLE}"
             FEM_TEST_HOST_PACKAGE_DIR="${PROJECT_SOURCE_DIR}/python"
             FEM_TEST_STRESSLAB="$<TARGET_FILE:stresslab>")
-gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(fem_core_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
 # The project folder (tasks 2.1-2.5): canonical JSON, blocks of bulk data and their garbage
 # collection, the files of a project and its session, the history, the cache of results and
@@ -105,7 +108,7 @@ add_executable(
 find_package(miniz CONFIG REQUIRED)
 target_link_libraries(fem_storage_tests PRIVATE fem::storage miniz::miniz GTest::gtest_main)
 target_compile_definitions(fem_storage_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
-gtest_discover_tests(fem_storage_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(fem_storage_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
 # The import of Abaqus input files (task 3.2): the reader of extensions/fem.format.abaqus-inp on the
 # fixtures of data/inp, and the module itself, loaded from the copy of the built-in modules.
@@ -121,7 +124,7 @@ target_compile_definitions(
             FEM_STAGED_EXTENSIONS_DIR="${FEM_STAGED_EXTENSIONS_DIR}"
             FEM_INP_SOURCE_DIR="${PROJECT_SOURCE_DIR}/extensions/fem.format.abaqus-inp/src")
 add_dependencies(fem_inp_tests fem_builtin_extensions)
-gtest_discover_tests(fem_inp_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(fem_inp_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
 # Import benchmark (task 3.2): 100 000 C3D10 elements read and imported through the C ABI; its
 # timings are printed with `ctest -L benchmark -V`, a million with `fem_inp_benchmark 1000000`.
@@ -144,7 +147,7 @@ target_compile_definitions(
     fem_python_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
                              FEM_BUILTIN_EXTENSIONS_DIR="${PROJECT_SOURCE_DIR}/extensions")
 fem_copy_runtime_dlls(fem_python_tests)
-gtest_discover_tests(fem_python_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(fem_python_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
 execute_process(
     COMMAND "${Python_EXECUTABLE}" -c "import pytest, numpy"
@@ -176,7 +179,7 @@ target_link_libraries(stresslab_app_tests PRIVATE stresslab_app GTest::gtest_mai
 set_target_properties(stresslab_app_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                                      ${CMAKE_CURRENT_BINARY_DIR}/app)
 fem_copy_runtime_dlls(stresslab_app_tests)
-gtest_discover_tests(stresslab_app_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(stresslab_app_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
 # Native test modules (task 1.5), built like modules made outside the platform: plain C, only the
 # C ABI header, nothing of the core linked. `hello_bad_abi` claims an ABI version the platform does
@@ -275,7 +278,7 @@ if(FEM_BUILD_GUI)
                                                      ${CMAKE_CURRENT_BINARY_DIR}/shell)
     fem_copy_runtime_dlls(fem_shell_tests)
     fem_write_qt_conf(fem_shell_tests)
-    gtest_discover_tests(fem_shell_tests DISCOVERY_MODE PRE_TEST)
+    gtest_discover_tests(fem_shell_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
     # The window part of the executable: log files of several windows.
     add_executable(stresslab_window_tests unit/app/log_slot_test.cpp)
@@ -283,5 +286,5 @@ if(FEM_BUILD_GUI)
     set_target_properties(stresslab_window_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                                             ${CMAKE_CURRENT_BINARY_DIR}/window)
     fem_copy_runtime_dlls(stresslab_window_tests)
-    gtest_discover_tests(stresslab_window_tests DISCOVERY_MODE PRE_TEST)
+    gtest_discover_tests(stresslab_window_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 endif()
