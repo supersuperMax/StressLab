@@ -1,0 +1,37 @@
+** Solids with full and reduced integration in one set, a shell, a beam and an element type the
+** model reads as its shape only.
+*NODE
+1, 0., 0., 0.
+2, 1., 0., 0.
+3, 2., 0., 0.
+4, 0., 1., 0.
+5, 1., 1., 0.
+6, 2., 1., 0.
+7, 0., 0., 1.
+8, 1., 0., 1.
+9, 2., 0., 1.
+10, 0., 1., 1.
+11, 1., 1., 1.
+12, 2., 1., 1.
+13, 3., 0., 0.
+14, 4., 0., 0.
+*ELEMENT, TYPE=C3D8, ELSET=SOLIDS
+1, 1, 2, 5, 4, 7, 8, 11, 10
+*ELEMENT, TYPE=C3D8R, ELSET=SOLIDS
+2, 2, 3, 6, 5, 8, 9, 12, 11
+*ELEMENT, TYPE=S4R, ELSET=SKIN
+3, 7, 8, 11, 10
+*ELEMENT, TYPE=B31, ELSET=BEAM
+4, 13, 14
+*ELEMENT, TYPE=C3D8I, ELSET=INCOMPATIBLE
+5, 1, 2, 5, 4, 7, 8, 11, 10
+*MATERIAL, NAME=Steel
+*ELASTIC
+210000., 0.3
+*SOLID SECTION, ELSET=SOLIDS, MATERIAL=Steel
+*SHELL SECTION, ELSET=SKIN, MATERIAL=Steel, OFFSET=SPOS
+2., 7
+*BEAM SECTION, ELSET=BEAM, MATERIAL=Steel, SECTION=RECT
+0.5, 1.
+0., 1., 0.
+*SOLID SECTION, ELSET=SKIN, MATERIAL=Steel

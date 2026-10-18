@@ -11,10 +11,10 @@ target_link_libraries(stresslab_app PUBLIC fem_python_embed)
 
 add_executable(stresslab main.cpp)
 target_link_libraries(stresslab PRIVATE stresslab_app)
-# The modules shipped with the application; from the source tree until the application is
-# packaged (task 3.11), like the pure Python part of `stresslab`.
+# The modules shipped with the application: the copy of extensions/ in the build tree, with the
+# libraries of native modules (extensions/CMakeLists.txt, task 3.2).
 target_compile_definitions(stresslab PRIVATE
-                           FEM_BUILTIN_EXTENSIONS_DIR="${PROJECT_SOURCE_DIR}/extensions")
+                           FEM_BUILTIN_EXTENSIONS_DIR="${PROJECT_BINARY_DIR}/builtin-extensions")
 
 # The icon of the executable on Windows, from the brand kit.
 if(WIN32)

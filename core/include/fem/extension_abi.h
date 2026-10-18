@@ -57,6 +57,48 @@ typedef struct FemCommandCall FemCommandCall;
  * reverts every change the command made. */
 typedef FemStatus (*FemCommandHandler)(FemCommandCall* call, void* user_data);
 
+/* Bulk data of a new object (docs/adr/, ADR 0024). Arrays are read during the
+ * call and copied; the module keeps ownership. Indices are 0-based positions in the arrays of the
+ * mesh, as in the Model IR (fem/core/model/mesh.h). */
+typedef uint32_t FemDataKind;
+#define FEM_DATA_NONE ((FemDataKind)0)
+#define FEM_DATA_MESH ((FemDataKind)1)
+#define FEM_DATA_NODE_SET ((FemDataKind)2)
+#define FEM_DATA_ELEMENT_SET ((FemDataKind)3)
+#define FEM_DATA_SURFACE ((FemDataKind)4)
+
+/* Elements of one type: `count` labels and `count * nodes per element` node indices in the
+ * neutral numbering. */
+typedef struct FemElementBlock {
+    uint32_t struct_size;
+    const char* type; /* Name of the element type, e.g. "tet10". */
+    int64_t count;
+    const int64_t* ids;
+    const int32_t* connectivity;
+} FemElementBlock;
+
+typedef struct FemMeshData {
+    uint32_t struct_size;
+    int64_t node_count;
+    const int64_t* node_ids;
+    const double* x;
+    const double* y;
+    const double* z;
+    int64_t block_count;
+    const FemElementBlock* blocks;
+} FemMeshData;
+
+typedef struct FemObjectData {
+    uint32_t struct_size;
+    FemDataKind kind;
+    /* FEM_DATA_MESH. */
+    const FemMeshData* mesh;
+    /* FEM_DATA_NODE_SET: node indices; FEM_DATA_ELEMENT_SET: global element indices;
+     * FEM_DATA_SURFACE: pairs (global element index, side number), `count` pairs. */
+    const int32_t* indices;
+    int64_t count;
+} FemObjectData;
+
 /* What a command handler can do with its call. */
 typedef struct FemCommandApi {
     uint32_t struct_size;
@@ -77,6 +119,22 @@ typedef struct FemCommandApi {
     /* Why the command fails; used when the handler returns FEM_ERROR. Without it the reason is
      * `last_error`, or a generic message. */
     void (*set_error)(FemCommandCall* call, const char* message);
+
+    /* Since 3.2 (check `struct_size` before using the fields below). */
+
+    /* Creates an object with bulk data as a part of this command. `object` is a JSON object with
+     * the arguments of "model.create" (type, owner, name, parent, dependencies, schema_version,
+     * properties) and, optionally, "unique_name": true to take "name-2", "name-3"... if a sibling
+     * of the same type has the name; `data` may be NULL for an object without data. On success
+     * `*id` (if `id` is not NULL) is the id of the new object. On failure returns FEM_ERROR and
+     * `last_error` tells why. */
+    FemStatus (*create_object)(FemCommandCall* call, const char* object, const FemObjectData* data,
+                               int64_t* id);
+    /* Tells the user about something, as the "Problems" tab shows it: a JSON object
+     * {"severity": "info" | "warning" | "error", "message": "%key%" or text, "args": {name: text
+     * or number}, "file": "...", "line": 12}; only "message" is required. The text is translated
+     * with the catalogs of the module. Problems reach the user even if the command fails later. */
+    FemStatus (*report_problem)(FemCommandCall* call, const char* problem);
 } FemCommandApi;
 
 /* What the platform gives an activated module. */

@@ -210,6 +210,12 @@ CommandResult CommandContext::execute(std::string_view id, Value::Dict args) con
     return bus_.execute(id, std::move(args));
 }
 
+void CommandContext::report(Problem problem) const {
+    problem.owner = spec_.owner;
+    problem.command = spec_.id;
+    bus_.problem_.emit(problem);
+}
+
 // --- Registry ------------------------------------------------------------------------------------
 
 CommandBus::CommandBus(model::Document& document) : document_(document), editor_(document) {
@@ -589,6 +595,10 @@ Subscription CommandBus::on_journal(std::function<void(std::string_view entry)> 
 
 Subscription CommandBus::on_before_command(std::function<void(const CommandSpec& spec)> listener) {
     return before_command_.subscribe(std::move(listener));
+}
+
+Subscription CommandBus::on_problem(std::function<void(const Problem& problem)> listener) {
+    return problem_.subscribe(std::move(listener));
 }
 
 }  // namespace fem::command

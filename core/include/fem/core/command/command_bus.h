@@ -180,6 +180,9 @@ public:
     /// which then does not run.
     [[nodiscard]] Subscription on_before_command(
         std::function<void(const CommandSpec& spec)> listener);
+    /// Called with every problem a running command reports (`CommandContext::report`), at once,
+    /// while the command runs: listeners must not run commands or change the model.
+    [[nodiscard]] Subscription on_problem(std::function<void(const Problem& problem)> listener);
 
 private:
     friend class CommandContext;
@@ -234,6 +237,7 @@ private:
     Signal<const ModelChange&> model_changed_;
     Signal<std::string_view> journal_;
     Signal<const CommandSpec&> before_command_;
+    Signal<const Problem&> problem_;
 };
 
 }  // namespace fem::command

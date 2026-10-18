@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "keyword": {
+      "type": "string",
+      "title": "%keyword.keyword%",
+      "readOnly": true,
+      "x-order": 1
+    },
+    "text": {
+      "type": "string",
+      "title": "%keyword.text%",
+      "description": "%keyword.text.description%",
+      "readOnly": true,
+      "x-order": 2
+    },
+    "file": {
+      "type": "string",
+      "title": "%keyword.file%",
+      "readOnly": true,
+      "x-order": 3
+    },
+    "line": {
+      "type": "integer",
+      "title": "%keyword.line%",
+      "minimum": 1,
+      "readOnly": true,
+      "x-order": 4
+    },
+    "index": {
+      "type": "integer",
+      "title": "%keyword.index%",
+      "description": "%keyword.index.description%",
+      "minimum": 0,
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 5
+    },
+    "part": {
+      "type": "string",
+      "title": "%keyword.part%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 6
+    },
+    "assembly": {
+      "type": "string",
+      "title": "%keyword.assembly%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 7
+    },
+    "instance": {
+      "type": "string",
+      "title": "%keyword.instance%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 8
+    },
+    "material": {
+      "type": "string",
+      "title": "%keyword.material%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 9
+    },
+    "step": {
+      "type": "string",
+      "title": "%keyword.step%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 10
+    }
+  },
+  "required": [
+    "keyword",
+    "text",
+    "file",
+    "line",
+    "index"
+  ]
+}

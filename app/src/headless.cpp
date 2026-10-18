@@ -99,6 +99,11 @@ int run(const HeadlessOptions& options, const Environment& environment) {
         journal.emplace(*options.journal);
         journaling = bus.on_journal([&](std::string_view entry) { journal->write(entry); });
     }
+    // What commands report (warnings of an import...) goes where the window shows "Problems".
+    const Subscription problems = bus.on_problem([&](const command::Problem& problem) {
+        print_error(text("app.problem." + std::string(command::to_string(problem.severity)),
+                         {{"text", command::problem_text(problem, application.localization())}}));
+    });
 
     python::Interpreter python;
     python.attach(bus, application.keys(), &application.extensions(), &application.project(),

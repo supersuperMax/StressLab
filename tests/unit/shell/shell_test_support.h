@@ -62,6 +62,8 @@ public:
     std::set<std::string, std::less<>> broken;
     /// The hosts of the active modules, by module id, to report crashes.
     std::map<std::string, extension::ExtensionHost*, std::less<>> hosts;
+    /// The code of commands that do more than being logged, by command id.
+    std::map<std::string, command::CommandHandler, std::less<>> handlers;
 
     [[nodiscard]] std::unique_ptr<extension::ExtensionInstance> activate(
         const extension::ExtensionInfo& extension, extension::ExtensionHost& host) override {
@@ -78,6 +80,10 @@ private:
         Instance(FakeRuntime& runtime, std::string id) : runtime_(runtime), id_(std::move(id)) {}
         command::CommandResult execute(command::CommandContext& context) override {
             runtime_.log.push_back("execute " + context.spec().id);
+            if (const auto it = runtime_.handlers.find(context.spec().id);
+                it != runtime_.handlers.end()) {
+                return it->second(context);
+            }
             return {};
         }
         void deactivate() noexcept override { runtime_.hosts.erase(id_); }

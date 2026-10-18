@@ -1,8 +1,10 @@
 // Opening and saving the project folder in the window (task 2.1): the "File" menu, the title,
-// autosave and the question about unsaved changes; "Clean project" (task 2.2).
+// autosave and the question about unsaved changes; "Clean project" (task 2.2); "Import…" and the
+// problems commands report (task 3.2).
 
 #include "fem/shell/project_actions.h"
 
+#include "fem/core/command/problem.h"
 #include "fem/core/io/files.h"
 #include "fem/core/model/document_editor.h"
 #include "fem/core/model/mesh.h"
@@ -52,6 +54,10 @@ protected:
         fem::shell::Workbench workbench = app_.workbench();
         workbench.project = &project_;
         workbench.dialogs.open_folder = [this](QWidget*, const QString&) { return chosen_; };
+        workbench.dialogs.open_file = [this](QWidget*, const QString&, const QString& filter) {
+            filter_ = filter;
+            return chosen_;
+        };
         workbench.dialogs.save_file = [this](QWidget*, const QString&, const QString& name,
                                              const QString&) {
             suggested_ = name;
@@ -83,6 +89,7 @@ protected:
     std::unique_ptr<MainWindow> window_;
     fs::path chosen_;
     QString suggested_;
+    QString filter_;
     UnsavedChanges answer_ = UnsavedChanges::cancel;
     std::vector<QString> asked_;
 };
@@ -91,12 +98,14 @@ TEST_F(ShellProject, FileMenuHasTheProjectActions) {
     QMenu* file = window_->menuBar()->findChild<QMenu*>(QStringLiteral("menu.file"));
     ASSERT_NE(file, nullptr);
     const QList<QAction*> items = file->actions();
-    ASSERT_GE(items.size(), 5);
+    ASSERT_GE(items.size(), 7);
     EXPECT_EQ(items[0]->objectName(), QStringLiteral("project.open"));
-    EXPECT_EQ(items[2]->objectName(), QStringLiteral("project.save"));
-    EXPECT_EQ(items[3]->objectName(), QStringLiteral("project.saveAs"));
-    EXPECT_EQ(items[4]->objectName(), QStringLiteral("history.commitVersion"));
-    EXPECT_EQ(items[5]->objectName(), QStringLiteral("project.clean"));
+    EXPECT_EQ(items[1]->objectName(), QStringLiteral("project.import"));
+    EXPECT_EQ(items[3]->objectName(), QStringLiteral("project.save"));
+    EXPECT_EQ(items[4]->objectName(), QStringLiteral("project.saveAs"));
+    EXPECT_EQ(items[5]->objectName(), QStringLiteral("history.commitVersion"));
+    EXPECT_EQ(items[6]->objectName(), QStringLiteral("project.clean"));
+    EXPECT_EQ(actions().import_action()->text(), QStringLiteral("Import…"));
     EXPECT_EQ(actions().clean_action()->text(), QStringLiteral("Clean Project"));
     EXPECT_EQ(actions().save_action()->shortcut(), QKeySequence(QKeySequence::Save));
     EXPECT_EQ(actions().open_action()->shortcut(), QKeySequence(QKeySequence::Open));
@@ -168,6 +177,64 @@ TEST_F(ShellProject, FailuresGoToTheProblems) {
     EXPECT_TRUE(window_->problems().messages()[0].contains(QStringLiteral("cannot be opened")))
         << window_->problems().messages()[0].toStdString();
     EXPECT_TRUE(window_->problems().messages()[0].contains(QStringLiteral("not a project folder")));
+}
+
+/// A module that "reads" .res files: its command reports what an importer does.
+constexpr const char* reader = R"(
+[[contributes.commands]]
+id = "test.read"
+title = "Read"
+args = [{ name = "path", type = "path" }]
+
+[[contributes.fileFormats]]
+id = "test-res"
+title = "Results of the test"
+extensions = [".res", ".res2"]
+role = "model-import"
+command = "test.read"
+)";
+
+TEST_F(ShellProject, ImportReadsAFileWithTheModuleOfItsFormat) {
+    std::vector<std::string> paths;
+    app_.runtime->handlers["test.read"] = [&](fem::command::CommandContext& context) {
+        paths.push_back(utf8(context.args().path("path").filename().u8string()));
+        context.report({.severity = fem::command::Problem::Severity::warning,
+                        .message = "%kept%",
+                        .file = "model.res",
+                        .line = 3});
+        context.report({.severity = fem::command::Problem::Severity::info,
+                        .message = "Values are in the units of the model"});
+        (void)context.editor().create({.type = "note", .owner = "test.module", .name = "imported"});
+        return fem::command::CommandResult{};
+    };
+    app_.add("test.reader", reader);
+    EXPECT_EQ(
+        actions().import_filter(),
+        QStringLiteral("All supported files (*.res *.res2);;Results of the test (*.res *.res2)"));
+
+    chosen_ = folder_ / fs::path(u8"модель.RES");
+    ASSERT_TRUE(actions().import_dialog());
+    EXPECT_EQ(filter_, actions().import_filter());
+    EXPECT_EQ(paths, std::vector<std::string>{utf8(u8"модель.RES")});
+    EXPECT_EQ(app_.document.size(), 1U);
+    // The warning is in "Problems" with its place; the fact is not a problem.
+    ASSERT_EQ(window_->problems().messages().size(), 1);
+    EXPECT_EQ(window_->problems().messages()[0], QStringLiteral("model.res:3: kept"));
+    // One step, which undo takes back.
+    ASSERT_TRUE(app_.bus.undo());
+    EXPECT_EQ(app_.document.size(), 0U);
+
+    EXPECT_FALSE(actions().import_file(folder_ / "model.step"));
+    EXPECT_EQ(window_->problems().messages()[0],
+              QStringLiteral("No enabled module reads \u201Cmodel.step\u201D."));
+}
+
+TEST_F(ShellProject, ImportWithoutFormatsSaysSo) {
+    EXPECT_TRUE(actions().import_filter().isEmpty());
+    EXPECT_FALSE(actions().import_dialog());
+    ASSERT_EQ(window_->problems().messages().size(), 1);
+    EXPECT_EQ(window_->problems().messages()[0],
+              QStringLiteral("No enabled module imports model files."));
 }
 
 TEST_F(ShellProject, AutosaveFollowsTheSetting) {

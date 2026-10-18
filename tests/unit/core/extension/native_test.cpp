@@ -2,11 +2,15 @@
 // with its manifest into a folder with Cyrillic letters and spaces, as a module installed by a user
 // would be.
 
+#include "fem/core/command/command_bus.h"
+#include "fem/core/command/problem.h"
 #include "fem/core/command/value.h"
 #include "fem/core/context/value.h"
 #include "fem/core/extension/error.h"
 #include "fem/core/extension/manager.h"
 #include "fem/core/extension/manifest.h"
+#include "fem/core/l10n/localization.h"
+#include "fem/core/model/mesh.h"
 #include "fem/core/model/object_id.h"
 
 #include "extension_test_support.h"
@@ -124,6 +128,55 @@ TEST_F(NativeModuleTest, FailingCommandLeavesTheModelAsItWas) {
     }
     EXPECT_EQ(ws.document.size(), objects);
     EXPECT_FALSE(ws.bus.can_undo());
+}
+
+TEST_F(NativeModuleTest, CommandCreatesObjectsWithBulkDataAndReportsProblems) {
+    ws.manager.enable("test.native");
+    std::vector<fem::command::Problem> problems;
+    const fem::Subscription listening = ws.bus.on_problem(
+        [&](const fem::command::Problem& problem) { problems.push_back(problem); });
+
+    const ObjectId mesh(
+        static_cast<std::uint64_t>(ws.bus.execute("hello.data").value.as_integer()));
+    EXPECT_EQ(ws.document.get(mesh).name(), "tet");
+    const auto data = ws.document.data<fem::model::Mesh>(mesh);
+    ASSERT_NE(data, nullptr);
+    EXPECT_EQ(std::vector<std::int64_t>(data->node_ids().begin(), data->node_ids().end()),
+              (std::vector<std::int64_t>{10, 20, 30, 40}));
+    EXPECT_EQ(data->z()[3], 1.0);
+    ASSERT_EQ(data->blocks().size(), 1U);
+    EXPECT_EQ(data->blocks()[0].type(), fem::model::ElementType::tet4);
+    EXPECT_EQ(data->blocks()[0].ids()[0], 7);
+
+    // "unique_name": the second mesh of the same name got a suffix; the broken one is not there.
+    const ObjectId second = ws.document.find_child({}, "mesh", "tet-2");
+    EXPECT_TRUE(second.is_valid());
+    EXPECT_FALSE(ws.document.find_child({}, "mesh", "broken").is_valid());
+
+    const ObjectId corners = ws.document.find_child(mesh, "node_set", "corners");
+    ASSERT_TRUE(corners.is_valid());
+    const auto set = ws.document.data<fem::model::NodeSet>(corners);
+    EXPECT_EQ(std::vector<std::int32_t>(set->nodes().begin(), set->nodes().end()),
+              (std::vector<std::int32_t>{0, 3}));
+    const auto surface =
+        ws.document.data<fem::model::Surface>(ws.document.find_child(mesh, "surface", "side"));
+    ASSERT_EQ(surface->sides().size(), 1U);
+    EXPECT_EQ(surface->sides()[0], (fem::model::ElementSide{0, 2}));
+
+    // The problem comes with its owner, command and place; the invalid one was refused.
+    ASSERT_EQ(problems.size(), 1U);
+    EXPECT_EQ(problems[0].severity, fem::command::Problem::Severity::info);
+    EXPECT_EQ(problems[0].owner, "test.native");
+    EXPECT_EQ(problems[0].command, "hello.data");
+    EXPECT_EQ(problems[0].message, "%problem.made%");
+    EXPECT_EQ(problems[0].args.at("count"), fem::l10n::Arg(std::int64_t{2}));
+    EXPECT_EQ(fem::command::problem_text(problems[0], fem::l10n::Localization()),
+              "tet.inp:3: problem.made");
+
+    // All of it is one step.
+    ASSERT_TRUE(ws.bus.undo());
+    EXPECT_FALSE(ws.document.contains(mesh));
+    EXPECT_FALSE(ws.document.contains(corners));
 }
 
 TEST_F(NativeModuleTest, LibraryStaysLoadedWhileTheModuleIsDisabled) {

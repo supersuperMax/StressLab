@@ -251,6 +251,26 @@ TEST(Manifest, AnActivityMayGoWithoutAnIcon) {
     EXPECT_EQ(manifest.contributes.activity_bar[0].icon, "");
 }
 
+// The command of an import format (task 3.2): `open_model_file` runs it with the file as `path`.
+constexpr std::string_view open_command = R"(
+[[contributes.commands]]
+id = "case.open"
+title = "Open"
+args = [{ name = "path", type = "path" }]
+)";
+
+TEST(Manifest, FileFormatNamesTheCommandThatReadsTheFile) {
+    const Manifest manifest = parse_manifest(
+        with_header(std::string(open_command) +
+                    "[[contributes.fileFormats]]\nid = \"res\"\nextensions = [\".res\"]\n"
+                    "role = \"model-import\"\ncommand = \"case.open\"\n"),
+        engine);
+    ASSERT_EQ(manifest.contributes.file_formats.size(), 1U);
+    EXPECT_EQ(manifest.contributes.file_formats[0].command, "case.open");
+    EXPECT_EQ(manifest.contributes.file_formats[0].role,
+              FileFormatContribution::Role::model_import);
+}
+
 TEST(Manifest, ModuleWithoutCodeHasNoKind) {
     const Manifest manifest =
         load_manifest(fixtures() / "installed" / "l10n" / std::string(manifest_file_name), engine);
@@ -550,6 +570,15 @@ TEST(Manifest, ReportsErrorsWithTheirPosition) {
          with_header("[[contributes.fileFormats]]\nid = \"res\"\nextensions = [\"res\"]\n"
                      "role = \"results-import\"\n"),
          10, 15, "invalid file extension"},
+        {"file format command of another module",
+         with_header("[[contributes.fileFormats]]\nid = \"res\"\nextensions = [\".res\"]\n"
+                     "role = \"model-import\"\ncommand = \"other.open\"\n"),
+         12, 11, "must be a command of this module with an argument 'path' of type path"},
+        {"file format command without a path",
+         with_header("[[contributes.commands]]\nid = \"case.open\"\ntitle = \"Open\"\n"
+                     "[[contributes.fileFormats]]\nid = \"res\"\nextensions = [\".res\"]\n"
+                     "role = \"model-import\"\ncommand = \"case.open\"\n"),
+         15, 11, "must be a command of this module with an argument 'path' of type path"},
         {"unknown file format role",
          with_header("[[contributes.fileFormats]]\nid = \"res\"\nextensions = [\".res\"]\n"
                      "role = \"results-view\"\n"),
