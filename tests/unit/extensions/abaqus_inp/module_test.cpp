@@ -16,6 +16,8 @@
 #include "fem/core/model/mesh.h"
 #include "fem/storage/project.h"
 
+#include "inp/export.h"
+#include "inp/model.h"
 #include "inp_test_support.h"
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -228,6 +230,87 @@ TEST_F(InpModule, ImportedModelRoundTripsThroughAProjectFolder) {
     fs::remove_all(root);
 }
 
+// --- Export (task 3.3) ---------------------------------------------------------------------------
+
+/// A folder of its own, with Cyrillic letters and spaces in its path.
+fs::path export_folder(std::string_view test) {
+    const fs::path folder =
+        fs::temp_directory_path() / fs::path(u8"stresslab экспорт inp") / std::string(test);
+    fs::remove_all(folder);
+    fs::create_directories(folder);
+    return folder;
+}
+
+TEST_F(InpModule, ExportReadsTheModelThroughTheCAbi) {
+    (void)import("assembly.inp");
+    std::vector<std::string> journal;
+    const fem::Subscription recording =
+        bus.on_journal([&](std::string_view entry) { journal.emplace_back(entry); });
+    problems.clear();
+    const std::size_t steps = bus.undo_count();
+    const fs::path file = export_folder("abi") / fs::path(u8"сборка.inp");
+
+    const Value keywords = bus.execute("inp.export", {{"path", Value(file)}}).value;
+    EXPECT_GT(keywords.as_integer(), 20);
+    // The model read through the C ABI is written as the writer writes the import itself.
+    const fem::inp::Import direct = fem::inp::testing::import_fixture("assembly.inp");
+    EXPECT_EQ(read(file),
+              fem::inp::export_model(fem::inp::model_of(direct), utf8(u8"сборка")).text);
+    EXPECT_FALSE(fs::exists(fs::path(file).concat(".part")));
+    // The journal replays the export; the losses reach the "Problems" tab.
+    ASSERT_EQ(journal.size(), 1U);
+    EXPECT_TRUE(journal[0].starts_with("stresslab.cmd(\"inp.export\", path=")) << journal[0];
+    const auto has = [&](std::string_view message) {
+        return std::any_of(problems.begin(), problems.end(),
+                           [&](const Problem& p) { return p.message == message; });
+    };
+    EXPECT_TRUE(has("%loss.sharedPart%"));
+    EXPECT_TRUE(has("%loss.units%"));
+    // Nothing in the model changed: there is nothing to undo.
+    EXPECT_EQ(bus.undo_count(), steps);
+}
+
+TEST_F(InpModule, SavedFileOpensToTheSameModel) {
+    (void)import("flat.inp");
+    const fs::path folder = export_folder("round trip");
+    const fs::path first = folder / "flat.inp";
+    (void)bus.execute("inp.export", {{"path", Value(first)}});
+
+    // Opened in another document and saved again: the same bytes.
+    fem::model::Document other;
+    fem::command::CommandBus other_bus{other};
+    fem::context::ContextKeys other_keys;
+    fem::extension::ExtensionManager other_manager{other, other_bus, other_keys};
+    (void)other_manager.install(staged / "fem.model.structural", ExtensionSource::builtin);
+    (void)other_manager.install(staged / id, ExtensionSource::builtin);
+    (void)other_manager.enable(id);
+    (void)other_bus.execute("inp.import", {{"path", Value(first)}});
+    EXPECT_EQ(other.size(), document.size());
+    const fs::path second = folder / fs::path(u8"второй") / "flat.inp";
+    fs::create_directories(second.parent_path());
+    (void)other_bus.execute("inp.export", {{"path", Value(second)}});
+    EXPECT_EQ(read(second), read(first));
+}
+
+TEST_F(InpModule, DescribeLossesListsWhatTheFileCannotHold) {
+    (void)import("flat.inp");
+    const auto losses = [&](Value::Dict args) {
+        std::vector<std::string> out;
+        const Value result = bus.execute("inp.describe_losses", std::move(args)).value;
+        for (const Value& loss : result.as_list()) {
+            const Value::Dict& item = loss.as_dict();
+            out.push_back(item.at("message").as_string());
+            EXPECT_FALSE(item.at("text").as_string().empty());
+            EXPECT_EQ(item.at("severity").as_string(), "info");
+        }
+        return out;
+    };
+    EXPECT_EQ(losses({{"path", Value(fs::path("flat.inp"))}}),
+              (std::vector<std::string>{"%loss.units%"}));
+    // Without a file, or under another name, the mesh would take the name of the file.
+    EXPECT_EQ(losses({}), (std::vector<std::string>{"%loss.meshName%", "%loss.units%"}));
+}
+
 std::set<std::string> catalog_keys(std::string_view language) {
     const nlohmann::json catalog =
         nlohmann::json::parse(read(staged / id / "l10n" / (std::string(language) + ".json")));
@@ -242,7 +325,8 @@ TEST_F(InpModule, EveryTextIsTranslatedToEnglishAndRussian) {
     const std::set<std::string> english = catalog_keys("en");
     EXPECT_EQ(catalog_keys("ru"), english);
 
-    // Texts of the manifest and the schemas ("%key%"), and problems of the code ("problem.x").
+    // Texts of the manifest and the schemas ("%key%"), and problems of the code ("problem.x",
+    // "loss.x").
     std::set<std::string> referenced;
     const auto collect = [&](const std::string& text, const std::regex& pattern) {
         for (std::sregex_iterator it(text.begin(), text.end(), pattern), end; it != end; ++it) {
@@ -254,7 +338,7 @@ TEST_F(InpModule, EveryTextIsTranslatedToEnglishAndRussian) {
     for (const fs::directory_entry& entry : fs::directory_iterator(staged / id / "schemas")) {
         collect(read(entry.path()), manifest_text);
     }
-    const std::regex problem_key("\"((?:problem|error)\\.[A-Za-z]+)\"");
+    const std::regex problem_key("\"((?:problem|error|loss)\\.[A-Za-z]+)\"");
     for (const fs::directory_entry& entry :
          fs::recursive_directory_iterator(fs::path(FEM_INP_SOURCE_DIR))) {
         if (entry.is_regular_file()) {
@@ -281,8 +365,9 @@ TEST_F(InpModule, FormsOfItsTypesHaveNoMistakes) {
             EXPECT_EQ(field->title.front(), '%') << field->pointer;
         }
     }
-    ASSERT_EQ(contributes.file_formats.size(), 1U);
+    ASSERT_EQ(contributes.file_formats.size(), 2U);
     EXPECT_EQ(contributes.file_formats[0].command, "inp.import");
+    EXPECT_EQ(contributes.file_formats[1].command, "inp.export");
 }
 
 }  // namespace

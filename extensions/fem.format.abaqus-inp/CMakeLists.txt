@@ -1,10 +1,11 @@
-# fem.format.abaqus-inp (task 3.2, docs/adr/0024-abaqus-inp-import.md): a native module. The
-# reader is a static library without the core, so that the tests use it directly; the module
+# fem.format.abaqus-inp (tasks 3.2 and 3.3, docs/adr/0024-abaqus-inp-import.md,
+# docs/adr/0025-abaqus-inp-export.md): a native module. The reader and writer are a static library without the core, so that the tests use it directly; the module
 # links it with the C ABI glue and depends on nothing of the platform but fem/extension_abi.h.
 find_package(nlohmann_json CONFIG REQUIRED)
 
-add_library(fem_inp_reader STATIC src/inp/deck.cpp src/inp/elements.cpp src/inp/encoding.cpp
-                                  src/inp/import.cpp src/inp/numbers.cpp)
+add_library(
+    fem_inp_reader STATIC src/inp/deck.cpp src/inp/elements.cpp src/inp/encoding.cpp
+                          src/inp/export.cpp src/inp/import.cpp src/inp/numbers.cpp)
 target_include_directories(fem_inp_reader PUBLIC src)
 target_link_libraries(fem_inp_reader PUBLIC nlohmann_json::nlohmann_json)
 

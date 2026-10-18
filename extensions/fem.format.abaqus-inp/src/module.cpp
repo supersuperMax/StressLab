@@ -1,17 +1,26 @@
 // The native module fem.format.abaqus-inp: the command "inp.import" reads an Abaqus input file
-// into the model through the C ABI of the platform (fem/extension_abi.h). What it reads and how:
-// docs/extensions/fem.format.abaqus-inp.md, docs/adr/0024-abaqus-inp-import.md.
+// into the model, "inp.export" writes the model to one and "inp.describe_losses" tells what the
+// file would not hold, through the C ABI of the platform (fem/extension_abi.h). What it reads and
+// writes: docs/extensions/fem.format.abaqus-inp.md, docs/adr/0024-abaqus-inp-import.md,
+// docs/adr/0025-abaqus-inp-export.md.
 
 #include "fem/extension_abi.h"
 
 #include "inp/deck.h"
+#include "inp/elements.h"
+#include "inp/export.h"
 #include "inp/import.h"
+#include "inp/model.h"
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
 #include <exception>
+#include <filesystem>
 #include <fstream>
+#include <optional>
+#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -171,11 +180,159 @@ FemStatus import_command(FemCommandCall* call, void* /*user_data*/) {
     return FEM_ERROR;
 }
 
+// --- Export (task 3.3) ---------------------------------------------------------------------------
+
+/// The model of the running command, its bulk data read in place: valid until the call returns.
+fem::inp::Model read_model(FemCommandCall* call, const FemCommandApi& api) {
+    const char* text = api.read_model(call);
+    if (text == nullptr) {
+        throw std::runtime_error(std::string("cannot read the model: ") + api.last_error(call));
+    }
+    const Json json = Json::parse(text);
+    fem::inp::Model model;
+    model.units = json.value("units", Json::object());
+    for (const Json& object : json.at("objects")) {
+        fem::inp::ModelObject out;
+        out.id = object.at("id").get<std::int64_t>();
+        out.type = object.at("type").get<std::string>();
+        out.owner = object.at("owner").get<std::string>();
+        out.name = object.at("name").get<std::string>();
+        out.parent = object.at("parent").get<std::int64_t>();
+        out.dependencies = object.at("dependencies").get<std::vector<std::int64_t>>();
+        out.properties = object.at("properties");
+        out.opaque = object.value("opaque", false);
+        const std::string data = object.value("data", std::string("none"));
+        if (data != "none" && data != "array") {
+            FemObjectData view{static_cast<uint32_t>(sizeof(FemObjectData)), FEM_DATA_NONE, nullptr,
+                               nullptr, 0};
+            if (api.object_data(call, out.id, &view) != FEM_OK) {
+                throw std::runtime_error(std::string("cannot read the data of '") + out.name +
+                                         "': " + api.last_error(call));
+            }
+            const auto count = static_cast<std::size_t>(view.count);
+            if (view.kind == FEM_DATA_MESH) {
+                const FemMeshData& mesh = *view.mesh;
+                const auto nodes = static_cast<std::size_t>(mesh.node_count);
+                fem::inp::MeshView meshes{
+                    {mesh.node_ids, nodes}, {mesh.x, nodes}, {mesh.y, nodes}, {mesh.z, nodes}, {}};
+                for (int64_t b = 0; b < mesh.block_count; ++b) {
+                    const FemElementBlock& block = mesh.blocks[b];
+                    const auto elements = static_cast<std::size_t>(block.count);
+                    const std::optional<int> per_element = fem::inp::shape_nodes(block.type);
+                    if (!per_element) {
+                        throw std::runtime_error(std::string("unknown element type '") +
+                                                 block.type + "'");
+                    }
+                    meshes.blocks.push_back(
+                        {block.type,
+                         {block.ids, elements},
+                         {block.connectivity, elements * static_cast<std::size_t>(*per_element)}});
+                }
+                out.data = std::move(meshes);
+            } else if (view.kind == FEM_DATA_SURFACE) {
+                out.data = fem::inp::SetView{fem::inp::SetKind::surface, {view.indices, count * 2}};
+            } else if (view.kind == FEM_DATA_NODE_SET || view.kind == FEM_DATA_ELEMENT_SET) {
+                out.data =
+                    fem::inp::SetView{view.kind == FEM_DATA_NODE_SET ? fem::inp::SetKind::node
+                                                                     : fem::inp::SetKind::element,
+                                      {view.indices, count}};
+            }
+        }
+        model.objects.push_back(std::move(out));
+    }
+    return model;
+}
+
+/// The name of the file without its extension, as the import names a mesh after it.
+std::string file_stem(const std::string& path) {
+    if (path.empty()) {
+        return {};
+    }
+    const std::u8string stem = fem::inp::text_path(path).stem().u8string();
+    return {stem.begin(), stem.end()};
+}
+
+void report(FemCommandCall* call, const FemCommandApi& api,
+            const std::vector<fem::inp::Problem>& losses) {
+    for (const fem::inp::Problem& loss : losses) {
+        (void)api.report_problem(call, problem_json(loss).dump().c_str());
+    }
+}
+
+FemStatus export_command(FemCommandCall* call, void* /*user_data*/) {
+    const FemCommandApi& api = *state.host->commands;
+    try {
+        const Json args = Json::parse(api.arguments(call));
+        const std::string path = args.at("path").get<std::string>();
+        const fem::inp::Model model = read_model(call, api);
+        const fem::inp::Export result = fem::inp::export_model(model, file_stem(path));
+        // Written next to the file first, so that a failed write leaves the old file as it was.
+        const std::filesystem::path file = fem::inp::text_path(path);
+        std::filesystem::path temporary = file;
+        temporary += ".part";
+        {
+            std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
+            stream.write(result.text.data(), static_cast<std::streamsize>(result.text.size()));
+            stream.close();
+            if (!stream) {
+                std::error_code ignored;
+                std::filesystem::remove(temporary, ignored);
+                throw fem::inp::InpError({fem::inp::Problem::Severity::error,
+                                          "error.fileUnwritable",
+                                          {{"file", path}},
+                                          {},
+                                          0});
+            }
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, file, error);
+        if (error) {
+            std::filesystem::remove(temporary, error);
+            throw fem::inp::InpError({fem::inp::Problem::Severity::error,
+                                      "error.fileUnwritable",
+                                      {{"file", path}},
+                                      {},
+                                      0});
+        }
+        report(call, api, result.losses);
+        api.set_result(call, std::to_string(result.keywords).c_str());
+        return FEM_OK;
+    } catch (const fem::inp::InpError& e) {
+        (void)api.report_problem(call, problem_json(e.problem()).dump().c_str());
+        api.set_error(call, english(e.problem()).c_str());
+    } catch (const std::exception& e) {
+        api.set_error(call, e.what());
+    }
+    return FEM_ERROR;
+}
+
+FemStatus describe_losses_command(FemCommandCall* call, void* /*user_data*/) {
+    const FemCommandApi& api = *state.host->commands;
+    try {
+        const Json args = Json::parse(api.arguments(call));
+        const std::string path = args.value("path", std::string());
+        const std::vector<fem::inp::Problem> losses =
+            fem::inp::describe_losses(read_model(call, api), file_stem(path));
+        // As the "Problems" tab shows them, with the English text for scripts.
+        Json result = Json::array();
+        for (const fem::inp::Problem& loss : losses) {
+            Json item = problem_json(loss);
+            item["text"] = english(loss);
+            result.push_back(std::move(item));
+        }
+        api.set_result(call, result.dump().c_str());
+        return FEM_OK;
+    } catch (const std::exception& e) {
+        api.set_error(call, e.what());
+    }
+    return FEM_ERROR;
+}
+
 FemStatus activate(const FemHostApi* host, void** module_state) {
     state.host = host;
     *module_state = &state;
     if (host->commands->struct_size < sizeof(FemCommandApi)) {
-        host->set_error(host->host, "the platform is too old: it has no create_object");
+        host->set_error(host->host, "the platform is too old: it has no read_model");
         return FEM_ERROR;
     }
     try {
@@ -186,7 +343,12 @@ FemStatus activate(const FemHostApi* host, void** module_state) {
     } catch (const std::exception&) {
         state.english = Json::object();  // The keys stand in for the texts.
     }
-    return host->register_command(host->host, "inp.import", import_command, nullptr);
+    if (host->register_command(host->host, "inp.import", import_command, nullptr) != FEM_OK ||
+        host->register_command(host->host, "inp.export", export_command, nullptr) != FEM_OK) {
+        return FEM_ERROR;
+    }
+    return host->register_command(host->host, "inp.describe_losses", describe_losses_command,
+                                  nullptr);
 }
 
 void deactivate(void* /*module_state*/) {

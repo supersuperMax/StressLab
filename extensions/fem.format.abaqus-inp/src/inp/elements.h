@@ -28,6 +28,10 @@ struct ElementKind {
 
 [[nodiscard]] std::optional<ElementKind> element_kind(std::string_view abaqus_upper) noexcept;
 
+/// Nodes of a neutral element type ("tet10" has 10), for the export, which reads meshes through
+/// the C ABI without the core; nothing for an unknown name.
+[[nodiscard]] std::optional<int> shape_nodes(std::string_view shape) noexcept;
+
 /// The side of the neutral shape for Abaqus face `face` ("S1" is 1) of a solid; nothing for a
 /// face the shape does not have or a shape without faces.
 [[nodiscard]] std::optional<std::int32_t> neutral_side(std::string_view shape, int face) noexcept;

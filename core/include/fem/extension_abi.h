@@ -135,6 +135,23 @@ typedef struct FemCommandApi {
      * or number}, "file": "...", "line": 12}; only "message" is required. The text is translated
      * with the catalogs of the module. Problems reach the user even if the command fails later. */
     FemStatus (*report_problem)(FemCommandCall* call, const char* problem);
+
+    /* Since 3.3 (ADR 0025). */
+
+    /* The model without bulk data, as JSON: {"units": {"length": "m", "mass": "kg", "time": "s",
+     * "temperature": "K"}, "objects": [...]}. Objects come in tree order: roots in order, each
+     * followed by its subtree, children in creation order. An object is {"id", "type", "owner",
+     * "schema_version", "name", "parent" (0 for a root), "dependencies", "properties", "data"
+     * ("none", "mesh", "node_set", "element_set", "surface" or "array"), "opaque" (true for an
+     * object of a disabled module)}. The text stays valid until the call returns; NULL on failure,
+     * with `last_error`. */
+    const char* (*read_model)(FemCommandCall* call);
+    /* The bulk data of an object, without copying: the arrays point into the model and stay valid
+     * until the call returns. `data->struct_size` must be set by the module. A mesh fills `mesh`
+     * (its blocks give the element types by name); sets fill `indices` and `count` as for
+     * `create_object`. An object without such data gives FEM_DATA_NONE. FEM_ERROR for an unknown
+     * object, with `last_error`. */
+    FemStatus (*object_data)(FemCommandCall* call, int64_t id, FemObjectData* data);
 } FemCommandApi;
 
 /* What the platform gives an activated module. */

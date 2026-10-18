@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace fem::inp {
@@ -15,5 +16,9 @@ namespace fem::inp {
 
 /// An integer, also written as a number with a zero fraction ("5." or "5.0"); nothing otherwise.
 [[nodiscard]] std::optional<std::int64_t> parse_integer(std::string_view text) noexcept;
+
+/// The shortest text that `parse_number` reads back as `value`, whatever the locale; always with
+/// a point or an exponent ("1.", "0.3", "2.1e+05"). `value` must be finite.
+[[nodiscard]] std::string format_number(double value);
 
 }  // namespace fem::inp

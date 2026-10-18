@@ -1,7 +1,8 @@
-# Import of Abaqus input files (task 3.2 of docs/plan.md, docs/adr/0024-abaqus-inp-import.md,
+# Import and export of Abaqus input files (tasks 3.2 and 3.3 of docs/plan.md,
+# docs/adr/0024-abaqus-inp-import.md, docs/adr/0025-abaqus-inp-export.md,
 # docs/extensions/fem.format.abaqus-inp.md). A native module: the parser is C++ for large meshes.
 # What the Model IR cannot hold is kept as "Abaqus keyword" objects with their place in the file,
-# so that the export (task 3.3) can put them back.
+# and the export puts them back.
 
 [extension]
 id = "fem.format.abaqus-inp"
@@ -25,12 +26,31 @@ args = [
     { name = "encoding", type = "string", default = "auto" },
 ]
 
+[[contributes.commands]]
+id = "inp.export"
+title = "%command.export%"
+category = "%category%"
+args = [{ name = "path", type = "path" }]
+
+[[contributes.commands]]
+id = "inp.describe_losses"
+title = "%command.describeLosses%"
+category = "%category%"
+args = [{ name = "path", type = "path", required = false }]
+
 [[contributes.fileFormats]]
 id = "abaqus-inp"
 title = "%format.inp%"
 extensions = [".inp"]
 role = "model-import"
 command = "inp.import"
+
+[[contributes.fileFormats]]
+id = "abaqus-inp-export"
+title = "%format.inp%"
+extensions = [".inp"]
+role = "model-export"
+command = "inp.export"
 
 [[contributes.treeNodeTypes]]
 type = "abaqus_input"

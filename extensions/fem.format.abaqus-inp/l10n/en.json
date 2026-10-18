@@ -3,8 +3,10 @@
   "formatVersion": 1,
   "strings": {
     "category": "Abaqus",
+    "command.describeLosses": "What an Abaqus Input Export Loses",
+    "command.export": "Export Abaqus Input (.inp)",
     "command.import": "Import Abaqus Input (.inp)",
-    "description": "Reads Abaqus input files (.inp) into the model; keywords the model does not hold are kept as they are.",
+    "description": "Reads Abaqus input files (.inp) into the model and writes the model back; keywords the model does not hold are kept as they are and written back in their places.",
     "error.badEncoding": "The file cannot be read as {encoding}.",
     "error.badGenerate": "{keyword}, GENERATE: expected “first, last[, step]” with first ≤ last and a positive step.",
     "error.badNumber": "{keyword}: “{value}” is not a number.",
@@ -13,6 +15,7 @@
     "error.duplicateName": "{keyword}: the name “{name}” is taken.",
     "error.duplicateNode": "Node {node} is defined twice.",
     "error.fileUnreadable": "The file “{file}” cannot be read.",
+    "error.fileUnwritable": "The file “{file}” cannot be written.",
     "error.includeCycle": "*INCLUDE of “{file}” includes itself.",
     "error.includeMissing": "*INCLUDE: the file “{file}” cannot be read.",
     "error.incompleteElement": "Element {element} of type {type} needs {count} nodes, the data ends earlier.",
@@ -27,9 +30,12 @@
     "error.unsupportedKeyword": "{keyword} is not supported: without it the mesh would be wrong.",
     "error.unsupportedParameter": "{keyword}: {parameter} is not supported: without it the mesh would be wrong.",
     "format.inp": "Abaqus input",
+    "input.assembly": "Assembly",
     "input.file": "File",
     "input.heading": "Heading",
     "input.heading.description": "The text of *HEADING.",
+    "input.steps": "Steps in file order",
+    "input.steps.description": "Names of all steps of the file, kept ones too: the export puts them back in this order.",
     "keyword.assembly": "Assembly",
     "keyword.file": "File",
     "keyword.index": "Position",
@@ -39,9 +45,38 @@
     "keyword.line": "Line",
     "keyword.material": "Material",
     "keyword.part": "Part",
+    "keyword.position": "Place in the step",
+    "keyword.position.description": "How many objects of the step come before the keyword.",
     "keyword.step": "Step",
     "keyword.text": "Text",
     "keyword.text.description": "The keyword line and its data lines as in the file, without comments.",
+    "loss.droppedKeyword": "{keyword} ({file}:{line}) kept from the file has no place left in the model and is not written.",
+    "loss.elementType": {
+      "one": "Mesh “{mesh}”: {count} element of type {shape} has no Abaqus type and is not written.",
+      "other": "Mesh “{mesh}”: {count} elements of type {shape} have no Abaqus type and are not written."
+    },
+    "loss.emptyOutput": "Output request “{name}” asks for nothing and is not written.",
+    "loss.emptySet": "Set “{name}” is empty and is not written.",
+    "loss.integration": "Section “{name}”: its integration does not match element type {type}; the file keeps the element types.",
+    "loss.meshName": "Mesh “{mesh}” will be named “{file}” when the file is read: a file without parts names its mesh after itself.",
+    "loss.noTarget": "“{name}” has no set to act on and is not written.",
+    "loss.notExported": {
+      "one": "{count} object of type “{type}” is not written: an Abaqus input file has no place for it.",
+      "other": "{count} objects of type “{type}” are not written: an Abaqus input file has no place for them."
+    },
+    "loss.outputTargets": "Output request “{name}” acts on several sets; only the first is written.",
+    "loss.outsideStep": "“{name}” is not in a step and is not written: Abaqus applies loads and output requests in steps.",
+    "loss.results": {
+      "one": "{count} result object is not written: results are not a part of an input file.",
+      "other": "{count} result objects are not written: results are not a part of an input file."
+    },
+    "loss.sharedPart": "Instance “{instance}” of part “{part}” is written as a part of its own, at the coordinates of the assembly.",
+    "loss.split": "“{name}” acts on {count} targets and will be read back as {count} objects.",
+    "loss.surfaceSide": {
+      "one": "Surface “{name}”: {count} side is not a face of a solid and is not written.",
+      "other": "Surface “{name}”: {count} sides are not faces of solids and are not written."
+    },
+    "loss.units": "An Abaqus input file has no units: the values are written as they are, in {units}.",
     "name": "Abaqus Formats",
     "node.abaqus_element_types": "Abaqus element types",
     "node.abaqus_input": "Abaqus input",
@@ -77,7 +112,15 @@
     "problem.unsupportedStep": "Step “{step}” ({procedure}) is not a linear static step and is kept without interpretation.",
     "problem.unsupportedSurface": "The surface “{name}” ({type}) is not supported and is kept without interpretation.",
     "problem.unsupportedVariables": "{keyword}: the variables {variables} are kept without interpretation.",
+    "types.assembly": "Nodes of the assembly",
+    "types.assembly.description": "The mesh holds the nodes and elements of the assembly itself, such as reference points.",
     "types.blocks": "Types by block",
-    "types.blocks.description": "The Abaqus element type of each block of the mesh, for export."
+    "types.blocks.description": "The Abaqus element type of each block of the mesh, for export.",
+    "types.instance": "Instance",
+    "types.keptMembers": "Members kept from the file",
+    "types.keptMembers.description": "Labels of sets that the mesh does not have, such as elements of types kept without interpretation: the export writes them back.",
+    "types.part": "Part",
+    "types.partSets": "Sets of the part",
+    "types.partSets.description": "Sets of this mesh that belong to its part; the others are sets of the assembly."
   }
 }

@@ -110,10 +110,11 @@ target_link_libraries(fem_storage_tests PRIVATE fem::storage miniz::miniz GTest:
 target_compile_definitions(fem_storage_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 gtest_discover_tests(fem_storage_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT ${fem_discovery_timeout})
 
-# The import of Abaqus input files (task 3.2): the reader of extensions/fem.format.abaqus-inp on the
+# The import and export of Abaqus input files (tasks 3.2 and 3.3): the reader of extensions/fem.format.abaqus-inp on the
 # fixtures of data/inp, and the module itself, loaded from the copy of the built-in modules.
 add_executable(
-    fem_inp_tests unit/extensions/abaqus_inp/import_test.cpp
+    fem_inp_tests unit/extensions/abaqus_inp/export_test.cpp
+                  unit/extensions/abaqus_inp/import_test.cpp
                   unit/extensions/abaqus_inp/module_test.cpp
                   unit/extensions/abaqus_inp/reader_test.cpp)
 target_link_libraries(fem_inp_tests PRIVATE fem_inp_reader fem::core fem::storage

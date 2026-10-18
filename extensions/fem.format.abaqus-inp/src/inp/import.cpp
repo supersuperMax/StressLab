@@ -199,6 +199,9 @@ struct OutSet {
     std::string name;
     std::vector<std::int32_t> indices;
     ItemRef item = no_item;
+    bool own = false;  // A set of the part of an instance, not one of the assembly.
+    /// Labels the mesh does not have (elements of types kept in passthrough), for the export.
+    std::vector<std::int64_t> kept;
 };
 
 struct Scope {
@@ -1215,6 +1218,7 @@ private:
                 procedure += (procedure.empty() ? "*" : ", *") + p;
             }
             warn("problem.unsupportedStep", {{"step", name}, {"procedure", procedure}}, keyword);
+            step_names_.push_back(name);
             Json context = context_here();
             context["step"] = name;
             keep(keyword, std::move(text), {ParentKind::input, 0}, std::move(context), false);
@@ -1242,6 +1246,7 @@ private:
                      {{"keyword", keyword.title()}, {"parameter", parameter.key}}, keyword);
             }
         }
+        step_names_.push_back(name);
         steps_.push_back(std::move(step));
         step_ = steps_.size() - 1;
         const Parent parent{ParentKind::step, *step_};
@@ -1992,11 +1997,14 @@ private:
                     out.indices.push_back(*found);
                 } else {
                     ++undefined;
+                    out.kept.push_back(label);
                 }
             }
             std::sort(out.indices.begin(), out.indices.end());
             out.indices.erase(std::unique(out.indices.begin(), out.indices.end()),
                               out.indices.end());
+            std::sort(out.kept.begin(), out.kept.end());
+            out.kept.erase(std::unique(out.kept.begin(), out.kept.end()), out.kept.end());
         }
         if (undefined > 0) {
             problems_.push_back(Problem{Problem::Severity::warning,
@@ -2062,6 +2070,7 @@ private:
                     out->name = renamed;
                     names.insert(upper(renamed));
                 }
+                out->own = own;
                 scope.by_set.emplace(s, scope.sets.size());
                 scope.sets.push_back(std::move(*out));
             }
@@ -2111,6 +2120,11 @@ private:
             if (!heading_.empty()) {
                 input.properties["heading"] = heading_;
             }
+            // For the export (task 3.3): steps kept whole go back between the others.
+            input.properties["steps"] = step_names_;
+            if (assembly_) {
+                input.properties["assembly"] = containers_[*assembly_].name;
+            }
             result.input = add_item(result, std::move(input));
         }
         // Passthrough by parent, in the order of the file.
@@ -2133,6 +2147,14 @@ private:
                 item.properties["file"] = display(block.file);
                 item.properties["line"] = block.line;
                 item.properties["index"] = static_cast<std::int64_t>(block.index);
+                if (kind == ParentKind::step) {
+                    // How many objects of the step come before it: its place among them.
+                    item.properties["position"] = static_cast<std::int64_t>(std::count_if(
+                        pending_.begin(), pending_.end(), [&](const Pending& pending) {
+                            return pending.parent.kind == ParentKind::step &&
+                                   pending.parent.index == index && pending.order < block.index;
+                        }));
+                }
                 item.parent = parent;
                 add_item(result, std::move(item));
             }
@@ -2176,6 +2198,25 @@ private:
             types.properties["blocks"] = Json::array();
             for (const MeshBlock& block : containers_[scope.container].blocks) {
                 types.properties["blocks"].push_back(block.abaqus);
+            }
+            // Where the mesh was in the file, for the export (task 3.3).
+            if (scope.place >= 0) {
+                types.properties["part"] = containers_[scope.container].name;
+                types.properties["instance"] = scope.name;
+                types.properties["partSets"] = Json::array();
+                for (const OutSet& set : scope.sets) {
+                    if (set.own) {
+                        types.properties["partSets"].push_back(set.name);
+                    }
+                }
+            } else if (scope.place == place_assembly) {
+                types.properties["assembly"] = true;
+            }
+            for (const OutSet& set : scope.sets) {
+                if (!set.kept.empty()) {
+                    const char* type = set.kind == SetKind::node ? "node_set " : "element_set ";
+                    types.properties["keptMembers"][type + set.name] = set.kept;
+                }
             }
             add_item(result, std::move(types));
             for (OutSet& set : scope.sets) {
@@ -2313,9 +2354,11 @@ private:
             };
             if (!full.empty() && !reduced.empty()) {
                 const std::string name = scope.sets[o].name;
+                const bool own = scope.sets[o].own;
                 const std::size_t full_set = scope.sets.size();
-                scope.sets.push_back({SetKind::element, name + "-full", full, no_item});
-                scope.sets.push_back({SetKind::element, name + "-reduced", reduced, no_item});
+                scope.sets.push_back({SetKind::element, name + "-full", full, no_item, own, {}});
+                scope.sets.push_back(
+                    {SetKind::element, name + "-reduced", reduced, no_item, own, {}});
                 problems_.push_back(Problem{
                     Problem::Severity::warning,
                     "problem.mixedIntegration",
@@ -2344,6 +2387,7 @@ private:
     std::map<std::string, std::size_t> materials_by_name_;
     std::vector<PendingSection> sections_;
     std::vector<Step> steps_;
+    std::vector<std::string> step_names_;  // Of all steps, kept ones too, in the order of the file.
     std::vector<Pending> pending_;
     std::vector<Passthrough> passthrough_;
     std::string heading_;

@@ -13,6 +13,24 @@
       "title": "%input.heading%",
       "description": "%input.heading.description%",
       "x-order": 2
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "%input.steps%",
+      "description": "%input.steps.description%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 3
+    },
+    "assembly": {
+      "type": "string",
+      "title": "%input.assembly%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 4
     }
   },
   "required": [
