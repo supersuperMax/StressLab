@@ -1,0 +1,52 @@
+# Golden model: cube under its own weight, the reactions equal the weight (tests/models/README.md).
+title = "Cube under gravity, C3D8"
+problem = "cube_gravity"
+element = "C3D8"
+model = "cube_gravity.inp"
+
+[units]
+length = "mm"
+mass = "t"
+time = "s"
+temperature = "degC"
+
+# A cube with the side s, its corner at the origin, the face z = 0 clamped, the gravity g along -z.
+[parameters]
+s = 100.0
+E = 210000.0
+nu = 0.3
+rho = 7.85e-9
+g = 9810.0
+
+[mesh]
+divisions = [4, 4, 4]
+
+[[checks]]
+name = "vertical reaction"
+field = "RF"
+component = "RF3"
+box = [[0.0, 0.0, 0.0], [100.0, 100.0, 0.0]]
+reduce = "sum"
+formula = "rho * g * s**3"
+expected = 77.0085
+rel_tol = 0.001
+
+[[checks]]
+name = "horizontal reaction along x"
+field = "RF"
+component = "RF1"
+box = [[0.0, 0.0, 0.0], [100.0, 100.0, 0.0]]
+reduce = "sum"
+formula = "0"
+expected = 0.0
+abs_tol = 0.001
+
+[[checks]]
+name = "horizontal reaction along y"
+field = "RF"
+component = "RF2"
+box = [[0.0, 0.0, 0.0], [100.0, 100.0, 0.0]]
+reduce = "sum"
+formula = "0"
+expected = 0.0
+abs_tol = 0.001

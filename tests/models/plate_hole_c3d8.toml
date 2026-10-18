@@ -1,0 +1,44 @@
+# Golden model: plate with a hole in tension, linear hexahedra (tests/models/README.md).
+title = "Plate with a hole in tension, C3D8"
+problem = "plate_hole"
+element = "C3D8"
+model = "plate_hole_c3d8.inp"
+
+[units]
+length = "mm"
+mass = "t"
+time = "s"
+temperature = "degC"
+
+# A plate Lp along x by W along y, thickness t, with a hole of radius a in the middle, pulled along x
+# by the stress sigma. An eighth is modelled: x >= 0, y >= 0, 0 <= z <= t / 2, symmetry on x = 0,
+# y = 0 and the mid-plane z = 0, the hole centre at the origin, the load on the face x = Lp / 2.
+[parameters]
+Lp = 400.0
+W = 200.0
+a = 10.0
+t = 1.0
+E = 210000.0
+nu = 0.3
+sigma = 100.0
+
+# Elements along each half of the quarter of the hole, from the hole to the square around it, along
+# x from that square to the loaded face, and through the half thickness.
+[mesh]
+around = 16
+radial = 24
+outer = 8
+thickness = 1
+
+# Kirsch: 3 * sigma at the edge of a hole in an infinite plate. The plate is W wide: the factor of
+# the gross stress for d / W = 0.1 by Howland's solution fitted by Peterson (Pilkey, Peterson's
+# Stress Concentration Factors, chart 4.1) is 3.02.
+[[checks]]
+name = "stress at the hole, Kt"
+field = "S"
+component = "S11"
+box = [[0.0, 10.0, 0.0], [0.0, 10.0, 0.5]]
+reduce = "mean"
+formula = "sigma * (3 - 3.14 * (2 * a / W) + 3.667 * (2 * a / W)**2 - 1.527 * (2 * a / W)**3) / (1 - 2 * a / W)"
+expected = 302.349
+rel_tol = 0.05
