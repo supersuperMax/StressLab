@@ -1,0 +1,68 @@
+# Import of Abaqus input files (task 3.2 of docs/plan.md, docs/adr/0024-abaqus-inp-import.md,
+# docs/extensions/fem.format.abaqus-inp.md). A native module: the parser is C++ for large meshes.
+# What the Model IR cannot hold is kept as "Abaqus keyword" objects with their place in the file,
+# so that the export (task 3.3) can put them back.
+
+[extension]
+id = "fem.format.abaqus-inp"
+name = "%name%"
+description = "%description%"
+author = "StressLab"
+version = "1.0.0"
+engine = "^0.1"
+kind = "native"
+entry = "fem_format_abaqus_inp"
+activation = ["onOpenFile:*.inp"]
+requires = ["fem.model.structural>=1.0"]
+
+[[contributes.commands]]
+id = "inp.import"
+title = "%command.import%"
+category = "%category%"
+snapshotBefore = true
+args = [
+    { name = "path", type = "path" },
+    { name = "encoding", type = "string", default = "auto" },
+]
+
+[[contributes.fileFormats]]
+id = "abaqus-inp"
+title = "%format.inp%"
+extensions = [".inp"]
+role = "model-import"
+command = "inp.import"
+
+[[contributes.treeNodeTypes]]
+type = "abaqus_input"
+title = "%node.abaqus_input%"
+
+[[contributes.treeNodeTypes]]
+type = "abaqus_keyword"
+title = "%node.abaqus_keyword%"
+
+[[contributes.treeNodeTypes]]
+type = "abaqus_element_types"
+title = "%node.abaqus_element_types%"
+
+[[contributes.propertySchemas]]
+type = "abaqus_input"
+version = 1
+schema = "schemas/abaqus_input.json"
+
+[[contributes.propertySchemas]]
+type = "abaqus_keyword"
+version = 1
+schema = "schemas/abaqus_keyword.json"
+
+[[contributes.propertySchemas]]
+type = "abaqus_element_types"
+version = 1
+schema = "schemas/abaqus_element_types.json"
+
+[[contributes.localization]]
+language = "en"
+path = "l10n/en.json"
+
+[[contributes.localization]]
+language = "ru"
+path = "l10n/ru.json"

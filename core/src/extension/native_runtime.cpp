@@ -4,6 +4,8 @@
 #include "fem/core/context/value.h"
 #include "fem/core/extension/error.h"
 #include "fem/core/extension/manager.h"
+#include "fem/core/model/mesh.h"
+#include "fem/core/model/object.h"
 #include "fem/extension_abi.h"
 
 #include "files.h"
@@ -126,6 +128,253 @@ void call_set_error(FemCommandCall* call, const char* message) noexcept {
     }
 }
 
+[[noreturn]] void bad_call(const std::string& message) {
+    throw ExtensionError(ExtensionErrc::command_failed, message);
+}
+
+/// A count of array entries the module passed; `what` names it in the error.
+std::size_t checked_count(std::int64_t count, std::string_view what) {
+    if (count < 0 || static_cast<std::uint64_t>(count) >
+                         static_cast<std::uint64_t>(std::numeric_limits<model::Index>::max())) {
+        bad_call("invalid " + std::string(what) + " count " + std::to_string(count));
+    }
+    return static_cast<std::size_t>(count);
+}
+
+template <class T>
+std::vector<T> copy_array(const T* values, std::size_t count, std::string_view what) {
+    if (count > 0 && values == nullptr) {
+        bad_call(std::string(what) + " is NULL");
+    }
+    return count > 0 ? std::vector<T>(values, values + count) : std::vector<T>();
+}
+
+std::shared_ptr<const model::Mesh> mesh_from_abi(const FemMeshData* data) {
+    if (data == nullptr || data->struct_size < sizeof(FemMeshData)) {
+        bad_call("FEM_DATA_MESH needs a FemMeshData");
+    }
+    const std::size_t nodes = checked_count(data->node_count, "node");
+    model::NodeArrays arrays;
+    arrays.ids = copy_array<model::Label>(data->node_ids, nodes, "node_ids");
+    arrays.x = copy_array(data->x, nodes, "x");
+    arrays.y = copy_array(data->y, nodes, "y");
+    arrays.z = copy_array(data->z, nodes, "z");
+    const std::size_t count = checked_count(data->block_count, "block");
+    if (count > 0 && data->blocks == nullptr) {
+        bad_call("blocks is NULL");
+    }
+    std::vector<model::ElementBlock> blocks;
+    blocks.reserve(count);
+    for (std::size_t b = 0; b < count; ++b) {
+        const FemElementBlock& block = data->blocks[b];
+        if (block.struct_size < sizeof(FemElementBlock)) {
+            bad_call("FemElementBlock " + std::to_string(b) + " is too small");
+        }
+        const std::optional<model::ElementType> type =
+            block.type != nullptr ? model::parse_element_type(block.type) : std::nullopt;
+        if (!type) {
+            bad_call("unknown element type '" + std::string(block.type ? block.type : "") + "'");
+        }
+        const std::size_t elements = checked_count(block.count, "element");
+        const auto per_element = static_cast<std::size_t>(model::nodes_per_element(*type));
+        blocks.emplace_back(
+            *type, copy_array<model::Label>(block.ids, elements, "ids"),
+            copy_array<model::Index>(block.connectivity, elements * per_element, "connectivity"));
+    }
+    return std::make_shared<const model::Mesh>(std::move(arrays), std::move(blocks));
+}
+
+std::shared_ptr<const model::ObjectData> data_from_abi(const FemObjectData* data) {
+    if (data == nullptr) {
+        return nullptr;
+    }
+    if (data->struct_size < sizeof(FemObjectData)) {
+        bad_call("FemObjectData is too small");
+    }
+    switch (data->kind) {
+        case FEM_DATA_NONE:
+            return nullptr;
+        case FEM_DATA_MESH:
+            return mesh_from_abi(data->mesh);
+        case FEM_DATA_NODE_SET:
+            return std::make_shared<const model::NodeSet>(copy_array<model::Index>(
+                data->indices, checked_count(data->count, "index"), "indices"));
+        case FEM_DATA_ELEMENT_SET:
+            return std::make_shared<const model::ElementSet>(copy_array<model::Index>(
+                data->indices, checked_count(data->count, "index"), "indices"));
+        case FEM_DATA_SURFACE: {
+            const std::size_t count = checked_count(data->count, "side");
+            const std::vector<model::Index> pairs =
+                copy_array<model::Index>(data->indices, count * 2, "indices");
+            std::vector<model::ElementSide> sides(count);
+            for (std::size_t i = 0; i < count; ++i) {
+                sides[i] = {pairs[2 * i], pairs[2 * i + 1]};
+            }
+            return std::make_shared<const model::Surface>(std::move(sides));
+        }
+        default:
+            bad_call("unknown data kind " + std::to_string(data->kind));
+    }
+}
+
+model::ObjectId object_id(const nlohmann::json& value, std::string_view what) {
+    if (!value.is_number_integer() || value.get<std::int64_t>() <= 0) {
+        bad_call("'" + std::string(what) + "' must be an object id");
+    }
+    return model::ObjectId(value.get<std::uint64_t>());
+}
+
+model::NewObject new_object_from_json(const nlohmann::json& object) {
+    if (!object.is_object()) {
+        bad_call("the object must be a JSON object");
+    }
+    const auto text = [&](std::string_view key, bool required) {
+        const auto it = object.find(key);
+        if (it == object.end() || it->is_null()) {
+            if (required) {
+                bad_call("the object needs '" + std::string(key) + "'");
+            }
+            return std::string();
+        }
+        if (!it->is_string()) {
+            bad_call("'" + std::string(key) + "' of the object must be text");
+        }
+        return it->get<std::string>();
+    };
+    model::NewObject init;
+    init.type = text("type", true);
+    init.owner = text("owner", true);
+    init.name = text("name", false);
+    if (const auto it = object.find("schema_version"); it != object.end() && !it->is_null()) {
+        if (!it->is_number_integer() || it->get<std::int64_t>() < 1 ||
+            it->get<std::int64_t>() > std::numeric_limits<std::uint32_t>::max()) {
+            bad_call("'schema_version' must be a positive integer");
+        }
+        init.schema_version = it->get<std::uint32_t>();
+    }
+    if (const auto it = object.find("properties"); it != object.end() && !it->is_null()) {
+        if (!it->is_object()) {
+            bad_call("'properties' of the object must be an object");
+        }
+        init.properties = *it;
+    }
+    if (const auto it = object.find("parent"); it != object.end() && !it->is_null()) {
+        init.parent = object_id(*it, "parent");
+    }
+    if (const auto it = object.find("dependencies"); it != object.end() && !it->is_null()) {
+        if (!it->is_array()) {
+            bad_call("'dependencies' of the object must be a list of object ids");
+        }
+        for (const nlohmann::json& target : *it) {
+            init.dependencies.push_back(object_id(target, "dependencies"));
+        }
+    }
+    return init;
+}
+
+FemStatus call_create_object(FemCommandCall* call, const char* object, const FemObjectData* data,
+                             int64_t* id) noexcept {
+    try {
+        if (object == nullptr) {
+            bad_call("create_object needs the object");
+        }
+        const nlohmann::json json = nlohmann::json::parse(object);
+        model::NewObject init = new_object_from_json(json);
+        init.data = data_from_abi(data);
+        if (const auto unique = json.find("unique_name");
+            unique != json.end() && unique->is_boolean() && unique->get<bool>() &&
+            !init.name.empty()) {
+            // "Steel", then "Steel-2", "Steel-3"...: a second import into the same model.
+            const model::Document& document = call->context->document();
+            const std::string name = init.name;
+            for (int n = 2; document.find_child(init.parent, init.type, init.name); ++n) {
+                init.name = name + "-" + std::to_string(n);
+            }
+        }
+        const model::ObjectId created = call->context->editor().create(std::move(init));
+        if (id != nullptr) {
+            *id = static_cast<int64_t>(created.value());
+        }
+        call->last_error.clear();
+        return FEM_OK;
+    } catch (const std::exception& e) {
+        call->last_error = e.what();
+    } catch (...) {
+        call->last_error = "unknown error";
+    }
+    return FEM_ERROR;
+}
+
+command::Problem problem_from_json(const nlohmann::json& json) {
+    if (!json.is_object()) {
+        bad_call("the problem must be a JSON object");
+    }
+    command::Problem problem;
+    const auto message = json.find("message");
+    if (message == json.end() || !message->is_string()) {
+        bad_call("the problem needs a 'message' text");
+    }
+    problem.message = message->get<std::string>();
+    if (const auto it = json.find("severity"); it != json.end() && !it->is_null()) {
+        using Severity = command::Problem::Severity;
+        bool known = false;
+        for (const Severity severity : {Severity::info, Severity::warning, Severity::error}) {
+            if (it->is_string() && it->get<std::string>() == command::to_string(severity)) {
+                problem.severity = severity;
+                known = true;
+            }
+        }
+        if (!known) {
+            bad_call("'severity' of the problem must be \"info\", \"warning\" or \"error\"");
+        }
+    }
+    if (const auto it = json.find("args"); it != json.end() && !it->is_null()) {
+        if (!it->is_object()) {
+            bad_call("'args' of the problem must be an object");
+        }
+        for (const auto& [name, value] : it->items()) {
+            if (value.is_string()) {
+                problem.args.emplace(name, value.get<std::string>());
+            } else if (value.is_number_integer()) {
+                problem.args.emplace(name, value.get<std::int64_t>());
+            } else if (value.is_number()) {
+                problem.args.emplace(name, value.get<double>());
+            } else {
+                bad_call("argument '" + name + "' of the problem must be text or a number");
+            }
+        }
+    }
+    if (const auto it = json.find("file"); it != json.end() && !it->is_null()) {
+        if (!it->is_string()) {
+            bad_call("'file' of the problem must be text");
+        }
+        problem.file = it->get<std::string>();
+    }
+    if (const auto it = json.find("line"); it != json.end() && !it->is_null()) {
+        if (!it->is_number_integer() || it->get<std::int64_t>() < 0) {
+            bad_call("'line' of the problem must be a line number");
+        }
+        problem.line = it->get<std::int64_t>();
+    }
+    return problem;
+}
+
+FemStatus call_report_problem(FemCommandCall* call, const char* problem) noexcept {
+    try {
+        if (problem == nullptr) {
+            bad_call("report_problem needs the problem");
+        }
+        call->context->report(problem_from_json(nlohmann::json::parse(problem)));
+        call->last_error.clear();
+        return FEM_OK;
+    } catch (const std::exception& e) {
+        call->last_error = e.what();
+    } catch (...) {
+        call->last_error = "unknown error";
+    }
+    return FEM_ERROR;
+}
+
 const FemCommandApi command_api = {
     static_cast<std::uint32_t>(sizeof(FemCommandApi)),
     call_command_id,
@@ -134,6 +383,8 @@ const FemCommandApi command_api = {
     call_last_error,
     call_set_result,
     call_set_error,
+    call_create_object,
+    call_report_problem,
 };
 
 }  // namespace

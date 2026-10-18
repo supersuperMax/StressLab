@@ -22,6 +22,7 @@ target_sources(
             src/command/error.cpp
             src/command/journal.cpp
             src/command/model_commands.cpp
+            src/command/problem.cpp
             src/command/python_literal.cpp
             src/command/value.cpp
             src/context/context_keys.cpp
@@ -39,6 +40,7 @@ target_sources(
             src/extension/manager.cpp
             src/extension/manifest.cpp
             src/extension/native_runtime.cpp
+            src/extension/open_file.cpp
             src/extension/profile.cpp
             src/extension/registry.cpp
             src/extension/semver.cpp

@@ -273,6 +273,7 @@ private:
     Subscription language_;
     Subscription extension_events_;
     Subscription model_changed_;
+    Subscription problems_reported_;
     std::vector<Subscription> history_watches_;
 };
 

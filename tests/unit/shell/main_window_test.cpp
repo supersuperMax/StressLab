@@ -209,26 +209,13 @@ TEST_F(ShellWindow, WithoutModulesHasOnlyTheShellMenusAndTheStandardStages) {
             }
         }
     }
-    std::set<QString> expected{"menu.file",
-                               "app.settings",
-                               "app.quit",
-                               "menu.edit",
-                               "app.undo",
-                               "app.redo",
-                               "menu.view",
-                               "view.fullScreen",
-                               "view.commandPalette",
-                               "view.settings",
-                               "menu.help",
-                               "app.about",
-                               "view.extensions",
-                               "view.history",
-                               "journal.saveAsScript",
-                               "project.clean",
-                               "project.open",
-                               "project.save",
-                               "project.saveAs",
-                               "history.commitVersion"};
+    std::set<QString> expected{"menu.file",       "app.settings",    "app.quit",
+                               "menu.edit",       "app.undo",        "app.redo",
+                               "menu.view",       "view.fullScreen", "view.commandPalette",
+                               "view.settings",   "menu.help",       "app.about",
+                               "view.extensions", "view.history",    "journal.saveAsScript",
+                               "project.clean",   "project.import",  "project.open",
+                               "project.save",    "project.saveAs",  "history.commitVersion"};
     for (const std::string_view id : all_zones) {
         if (id != zone::viewport) {
             expected.insert("view." + q(id));

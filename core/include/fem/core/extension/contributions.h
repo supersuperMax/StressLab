@@ -114,6 +114,9 @@ struct FileFormatContribution {
     std::string title;                    ///< May be empty.
     std::vector<std::string> extensions;  ///< With the dot, e.g. ".res".
     Role role = Role::model_import;
+    /// The command of the module that does it with a file given as its argument `path` (for
+    /// `model-import`: reads the file into the model, `open_model_file`); empty if none.
+    std::string command;
 };
 
 /// "model-import", "model-export", "mesh-import", "mesh-export", "results-import",

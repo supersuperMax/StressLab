@@ -1290,6 +1290,23 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
                           "results-import or results-export");
             }
         }
+        if (fields.get("command") != nullptr) {
+            format.command = id(fields, "command", command::is_valid_command_id, command_id_rule);
+            const auto declared =
+                std::find_if(out.commands.begin(), out.commands.end(),
+                             [&](const CommandContribution& c) { return c.id == format.command; });
+            const bool takes_path =
+                declared != out.commands.end() &&
+                std::any_of(declared->args.begin(), declared->args.end(),
+                            [](const command::ArgSpec& arg) {
+                                return arg.name == "path" && arg.type == command::ArgType::path;
+                            });
+            if (!format.command.empty() && !takes_path) {
+                error(entry.get("command")->source(),
+                      "the command of " + where + " must be a command of this module with an " +
+                          "argument 'path' of type path");
+            }
+        }
         fields.finish();
         out.file_formats.push_back(std::move(format));
     });

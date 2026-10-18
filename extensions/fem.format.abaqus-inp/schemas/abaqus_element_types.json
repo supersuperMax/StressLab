@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "%types.blocks%",
+      "description": "%types.blocks.description%",
+      "readOnly": true,
+      "x-order": 1
+    }
+  },
+  "required": [
+    "blocks"
+  ]
+}

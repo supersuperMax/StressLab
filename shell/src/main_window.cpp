@@ -1,5 +1,6 @@
 #include "fem/shell/main_window.h"
 
+#include "fem/core/command/problem.h"
 #include "fem/core/context/when.h"
 #include "fem/core/log/log.h"
 #include "fem/core/product.h"
@@ -240,6 +241,16 @@ void MainWindow::build_zones() {
     problems_ = new ProblemsPanel;
     docks_->addDockWidgetTabToArea(add_dock(zone::problems, "zone.problems", problems_), bottom);
     connect(problems_, &ProblemsPanel::changed, this, &MainWindow::retranslate);
+    // What commands report (task 3.2: warnings of an import) in the language of the window;
+    // facts that are not problems go to the prompt line.
+    problems_reported_ = workbench_.bus.on_problem([this](const command::Problem& problem) {
+        const QString message = to_qstring(command::problem_text(problem, localization_));
+        if (problem.severity == command::Problem::Severity::info) {
+            set_prompt(message);
+        } else {
+            problems_->add(message);
+        }
+    });
     bottom->setCurrentDockWidget(journal);
     connect(history_, &HistoryController::problem, this, [this](const QString& message) {
         problems_->add(message);
@@ -288,6 +299,7 @@ void MainWindow::build_menus() {
             [this](const QString& message) { set_prompt(message); });
     connect(project_, &ProjectActions::opened, this, &MainWindow::check_required_modules);
     file_menu_->addAction(project_->open_action());
+    file_menu_->addAction(project_->import_action());
     file_menu_->addSeparator();
     file_menu_->addAction(project_->save_action());
     file_menu_->addAction(project_->save_as_action());

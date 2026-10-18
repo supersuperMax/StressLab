@@ -1,0 +1,97 @@
+*Heading
+** Job name: bracket Model name: Model-1
+** Generated in the style of Abaqus/CAE: two instances of one part, the second moved and turned.
+*Preprint, echo=NO, model=NO, history=NO, contact=NO
+**
+** PARTS
+**
+*Part, name=Beam
+*Node
+      1,           0.,           0.,           0.
+      2,           1.,           0.,           0.
+      3,           0.,           1.,           0.
+      4,           0.,           0.,           1.
+*Element, type=C3D4
+1, 1, 2, 3, 4
+*Nset, nset=Set-1
+ 1, 2
+*Elset, elset=Set-1
+ 1,
+** Section: Section-1
+*Solid Section, elset=Set-1, material=Steel
+,
+*End Part
+**
+** ASSEMBLY
+**
+*Assembly, name=Assembly
+**
+*Instance, name=Beam-1, part=Beam
+*End Instance
+**
+*Instance, name=Beam-2, part=Beam
+          10.,           0.,           0.
+          10.,           0.,           0.,          10.,           0.,           1.,          90.
+*End Instance
+**
+*Node
+      1,           5.,           5.,           5.
+*Nset, nset=RP
+ 1,
+*Nset, nset=Set-1, instance=Beam-1
+ 1,
+*Nset, nset=Fixed, instance=Beam-1
+ 1, 3
+*Nset, nset=Fixed, instance=Beam-2
+ 1, 3
+*Elset, elset=_Surf-1_S1, internal, instance=Beam-2
+ 1,
+*Surface, type=ELEMENT, name=Surf-1
+_Surf-1_S1, S1
+*End Assembly
+**
+** MATERIALS
+**
+*Material, name=Steel
+*Elastic
+200000., 0.3
+**
+** BOUNDARY CONDITIONS
+**
+** Name: BC-1 Type: Displacement/Rotation
+*Boundary
+Fixed, ENCASTRE
+** ----------------------------------------------------------------
+**
+** STEP: Step-1
+**
+*Step, name=Step-1, nlgeom=NO
+*Static
+1., 1., 1e-05, 1.
+**
+** LOADS
+**
+** Name: Load-1   Type: Concentrated force
+*Cload
+Beam-2.4, 2, -100.
+** Name: Load-2   Type: Pressure
+*Dsload
+Surf-1, P, 5.
+** Name: Grav   Type: Gravity
+*Dload
+, GRAV, 9810., 0., 0., -1.
+**
+** OUTPUT REQUESTS
+**
+*Restart, write, frequency=0
+**
+** FIELD OUTPUT: F-Output-1
+**
+*Output, field, variable=PRESELECT
+**
+** HISTORY OUTPUT: H-Output-1
+**
+*Output, history, variable=PRESELECT
+*Node Output, nset=Set-1
+U
+*End Step

@@ -30,6 +30,7 @@ add_executable(
     unit/core/extension/manager_test.cpp
     unit/core/extension/manifest_test.cpp
     unit/core/extension/native_test.cpp
+    unit/core/extension/open_file_test.cpp
     unit/core/extension/profile_test.cpp
     unit/core/extension/registry_test.cpp
     unit/core/extension/semver_test.cpp
@@ -105,6 +106,32 @@ find_package(miniz CONFIG REQUIRED)
 target_link_libraries(fem_storage_tests PRIVATE fem::storage miniz::miniz GTest::gtest_main)
 target_compile_definitions(fem_storage_tests PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 gtest_discover_tests(fem_storage_tests DISCOVERY_MODE PRE_TEST)
+
+# The import of Abaqus input files (task 3.2): the reader of extensions/fem.format.abaqus-inp on the
+# fixtures of data/inp, and the module itself, loaded from the copy of the built-in modules.
+add_executable(
+    fem_inp_tests unit/extensions/abaqus_inp/import_test.cpp
+                  unit/extensions/abaqus_inp/module_test.cpp
+                  unit/extensions/abaqus_inp/reader_test.cpp)
+target_link_libraries(fem_inp_tests PRIVATE fem_inp_reader fem::core fem::storage
+                                            GTest::gtest_main)
+target_compile_definitions(
+    fem_inp_tests
+    PRIVATE FEM_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+            FEM_STAGED_EXTENSIONS_DIR="${FEM_STAGED_EXTENSIONS_DIR}"
+            FEM_INP_SOURCE_DIR="${PROJECT_SOURCE_DIR}/extensions/fem.format.abaqus-inp/src")
+add_dependencies(fem_inp_tests fem_builtin_extensions)
+gtest_discover_tests(fem_inp_tests DISCOVERY_MODE PRE_TEST)
+
+# Import benchmark (task 3.2): 100 000 C3D10 elements read and imported through the C ABI; its
+# timings are printed with `ctest -L benchmark -V`, a million with `fem_inp_benchmark 1000000`.
+add_executable(fem_inp_benchmark benchmark/inp_benchmark.cpp)
+target_link_libraries(fem_inp_benchmark PRIVATE fem_inp_reader fem::core)
+target_compile_definitions(fem_inp_benchmark
+                           PRIVATE FEM_STAGED_EXTENSIONS_DIR="${FEM_STAGED_EXTENSIONS_DIR}")
+add_dependencies(fem_inp_benchmark fem_builtin_extensions)
+add_test(NAME InpBenchmark.HundredThousandElements COMMAND fem_inp_benchmark)
+set_tests_properties(InpBenchmark.HundredThousandElements PROPERTIES LABELS benchmark)
 
 # The Python API (task 1.8): journals run as Python scripts by the embedded interpreter, and the
 # pytest suite run both by the embedded interpreter and by plain Python.

@@ -13,5 +13,8 @@
 *.zst binary
 *.slpack binary
 
+# Input files of the import tests in other encodings and with other line breaks (task 3.2).
+tests/data/inp/bytes/** binary
+
 # Blocks of bulk data in project folders (.fem/objects): bytes hashed as they are.
 **/.fem/objects/** binary

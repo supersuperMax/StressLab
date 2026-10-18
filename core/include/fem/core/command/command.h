@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fem/core/command/problem.h"
 #include "fem/core/command/value.h"
 #include "fem/core/model/document.h"
 #include "fem/core/model/document_editor.h"
@@ -131,6 +132,10 @@ public:
     /// Runs another command as a part of this one: its changes join this command's undo step
     /// and only this command is written to the journal.
     CommandResult execute(std::string_view id, Value::Dict args = {}) const;
+    /// Tells the listeners of `CommandBus::on_problem` at once, with the owner and id of this
+    /// command filled in. Problems are not undone: they reach the user even if the command fails
+    /// afterwards, which is how a failing import says where the file is wrong.
+    void report(Problem problem) const;
 
 private:
     friend class CommandBus;

@@ -24,6 +24,7 @@ enum class ExtensionErrc {
     invalid_profile,        ///< A profile is not in the format the core writes.
     io,                     ///< A file cannot be read or written.
     unknown_setting,        ///< The code of a module asked for a setting that has no schema.
+    unsupported_file,       ///< No enabled module reads files of this kind.
 };
 
 [[nodiscard]] std::string_view to_string(ExtensionErrc code) noexcept;

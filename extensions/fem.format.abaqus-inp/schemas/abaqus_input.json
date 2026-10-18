@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "file": {
+      "type": "string",
+      "title": "%input.file%",
+      "readOnly": true,
+      "x-order": 1
+    },
+    "heading": {
+      "type": "string",
+      "title": "%input.heading%",
+      "description": "%input.heading.description%",
+      "x-order": 2
+    }
+  },
+  "required": [
+    "file"
+  ]
+}

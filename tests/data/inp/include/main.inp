@@ -1,0 +1,13 @@
+** *INCLUDE: data lines of a keyword in another file, a folder with Cyrillic letters and spaces,
+** and an include inside an include (paths are relative to the including file).
+*HEADING
+Included mesh
+*NODE, NSET=ALLN
+*INCLUDE, INPUT="папка с пробелами/узлы.inp"
+*ELEMENT, TYPE=C3D4, ELSET=ALL
+*INCLUDE, INPUT=elements.inp
+*MATERIAL, NAME=Al
+*ELASTIC
+70000., 0.33
+*SOLID SECTION, ELSET=ALL, MATERIAL=Al
+*INCLUDE, INPUT="папка с пробелами/шаг.inp"

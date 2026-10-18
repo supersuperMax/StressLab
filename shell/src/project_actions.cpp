@@ -1,6 +1,8 @@
 #include "fem/shell/project_actions.h"
 
 #include "fem/core/command/error.h"
+#include "fem/core/extension/error.h"
+#include "fem/core/extension/open_file.h"
 #include "fem/core/log/log.h"
 #include "fem/core/product.h"
 #include "fem/core/settings/settings.h"
@@ -58,6 +60,9 @@ ProjectActions::ProjectActions(Workbench& workbench, QWidget* window)
     open_->setObjectName(QStringLiteral("project.open"));
     open_->setShortcuts(QKeySequence::Open);
     connect(open_, &QAction::triggered, this, [this] { (void)open_dialog(); });
+    import_ = new QAction(this);
+    import_->setObjectName(QStringLiteral("project.import"));
+    connect(import_, &QAction::triggered, this, [this] { (void)import_dialog(); });
     save_ = new QAction(this);
     save_->setObjectName(QStringLiteral("project.save"));
     save_->setShortcuts(QKeySequence::Save);
@@ -98,6 +103,65 @@ bool ProjectActions::open_dialog() {
     }
     const fs::path folder = workbench_.dialogs.open_folder(window_, text("project.openTitle"));
     return !folder.empty() && open(folder);
+}
+
+QString ProjectActions::import_filter() const {
+    QStringList formats;
+    QStringList all;
+    for (const extension::FileFormatContribution* format :
+         workbench_.extensions.registry().file_formats()) {
+        if (format->role != extension::FileFormatContribution::Role::model_import ||
+            format->command.empty()) {
+            continue;
+        }
+        QStringList patterns;
+        for (const std::string& suffix : format->extensions) {
+            patterns << QStringLiteral("*") + QString::fromStdString(suffix);
+        }
+        all << patterns;
+        const std::string title = format->title.empty() ? format->id
+                                                        : workbench_.localization.manifest_text(
+                                                              format->owner, format->title);
+        formats << QString::fromStdString(title) + QStringLiteral(" (") +
+                       patterns.join(QLatin1Char(' ')) + QLatin1Char(')');
+    }
+    if (formats.isEmpty()) {
+        return {};
+    }
+    formats.prepend(text("project.importAll") + QStringLiteral(" (") + all.join(QLatin1Char(' ')) +
+                    QLatin1Char(')'));
+    return formats.join(QStringLiteral(";;"));
+}
+
+bool ProjectActions::import_dialog() {
+    if (!workbench_.dialogs.open_file) {
+        return false;
+    }
+    const QString filter = import_filter();
+    if (filter.isEmpty()) {
+        Q_EMIT problem(text("project.importNone"));
+        return false;
+    }
+    const fs::path file =
+        workbench_.dialogs.open_file(window_, text("project.importTitle"), filter);
+    return !file.empty() && import_file(file);
+}
+
+bool ProjectActions::import_file(const fs::path& file) {
+    try {
+        (void)extension::open_model_file(workbench_.extensions, workbench_.bus, file);
+        Q_EMIT message(text("project.imported", {{"file", utf8(file.filename())}}));
+        return true;
+    } catch (const extension::ExtensionError& error) {
+        log::logger("shell")->error("import '{}': {}", utf8(file), error.what());
+        // A module that failed has told why in "Problems" itself, in the language of the window.
+        Q_EMIT problem(error.code() == extension::ExtensionErrc::unsupported_file
+                           ? text("project.importUnsupported", {{"file", utf8(file.filename())}})
+                           : text("project.importFailed", {{"file", utf8(file.filename())}}));
+    } catch (const std::exception& error) {
+        report("project.importError", file, error);
+    }
+    return false;
 }
 
 bool ProjectActions::open(const fs::path& folder) {
@@ -235,6 +299,7 @@ void ProjectActions::set_variant(const QString& variant) {
 
 void ProjectActions::retranslate() {
     open_->setText(text("action.openProject"));
+    import_->setText(text("action.import"));
     save_->setText(text("action.save"));
     save_as_->setText(text("action.saveAs"));
     clean_->setText(text("action.cleanProject"));

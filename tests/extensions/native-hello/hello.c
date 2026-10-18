@@ -6,6 +6,7 @@
  * - hello.greet creates an object of the module with "model.create", its properties being the
  *   arguments of the call, and returns the id of the object.
  * - hello.fail creates an object, then fails: the platform must revert the object.
+ * - hello.data creates a mesh, a node set and a surface with bulk data and reports a problem.
  * - Activation reports how many times the library was activated and deactivated in the context
  *   keys hello.activations and hello.deactivations: the counters live in the library, so they show
  *   whether it stayed loaded between activations.
@@ -77,6 +78,78 @@ static FemStatus fail(FemCommandCall* call, void* user_data) {
     return FEM_ERROR;
 }
 
+/* hello.data: objects with bulk data through create_object (task 3.2). A mesh of one tet4,
+ * twice with "unique_name" ("tet", "tet-2"), a node set and a surface on the first one, and a
+ * problem. A mesh whose element refers to a node it does not have must be refused. Returns the id
+ * of the first mesh. */
+static FemStatus data(FemCommandCall* call, void* user_data) {
+    static const int64_t node_ids[] = {10, 20, 30, 40};
+    static const double x[] = {0.0, 1.0, 0.0, 0.0};
+    static const double y[] = {0.0, 0.0, 1.0, 0.0};
+    static const double z[] = {0.0, 0.0, 0.0, 1.0};
+    static const int64_t element_ids[] = {7};
+    static const int32_t connectivity[] = {0, 1, 2, 3};
+    static const int32_t broken[] = {0, 1, 2, 9};
+    static const int32_t nodes[] = {3, 0};
+    static const int32_t sides[] = {0, 2};
+    const FemCommandApi* api = g_host->commands;
+    FemElementBlock block = {(uint32_t)sizeof(FemElementBlock), "tet4", 1, element_ids,
+                             connectivity};
+    FemMeshData mesh = {(uint32_t)sizeof(FemMeshData), 4, node_ids, x, y, z, 1, &block};
+    FemObjectData object = {(uint32_t)sizeof(FemObjectData), FEM_DATA_MESH, &mesh, NULL, 0};
+    FemObjectData set = {(uint32_t)sizeof(FemObjectData), FEM_DATA_NODE_SET, NULL, nodes, 2};
+    FemObjectData surface = {(uint32_t)sizeof(FemObjectData), FEM_DATA_SURFACE, NULL, sides, 1};
+    int64_t first = 0;
+    int64_t second = 0;
+    int64_t child = 0;
+    char request[160];
+
+    (void)user_data;
+    if (api->struct_size < sizeof(FemCommandApi)) {
+        api->set_error(call, "the platform has no create_object");
+        return FEM_ERROR;
+    }
+    if (api->create_object(call,
+                           "{\"type\":\"mesh\",\"owner\":\"fem.core\",\"name\":\"tet\","
+                           "\"unique_name\":true}",
+                           &object, &first) != FEM_OK ||
+        api->create_object(call,
+                           "{\"type\":\"mesh\",\"owner\":\"fem.core\",\"name\":\"tet\","
+                           "\"unique_name\":true}",
+                           &object, &second) != FEM_OK) {
+        return FEM_ERROR;
+    }
+    snprintf(request, sizeof request,
+             "{\"type\":\"node_set\",\"owner\":\"fem.core\",\"name\":\"corners\",\"parent\":%lld}",
+             (long long)first);
+    if (api->create_object(call, request, &set, &child) != FEM_OK) {
+        return FEM_ERROR;
+    }
+    snprintf(request, sizeof request,
+             "{\"type\":\"surface\",\"owner\":\"fem.core\",\"name\":\"side\",\"parent\":%lld}",
+             (long long)first);
+    if (api->create_object(call, request, &surface, &child) != FEM_OK) {
+        return FEM_ERROR;
+    }
+    block.connectivity = broken;
+    if (api->create_object(call, "{\"type\":\"mesh\",\"owner\":\"fem.core\",\"name\":\"broken\"}",
+                           &object, &child) != FEM_ERROR ||
+        api->last_error(call)[0] == '\0') {
+        api->set_error(call, "a mesh with a missing node was not refused");
+        return FEM_ERROR;
+    }
+    if (api->report_problem(call,
+                            "{\"severity\":\"info\",\"message\":\"%problem.made%\","
+                            "\"args\":{\"count\":2},\"file\":\"tet.inp\",\"line\":3}") != FEM_OK ||
+        api->report_problem(call, "{\"severity\":\"loud\",\"message\":\"x\"}") != FEM_ERROR) {
+        api->set_error(call, "report_problem does not check the problem");
+        return FEM_ERROR;
+    }
+    snprintf(request, sizeof request, "%lld", (long long)first);
+    api->set_result(call, request);
+    return FEM_OK;
+}
+
 static FemStatus activate(const FemHostApi* host, void** state) {
     if (host->abi_version != FEM_EXTENSION_ABI_VERSION || host->struct_size < sizeof(FemHostApi) ||
         host->commands->struct_size < sizeof(FemCommandApi)) {
@@ -90,7 +163,8 @@ static FemStatus activate(const FemHostApi* host, void** state) {
     ++g_activations;
     *state = &g_activations;
     if (host->register_command(host->host, "hello.greet", greet, NULL) != FEM_OK ||
-        host->register_command(host->host, "hello.fail", fail, NULL) != FEM_OK) {
+        host->register_command(host->host, "hello.fail", fail, NULL) != FEM_OK ||
+        host->register_command(host->host, "hello.data", data, NULL) != FEM_OK) {
         host->set_error(host->host, "cannot register the commands of the manifest");
         return FEM_ERROR;
     }

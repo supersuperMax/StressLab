@@ -17,6 +17,10 @@ args = [{ name = "name", type = "string" }]
 id = "hello.fail"
 title = "Fail"
 
+[[contributes.commands]]
+id = "hello.data"
+title = "Data"
+
 [[contributes.contextKeys]]
 name = "hello.activations"
 type = "number"
