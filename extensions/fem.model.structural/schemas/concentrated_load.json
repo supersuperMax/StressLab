@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fx": {
+      "type": "number",
+      "title": "%cload.fx%",
+      "x-order": 1,
+      "x-quantity": "force",
+      "default": 0
+    },
+    "fy": {
+      "type": "number",
+      "title": "%cload.fy%",
+      "x-order": 2,
+      "x-quantity": "force",
+      "default": 0
+    },
+    "fz": {
+      "type": "number",
+      "title": "%cload.fz%",
+      "x-order": 3,
+      "x-quantity": "force",
+      "default": 0
+    },
+    "mx": {
+      "type": "number",
+      "title": "%cload.mx%",
+      "x-order": 4,
+      "x-quantity": "moment",
+      "default": 0,
+      "x-advanced": true
+    },
+    "my": {
+      "type": "number",
+      "title": "%cload.my%",
+      "x-order": 5,
+      "x-quantity": "moment",
+      "default": 0,
+      "x-advanced": true
+    },
+    "mz": {
+      "type": "number",
+      "title": "%cload.mz%",
+      "x-order": 6,
+      "x-quantity": "moment",
+      "default": 0,
+      "x-advanced": true
+    }
+  }
+}

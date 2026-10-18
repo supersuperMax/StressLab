@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "youngsModulus": {
+      "type": "number",
+      "title": "%material.youngsModulus%",
+      "x-order": 1,
+      "description": "%material.youngsModulus.description%",
+      "x-quantity": "pressure",
+      "exclusiveMinimum": 0
+    },
+    "poissonsRatio": {
+      "type": "number",
+      "title": "%material.poissonsRatio%",
+      "x-order": 2,
+      "exclusiveMinimum": -1,
+      "exclusiveMaximum": 0.5
+    },
+    "density": {
+      "type": "number",
+      "title": "%material.density%",
+      "x-order": 3,
+      "description": "%material.density.description%",
+      "x-quantity": "density",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "youngsModulus",
+    "poissonsRatio"
+  ]
+}

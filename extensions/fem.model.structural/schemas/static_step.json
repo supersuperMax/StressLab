@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "timePeriod": {
+      "type": "number",
+      "title": "%step.timePeriod%",
+      "x-order": 1,
+      "description": "%step.timePeriod.description%",
+      "exclusiveMinimum": 0,
+      "default": 1.0
+    },
+    "initialIncrement": {
+      "type": "number",
+      "title": "%step.initialIncrement%",
+      "x-order": 2,
+      "exclusiveMinimum": 0,
+      "default": 1.0
+    },
+    "maxIncrements": {
+      "type": "integer",
+      "title": "%step.maxIncrements%",
+      "x-order": 3,
+      "minimum": 1,
+      "default": 100
+    }
+  }
+}

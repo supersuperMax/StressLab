@@ -1,10 +1,12 @@
 #include "fem/core/model/mesh.h"
 
+#include "fem/core/model/array_data.h"
 #include "fem/core/model/element_type.h"
 
 #include "common.h"
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 namespace fem::python {
@@ -42,6 +45,9 @@ struct ElementSetRef {
 };
 struct SurfaceRef {
     std::shared_ptr<const model::Surface> surface;
+};
+struct ArrayDataRef {
+    std::shared_ptr<const model::ArrayData> data;
 };
 
 static_assert(sizeof(ElementSide) == 2 * sizeof(Index) && std::is_standard_layout_v<ElementSide>,
@@ -125,6 +131,74 @@ std::shared_ptr<const model::Mesh> make_mesh(nb::handle node_ids, nb::handle x, 
     return std::make_shared<const model::Mesh>(std::move(nodes), std::move(element_blocks));
 }
 
+/// A named array from an array-like object of one or two dimensions, copied: rows of the width of
+/// its second dimension. Floats become float64, integers int32 if they are at most 32 bits wide
+/// (unsigned: 16) and int64 otherwise; anything else is refused.
+model::NamedArray make_named_array(const std::string& name, nb::handle object) {
+    const nb::module_ numpy = nb::module_::import_("numpy");
+    const nb::object array = numpy.attr("asarray")(object);
+    const auto dims = nb::cast<std::size_t>(array.attr("ndim"));
+    if (dims != 1 && dims != 2) {
+        throw nb::value_error(
+            ("array '" + name + "': expected one or two dimensions, got " + std::to_string(dims))
+                .c_str());
+    }
+    const nb::tuple shape = nb::cast<nb::tuple>(array.attr("shape"));
+    const std::size_t width = dims == 2 ? nb::cast<std::size_t>(shape[1]) : 1;
+    const nb::object dtype = array.attr("dtype");
+    const auto kind = nb::cast<std::string>(dtype.attr("kind"));
+    const auto bytes = nb::cast<std::size_t>(dtype.attr("itemsize"));
+    const std::string what = "array '" + name + "'";
+    model::NamedArray::Items items;
+    if (kind == "f") {
+        items = to_vector<double>(array, what.c_str());
+    } else if ((kind == "i" && bytes <= 4) || (kind == "u" && bytes <= 2)) {
+        items = to_vector<std::int32_t>(array, what.c_str());
+    } else if (kind == "i" || kind == "u") {
+        // to_vector checks the range of narrower types only; uint64 would wrap around.
+        if (kind == "u" && bytes == 8 &&
+            nb::cast<bool>(array.attr("__gt__")(nb::int_(std::numeric_limits<std::int64_t>::max()))
+                               .attr("any")()
+                               .attr("item")())) {
+            throw nb::value_error((what + ": a value is out of the range of int64").c_str());
+        }
+        items = to_vector<std::int64_t>(array, what.c_str());
+    } else {
+        throw nb::type_error((what + ": expected integers or numbers, got " +
+                              nb::cast<std::string>(dtype.attr("name")))
+                                 .c_str());
+    }
+    return {name, std::move(items), width};
+}
+
+std::shared_ptr<const model::ArrayData> make_array_data(const nb::dict& arrays) {
+    std::vector<model::NamedArray> list;
+    list.reserve(arrays.size());
+    for (const auto [key, value] : arrays) {
+        if (!nb::isinstance<nb::str>(key)) {
+            throw nb::type_error("the names of arrays are text");
+        }
+        list.push_back(make_named_array(nb::cast<std::string>(key), value));
+    }
+    return std::make_shared<const model::ArrayData>(std::move(list));
+}
+
+/// A read-only view of an array: one dimension for a width of 1, rows otherwise.
+nb::object array_view(const std::shared_ptr<const model::ArrayData>& data,
+                      const model::NamedArray& array) {
+    return std::visit(
+        [&](const auto& items) -> nb::object {
+            using T = typename std::decay_t<decltype(items)>::value_type;
+            if (array.width() == 1) {
+                return nb::cast(view<T, 1>(items.data(), {array.rows()}, data),
+                                nb::rv_policy::automatic);
+            }
+            return nb::cast(view<T, 2>(items.data(), {array.rows(), array.width()}, data),
+                            nb::rv_policy::automatic);
+        },
+        array.items());
+}
+
 }  // namespace
 
 nb::object data_to_python(const std::shared_ptr<const model::ObjectData>& data) {
@@ -139,6 +213,9 @@ nb::object data_to_python(const std::shared_ptr<const model::ObjectData>& data) 
     }
     if (auto surface = std::dynamic_pointer_cast<const model::Surface>(data)) {
         return nb::cast(SurfaceRef{std::move(surface)});
+    }
+    if (auto arrays = std::dynamic_pointer_cast<const model::ArrayData>(data)) {
+        return nb::cast(ArrayDataRef{std::move(arrays)});
     }
     return nb::none();
 }
@@ -156,7 +233,11 @@ std::shared_ptr<const model::ObjectData> data_from_python(nb::handle object) {
     if (nb::isinstance<SurfaceRef>(object)) {
         return nb::cast<const SurfaceRef&>(object).surface;
     }
-    throw nb::type_error("bulk data is a stresslab.Mesh, NodeSet, ElementSet or Surface");
+    if (nb::isinstance<ArrayDataRef>(object)) {
+        return nb::cast<const ArrayDataRef&>(object).data;
+    }
+    throw nb::type_error(
+        "bulk data is a stresslab.Mesh, NodeSet, ElementSet, Surface or ArrayData");
 }
 
 void define_mesh(nb::module_& m) {
@@ -311,6 +392,68 @@ void define_mesh(nb::module_& m) {
                 return view<Index, 2>(data, {self.surface->size(), std::size_t{2}}, self.surface);
             },
             nb::rv_policy::automatic);
+
+    nb::class_<ArrayDataRef>(
+        m, "ArrayData",
+        "Bulk data of an object of a module: named arrays with the same number of rows, such as "
+        "the values of a field of results and the nodes they belong to. Immutable; arrays are "
+        "read-only numpy views of the data in the model, not copies.")
+        .def(
+            "__init__",
+            [](ArrayDataRef* self, const nb::dict& arrays) {
+                new (self) ArrayDataRef{make_array_data(arrays)};
+            },
+            nb::arg("arrays"),
+            "Copies the arrays of `arrays` (name -> array-like of one or two dimensions; the "
+            "second is the width of a row). Names are 1 to 64 ASCII letters, digits and '_'. "
+            "Floats are kept as float64, integers as int32 if they are at most 32 bits wide and "
+            "as int64 otherwise.")
+        .def_prop_ro("rows", [](const ArrayDataRef& self) { return self.data->rows(); })
+        .def_prop_ro(
+            "names",
+            [](const ArrayDataRef& self) {
+                std::vector<std::string> names;
+                for (const model::NamedArray& array : self.data->arrays()) {
+                    names.push_back(array.name());
+                }
+                return names;
+            },
+            "The names of the arrays, sorted.")
+        .def(
+            "dtype",
+            [](const ArrayDataRef& self, const std::string& name) {
+                const model::NamedArray* array = self.data->find(name);
+                if (array == nullptr) {
+                    throw nb::key_error(name.c_str());
+                }
+                return std::string(model::to_string(array->type()));
+            },
+            nb::arg("name"), "The type of the items of an array: int32, int64 or float64.")
+        .def("__len__", [](const ArrayDataRef& self) { return self.data->arrays().size(); })
+        .def("__contains__",
+             [](const ArrayDataRef& self, const std::string& name) {
+                 return self.data->find(name) != nullptr;
+             })
+        .def(
+            "__getitem__",
+            [](const ArrayDataRef& self, const std::string& name) {
+                const model::NamedArray* array = self.data->find(name);
+                if (array == nullptr) {
+                    throw nb::key_error(name.c_str());
+                }
+                return array_view(self.data, *array);
+            },
+            "The array: one dimension if its rows are of width 1, (rows, width) otherwise.")
+        .def("__iter__", [](nb::handle self) { return nb::iter(self.attr("names")); })
+        .def(
+            "__eq__",
+            [](const ArrayDataRef& self, nb::handle other) {
+                return nb::isinstance<ArrayDataRef>(other) &&
+                       nb::cast<const ArrayDataRef&>(other).data == self.data;
+            },
+            nb::is_operator())
+        .def("__hash__",
+             [](const ArrayDataRef& self) { return std::hash<const void*>{}(self.data.get()); });
 }
 
 }  // namespace fem::python

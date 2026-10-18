@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "thickness": {
+      "type": "number",
+      "title": "%shell.thickness%",
+      "x-order": 1,
+      "x-quantity": "length",
+      "exclusiveMinimum": 0
+    },
+    "integrationPoints": {
+      "type": "integer",
+      "title": "%shell.integrationPoints%",
+      "x-order": 2,
+      "minimum": 1,
+      "default": 5
+    },
+    "offset": {
+      "type": "number",
+      "title": "%shell.offset%",
+      "x-order": 3,
+      "description": "%shell.offset.description%",
+      "default": 0,
+      "x-advanced": true
+    },
+    "integration": {
+      "type": "string",
+      "title": "%section.integration%",
+      "enum": [
+        "full",
+        "reduced"
+      ],
+      "x-enumTitles": [
+        "%section.integration.full%",
+        "%section.integration.reduced%"
+      ],
+      "x-order": 10,
+      "default": "full",
+      "description": "%section.integration.description%",
+      "x-advanced": true
+    }
+  },
+  "required": [
+    "thickness"
+  ]
+}

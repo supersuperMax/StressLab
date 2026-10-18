@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "increment": {
+      "type": "integer",
+      "title": "%result.frame.increment%",
+      "x-order": 1,
+      "minimum": 0,
+      "readOnly": true
+    },
+    "time": {
+      "type": "number",
+      "title": "%result.frame.time%",
+      "x-order": 2,
+      "readOnly": true
+    }
+  },
+  "required": [
+    "increment"
+  ]
+}

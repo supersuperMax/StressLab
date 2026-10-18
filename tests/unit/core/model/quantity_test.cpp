@@ -124,6 +124,7 @@ TEST(Quantity, TheUnitOfTheModelIsFoundInTheCatalog) {
     EXPECT_EQ(model_unit_id("temperatureDifference", in), "degF");
     EXPECT_EQ(model_unit_id("thermalExpansion", in), "1/degF");
     EXPECT_EQ(model_unit_id("angle", mm), "rad");
+    EXPECT_EQ(model_unit_id("strain", in), "ratio");
     // mm-kg-ms: stress in GPa, force in kN, velocity in mm/ms = m/s.
     const UnitSystem explicit_dynamics = UnitSystem::mm_kg_ms();
     EXPECT_EQ(model_unit_id("pressure", explicit_dynamics), "GPa");

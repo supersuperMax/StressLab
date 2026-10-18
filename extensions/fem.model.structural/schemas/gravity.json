@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "acceleration": {
+      "type": "number",
+      "title": "%gravity.acceleration%",
+      "x-order": 1,
+      "x-quantity": "acceleration",
+      "minimum": 0
+    },
+    "direction": {
+      "type": "object",
+      "title": "%gravity.direction%",
+      "additionalProperties": false,
+      "x-order": 2,
+      "properties": {
+        "x": {
+          "type": "number",
+          "title": "%axis.x%",
+          "default": 0.0,
+          "x-order": 1
+        },
+        "y": {
+          "type": "number",
+          "title": "%axis.y%",
+          "default": 0.0,
+          "x-order": 2
+        },
+        "z": {
+          "type": "number",
+          "title": "%axis.z%",
+          "default": -1.0,
+          "x-order": 3
+        }
+      },
+      "description": "%gravity.direction.description%"
+    }
+  },
+  "required": [
+    "acceleration"
+  ]
+}

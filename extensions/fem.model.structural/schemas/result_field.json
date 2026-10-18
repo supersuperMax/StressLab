@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "position": {
+      "type": "string",
+      "title": "%result.field.position%",
+      "enum": [
+        "nodal",
+        "element",
+        "integrationPoint",
+        "elementNodal"
+      ],
+      "x-enumTitles": [
+        "%result.field.position.nodal%",
+        "%result.field.position.element%",
+        "%result.field.position.integrationPoint%",
+        "%result.field.position.elementNodal%"
+      ],
+      "x-order": 1,
+      "readOnly": true
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "%result.field.components%",
+      "readOnly": true,
+      "x-order": 2
+    },
+    "quantity": {
+      "type": "string",
+      "title": "%result.field.quantity%",
+      "description": "%result.field.quantity.description%",
+      "readOnly": true,
+      "x-order": 3
+    }
+  },
+  "required": [
+    "position",
+    "components"
+  ]
+}

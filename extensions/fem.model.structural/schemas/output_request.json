@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "displacement": {
+      "type": "boolean",
+      "title": "%output.displacement%",
+      "default": true,
+      "x-order": 1
+    },
+    "reactionForce": {
+      "type": "boolean",
+      "title": "%output.reactionForce%",
+      "default": true,
+      "x-order": 2
+    },
+    "stress": {
+      "type": "boolean",
+      "title": "%output.stress%",
+      "default": true,
+      "x-order": 3
+    },
+    "strain": {
+      "type": "boolean",
+      "title": "%output.strain%",
+      "default": false,
+      "x-order": 4
+    },
+    "destination": {
+      "type": "string",
+      "title": "%output.destination%",
+      "enum": [
+        "results",
+        "table"
+      ],
+      "x-enumTitles": [
+        "%output.destination.results%",
+        "%output.destination.table%"
+      ],
+      "x-order": 5,
+      "default": "results",
+      "description": "%output.destination.description%"
+    },
+    "frequency": {
+      "type": "integer",
+      "title": "%output.frequency%",
+      "x-order": 6,
+      "minimum": 1,
+      "default": 1,
+      "x-advanced": true
+    }
+  }
+}

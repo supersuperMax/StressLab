@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "magnitude": {
+      "type": "number",
+      "title": "%pressure.magnitude%",
+      "x-order": 1,
+      "description": "%pressure.magnitude.description%",
+      "x-quantity": "pressure"
+    }
+  },
+  "required": [
+    "magnitude"
+  ]
+}

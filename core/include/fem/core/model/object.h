@@ -39,7 +39,8 @@ struct NewObject {
     Properties properties = Properties::object();
     ObjectId parent{};  ///< Invalid id for a root object.
     std::vector<ObjectId> dependencies{};
-    /// Bulk data. Only core types have it for now; a set must be a child of its mesh.
+    /// Bulk data. Core types have their own (a set must be a child of its mesh); types of modules
+    /// have none or an `ArrayData`.
     std::shared_ptr<const ObjectData> data{};
 };
 

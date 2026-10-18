@@ -123,7 +123,8 @@ TEST(StorageRoundTrip, Surfaces) {
     });
 }
 
-/// Objects of modules: a random tree with random properties and dependencies, some removed (ids
+/// Objects of modules: a random tree with random properties, named arrays (task 3.1) and
+/// dependencies, some removed (ids
 /// with gaps, missing dependencies), some renamed, in a unit system of its own.
 void build_module_objects(TestDocument& doc, Random& random) {
     doc.document.set_owner_enabled(module, true);
@@ -135,6 +136,9 @@ void build_module_objects(TestDocument& doc, Random& random) {
             random.chance(0.7) ? random.text() + "#" + std::to_string(i) : "");
         init.schema_version = static_cast<std::uint32_t>(random.integer(1, 4));
         init.properties = random.object(3);
+        if (random.chance(0.3)) {
+            init.data = random.array_data();
+        }
         if (!objects.empty() && random.chance(0.5)) {
             init.parent = objects[static_cast<std::size_t>(
                 random.integer(0, static_cast<int>(objects.size()) - 1))];

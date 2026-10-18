@@ -91,7 +91,7 @@ struct ActivationEvent {
 ///     ...
 ///
 /// A module without `kind` and `entry` has no code: it contributes only what needs none (menus for
-/// commands of other modules, keybindings, settings, translations).
+/// commands of other modules, keybindings, settings, translations, object types with their forms).
 struct Manifest {
     std::filesystem::path file;  ///< Where it was read from; empty if parsed from text.
     std::string id;
@@ -115,7 +115,8 @@ struct Manifest {
 /// missing required keys are errors; all of them are reported at once by ManifestError, with lines
 /// and columns. If the `engine` range of the module does not accept `engine`, only the id, name,
 /// version and engine are checked and `contributes` stays empty: a module for another version of
-/// the platform may use keys this one does not know. `file` is only used in messages.
+/// the platform may use keys this one does not know. `file` is used in messages, and the files of
+/// `propertySchemas` given by path are read relative to its folder.
 [[nodiscard]] Manifest parse_manifest(std::string_view text, const Version& engine,
                                       const std::filesystem::path& file = {});
 

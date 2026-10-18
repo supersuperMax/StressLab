@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "shape": {
+      "type": "string",
+      "title": "%beam.shape%",
+      "enum": [
+        "rectangle",
+        "circle",
+        "pipe"
+      ],
+      "x-enumTitles": [
+        "%beam.shape.rectangle%",
+        "%beam.shape.circle%",
+        "%beam.shape.pipe%"
+      ],
+      "x-order": 1
+    },
+    "width": {
+      "type": "number",
+      "title": "%beam.width%",
+      "x-order": 2,
+      "description": "%beam.width.description%",
+      "x-quantity": "length",
+      "exclusiveMinimum": 0
+    },
+    "height": {
+      "type": "number",
+      "title": "%beam.height%",
+      "x-order": 3,
+      "description": "%beam.height.description%",
+      "x-quantity": "length",
+      "exclusiveMinimum": 0
+    },
+    "radius": {
+      "type": "number",
+      "title": "%beam.radius%",
+      "x-order": 4,
+      "description": "%beam.radius.description%",
+      "x-quantity": "length",
+      "exclusiveMinimum": 0
+    },
+    "wallThickness": {
+      "type": "number",
+      "title": "%beam.wallThickness%",
+      "x-order": 5,
+      "description": "%beam.wallThickness.description%",
+      "x-quantity": "length",
+      "exclusiveMinimum": 0
+    },
+    "direction": {
+      "type": "object",
+      "title": "%beam.direction%",
+      "additionalProperties": false,
+      "x-order": 6,
+      "properties": {
+        "x": {
+          "type": "number",
+          "title": "%axis.x%",
+          "default": 0.0,
+          "x-order": 1
+        },
+        "y": {
+          "type": "number",
+          "title": "%axis.y%",
+          "default": 0.0,
+          "x-order": 2
+        },
+        "z": {
+          "type": "number",
+          "title": "%axis.z%",
+          "default": -1.0,
+          "x-order": 3
+        }
+      },
+      "description": "%beam.direction.description%"
+    }
+  },
+  "required": [
+    "shape"
+  ]
+}
