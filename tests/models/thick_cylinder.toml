@@ -1,0 +1,59 @@
+# Golden model: thick-walled cylinder under internal pressure, Lamé (tests/models/README.md).
+title = "Thick-walled cylinder under internal pressure, C3D20"
+problem = "thick_cylinder"
+element = "C3D20"
+model = "thick_cylinder.inp"
+
+[units]
+length = "mm"
+mass = "t"
+time = "s"
+temperature = "degC"
+
+# A cylinder with the axis z, inner radius a, outer radius b, under the pressure p on the inner face.
+# A quarter of a slice t long is modelled: x >= 0, y >= 0, symmetry on x = 0 and y = 0, and both end
+# faces held along z (plane strain, the ends of a long cylinder).
+[parameters]
+a = 50.0
+b = 100.0
+t = 10.0
+E = 210000.0
+nu = 0.3
+p = 100.0
+
+# Elements through the wall, along the quarter circle and along z.
+[mesh]
+radial = 8
+around = 16
+axial = 1
+
+# On the x axis the hoop stress is S22 and the radial displacement is U1.
+[[checks]]
+name = "hoop stress at the inner face"
+field = "S"
+component = "S22"
+box = [[50.0, 0.0, 0.0], [50.0, 0.0, 10.0]]
+reduce = "mean"
+formula = "p * (b**2 + a**2) / (b**2 - a**2)"
+expected = 166.667
+rel_tol = 0.02
+
+[[checks]]
+name = "hoop stress at the outer face"
+field = "S"
+component = "S22"
+box = [[100.0, 0.0, 0.0], [100.0, 0.0, 10.0]]
+reduce = "mean"
+formula = "2 * p * a**2 / (b**2 - a**2)"
+expected = 66.6667
+rel_tol = 0.02
+
+[[checks]]
+name = "radial displacement of the inner face"
+field = "U"
+component = "U1"
+box = [[50.0, 0.0, 0.0], [50.0, 0.0, 10.0]]
+reduce = "mean"
+formula = "(1 + nu) * p * a**2 / (E * (b**2 - a**2)) * ((1 - 2 * nu) * a + b**2 / a)"
+expected = 0.0453968
+rel_tol = 0.01

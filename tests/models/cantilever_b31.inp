@@ -1,0 +1,70 @@
+*HEADING
+StressLab golden model cantilever_b31: Cantilever beam, tip load, B31
+** Written by tests/models/generate.py from cantilever_b31.toml; do not edit by hand.
+** Units: mm, t, s (N, MPa).
+*NODE
+1, 0., 0., 0.
+2, 10., 0., 0.
+3, 20., 0., 0.
+4, 30., 0., 0.
+5, 40., 0., 0.
+6, 50., 0., 0.
+7, 60., 0., 0.
+8, 70., 0., 0.
+9, 80., 0., 0.
+10, 90., 0., 0.
+11, 100., 0., 0.
+12, 110., 0., 0.
+13, 120., 0., 0.
+14, 130., 0., 0.
+15, 140., 0., 0.
+16, 150., 0., 0.
+17, 160., 0., 0.
+18, 170., 0., 0.
+19, 180., 0., 0.
+20, 190., 0., 0.
+21, 200., 0., 0.
+*ELEMENT, TYPE=B31, ELSET=BEAM
+1, 1, 2
+2, 2, 3
+3, 3, 4
+4, 4, 5
+5, 5, 6
+6, 6, 7
+7, 7, 8
+8, 8, 9
+9, 9, 10
+10, 10, 11
+11, 11, 12
+12, 12, 13
+13, 13, 14
+14, 14, 15
+15, 15, 16
+16, 16, 17
+17, 17, 18
+18, 18, 19
+19, 19, 20
+20, 20, 21
+*NSET, NSET=ROOT
+1
+*NSET, NSET=TIP
+21
+*MATERIAL, NAME=STEEL
+*ELASTIC
+210000., 0.3
+*BEAM SECTION, ELSET=BEAM, MATERIAL=STEEL, SECTION=RECT
+10., 10.
+0., 0., -1.
+*BOUNDARY
+ROOT, ENCASTRE
+*STEP, NAME=LOAD
+*STATIC
+1., 1.
+*CLOAD
+TIP, 3, -100.
+*OUTPUT, FIELD
+*NODE OUTPUT
+U, RF
+*ELEMENT OUTPUT
+S
+*END STEP

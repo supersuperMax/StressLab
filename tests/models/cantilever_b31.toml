@@ -1,0 +1,42 @@
+# Golden model: cantilever beam with a tip load, linear beam elements (tests/models/README.md).
+title = "Cantilever beam, tip load, B31"
+problem = "cantilever"
+element = "B31"
+model = "cantilever_b31.inp"
+
+[units]
+length = "mm"
+mass = "t"
+time = "s"
+temperature = "degC"
+
+# Length L along x, rectangular section b (along y) by h (along z) on the x axis.
+# The end x = 0 is clamped; the force P acts along -z on the node x = L.
+[parameters]
+L = 200.0
+b = 10.0
+h = 10.0
+E = 210000.0
+nu = 0.3
+P = 100.0
+
+[mesh]
+divisions = [20]
+
+[[checks]]
+name = "tip deflection"
+field = "U"
+component = "U3"
+point = [200.0, 0.0, 0.0]
+formula = "-P * L**3 / (3 * E * b * h**3 / 12)"
+expected = -1.52381
+rel_tol = 0.02
+
+[[checks]]
+name = "support reaction"
+field = "RF"
+component = "RF3"
+point = [0.0, 0.0, 0.0]
+formula = "P"
+expected = 100.0
+rel_tol = 0.001

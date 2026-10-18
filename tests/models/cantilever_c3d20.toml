@@ -1,0 +1,44 @@
+# Golden model: cantilever beam with a tip load, quadratic hexahedra (tests/models/README.md).
+title = "Cantilever beam, tip load, C3D20"
+problem = "cantilever"
+element = "C3D20"
+model = "cantilever_c3d20.inp"
+
+[units]
+length = "mm"
+mass = "t"
+time = "s"
+temperature = "degC"
+
+# Length L along x, rectangular section b (along y) by h (along z), centred on the x axis.
+# The end x = 0 is clamped; the force P acts along -z on the end x = L, shared equally by its nodes.
+[parameters]
+L = 200.0
+b = 10.0
+h = 10.0
+E = 210000.0
+nu = 0.3
+P = 100.0
+
+[mesh]
+divisions = [20, 2, 2]
+
+[[checks]]
+name = "tip deflection"
+field = "U"
+component = "U3"
+box = [[200.0, -5.0, -5.0], [200.0, 5.0, 5.0]]
+reduce = "mean"
+formula = "-P * L**3 / (3 * E * b * h**3 / 12)"
+expected = -1.52381
+rel_tol = 0.02
+
+[[checks]]
+name = "support reaction"
+field = "RF"
+component = "RF3"
+box = [[0.0, -5.0, -5.0], [0.0, 5.0, 5.0]]
+reduce = "sum"
+formula = "P"
+expected = 100.0
+rel_tol = 0.001
