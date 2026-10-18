@@ -1,0 +1,85 @@
+{
+  "about": "Properties of the object types of fem.model.structural (task 3.1), in mm-t-s. Every 'valid' sample fits the schema of its type without problems; every 'invalid' one has exactly the listed problems (codes of fem::form::ProblemCode).",
+  "valid": {
+    "material": [
+      {"youngsModulus": 210000.0, "poissonsRatio": 0.3, "density": 7.85e-09},
+      {"youngsModulus": 70000.0, "poissonsRatio": 0.33},
+      {"youngsModulus": 1.0, "poissonsRatio": -0.5, "density": 0.0}
+    ],
+    "solid_section": [
+      {},
+      {"integration": "reduced"}
+    ],
+    "shell_section": [
+      {"thickness": 2.0},
+      {"thickness": 0.5, "integrationPoints": 3, "offset": 0.5, "integration": "reduced"}
+    ],
+    "beam_section": [
+      {"shape": "rectangle", "width": 10.0, "height": 20.0, "direction": {"x": 0.0, "y": 0.0, "z": -1.0}},
+      {"shape": "circle", "radius": 5.0},
+      {"shape": "pipe", "radius": 25.0, "wallThickness": 2.5, "direction": {"x": 0.0, "y": 1.0, "z": 0.0}}
+    ],
+    "static_step": [
+      {},
+      {"timePeriod": 1.0, "initialIncrement": 0.1, "maxIncrements": 1000}
+    ],
+    "boundary_condition": [
+      {"ux": 0.0, "uy": 0.0, "uz": 0.0, "rx": 0.0, "ry": 0.0, "rz": 0.0},
+      {"uz": -0.5},
+      {}
+    ],
+    "concentrated_load": [
+      {"fz": -1000.0},
+      {"fx": 1.5, "fy": -2.5, "fz": 0.0, "mx": 100.0, "my": 0.0, "mz": -3e+05}
+    ],
+    "pressure": [
+      {"magnitude": 10.0},
+      {"magnitude": -0.25}
+    ],
+    "gravity": [
+      {"acceleration": 9810.0, "direction": {"x": 0.0, "y": 0.0, "z": -1.0}},
+      {"acceleration": 9.81}
+    ],
+    "output_request": [
+      {},
+      {"displacement": true, "reactionForce": true, "stress": true, "strain": true, "destination": "table", "frequency": 5}
+    ],
+    "result_step": [
+      {"number": 1, "procedure": "static"}
+    ],
+    "result_frame": [
+      {"increment": 1, "time": 1.0},
+      {"increment": 0}
+    ],
+    "result_field": [
+      {"position": "nodal", "components": ["U1", "U2", "U3"], "quantity": "length"},
+      {"position": "element", "components": ["MISES"], "quantity": "pressure"},
+      {"position": "integrationPoint", "components": ["S11", "S22", "S33", "S12", "S13", "S23"], "quantity": "pressure"},
+      {"position": "elementNodal", "components": ["E11", "E22", "E33", "E12", "E13", "E23"], "quantity": "strain"}
+    ]
+  },
+  "invalid": [
+    {"type": "material", "properties": {"poissonsRatio": 0.5, "youngsModulus": 0.0},
+     "problems": [["youngsModulus", "belowMinimum"], ["poissonsRatio", "aboveMaximum"]]},
+    {"type": "material", "properties": {"youngsModulus": "steel"},
+     "problems": [["youngsModulus", "wrongType"], ["poissonsRatio", "required"]]},
+    {"type": "material", "properties": {"youngsModulus": 1.0, "poissonsRatio": -1.0, "density": -1.0},
+     "problems": [["poissonsRatio", "belowMinimum"], ["density", "belowMinimum"]]},
+    {"type": "shell_section", "properties": {"integrationPoints": 0},
+     "problems": [["thickness", "required"], ["integrationPoints", "belowMinimum"]]},
+    {"type": "shell_section", "properties": {"thickness": 1.0, "integrationPoints": 2.5},
+     "problems": [["integrationPoints", "wrongType"]]},
+    {"type": "beam_section", "properties": {"shape": "I-beam", "width": -1.0},
+     "problems": [["shape", "notInEnum"], ["width", "belowMinimum"]]},
+    {"type": "solid_section", "properties": {"material": "steel"},
+     "problems": [["material", "unknownProperty"]]},
+    {"type": "gravity", "properties": {"acceleration": -9.81, "direction": {"x": 0.0, "w": 1.0}},
+     "problems": [["acceleration", "belowMinimum"], ["direction/w", "unknownProperty"]]},
+    {"type": "pressure", "properties": {},
+     "problems": [["magnitude", "required"]]},
+    {"type": "output_request", "properties": {"destination": "screen", "frequency": 0},
+     "problems": [["destination", "notInEnum"], ["frequency", "belowMinimum"]]},
+    {"type": "result_field", "properties": {"position": "face", "components": ["U1"]},
+     "problems": [["position", "notInEnum"]]}
+  ]
+}

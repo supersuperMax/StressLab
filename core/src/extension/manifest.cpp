@@ -400,6 +400,10 @@ private:
                 std::string_view what);
     std::optional<command::Value> to_value(const toml::node& node);
     std::optional<nlohmann::json> to_json(const toml::node& node);
+    /// The JSON Schema of the file `path` names, relative to the folder of the manifest; nothing
+    /// (and an error) if the path is not one inside the module or the file is not a JSON object.
+    std::optional<nlohmann::json> schema_file(const toml::value<std::string>& path,
+                                              const std::string& type);
 
     const Version& engine_;
     std::filesystem::path file_;
@@ -737,6 +741,34 @@ std::string Parser::id(Fields& fields, std::string_view key, bool (*valid)(std::
 
 std::string Parser::path(Fields& fields, std::string_view key, bool required) {
     return id(fields, key, is_relative_path, path_rule, required);
+}
+
+std::optional<nlohmann::json> Parser::schema_file(const toml::value<std::string>& path,
+                                                  const std::string& type) {
+    const std::string& relative = path.get();
+    const std::string what = "property schema of type '" + type + "'";
+    if (!is_relative_path(relative)) {
+        error(path.source(),
+              "invalid file '" + relative + "' of the " + what + ": " + std::string(path_rule));
+        return std::nullopt;
+    }
+    const std::filesystem::path file = file_.parent_path() / std::filesystem::path(std::u8string(
+                                                                 relative.begin(), relative.end()));
+    std::string text;
+    try {
+        text = detail::read_file(file);
+    } catch (const ExtensionError& failure) {
+        error(path.source(),
+              "cannot read the file '" + relative + "' of the " + what + ": " + failure.what());
+        return std::nullopt;
+    }
+    nlohmann::json json = nlohmann::json::parse(text, nullptr, false);
+    if (json.is_discarded() || !json.is_object()) {
+        error(path.source(),
+              "the file '" + relative + "' of the " + what + " is not a JSON object");
+        return std::nullopt;
+    }
+    return json;
 }
 
 std::optional<context::WhenExpression> Parser::when(Fields& fields, std::string_view key) {
@@ -1184,8 +1216,17 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
                 }
             }
             if (const toml::node* value = fields.require("schema")) {
+                std::optional<nlohmann::json> json;
                 if (value->is_table()) {
-                    schema.schema = to_json(*value).value_or(nlohmann::json::object());
+                    json = to_json(*value);
+                } else if (value->is_string()) {
+                    json = schema_file(*value->as_string(), schema.type);
+                } else {
+                    wrong_type(*value, "schema", where,
+                               "a table with a JSON Schema or the path of a JSON file");
+                }
+                if (json) {
+                    schema.schema = std::move(*json);
                     std::vector<form::SchemaError> problems;
                     (void)form::parse(schema.schema, &problems);
                     for (const form::SchemaError& problem : problems) {
@@ -1195,8 +1236,6 @@ void Parser::parse_contributes(const toml::table& table, Contributions& out) {
                                                         : ", property '" + problem.pointer + "'") +
                                                    ": " + problem.message);
                     }
-                } else {
-                    wrong_type(*value, "schema", where, "a table with a JSON Schema");
                 }
             }
             fields.finish();

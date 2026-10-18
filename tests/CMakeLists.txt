@@ -33,6 +33,7 @@ add_executable(
     unit/core/extension/profile_test.cpp
     unit/core/extension/registry_test.cpp
     unit/core/extension/semver_test.cpp
+    unit/core/extension/structural_module_test.cpp
     unit/core/extension/uninstall_test.cpp
     unit/core/extension/user_modules_test.cpp
     unit/core/form/form_test.cpp
@@ -46,6 +47,7 @@ add_executable(
     unit/core/l10n/core_catalogs_test.cpp
     unit/core/l10n/localization_test.cpp
     unit/core/log/log_test.cpp
+    unit/core/model/array_data_test.cpp
     unit/core/model/dependency_test.cpp
     unit/core/model/document_test.cpp
     unit/core/model/element_type_test.cpp
@@ -96,7 +98,8 @@ add_executable(
     unit/storage/repository_test.cpp
     unit/storage/result_cache_test.cpp
     unit/storage/round_trip_property_test.cpp
-    unit/storage/session_test.cpp)
+    unit/storage/session_test.cpp
+    unit/storage/structural_round_trip_test.cpp)
 # miniz makes the damaged and hostile packages the tests of task 2.5 unpack.
 find_package(miniz CONFIG REQUIRED)
 target_link_libraries(fem_storage_tests PRIVATE fem::storage miniz::miniz GTest::gtest_main)

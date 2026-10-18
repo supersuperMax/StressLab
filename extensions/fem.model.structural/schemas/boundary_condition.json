@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ux": {
+      "type": "number",
+      "title": "%bc.ux%",
+      "x-order": 1,
+      "description": "%bc.ux.description%",
+      "x-quantity": "length"
+    },
+    "uy": {
+      "type": "number",
+      "title": "%bc.uy%",
+      "x-order": 2,
+      "description": "%bc.uy.description%",
+      "x-quantity": "length"
+    },
+    "uz": {
+      "type": "number",
+      "title": "%bc.uz%",
+      "x-order": 3,
+      "description": "%bc.uz.description%",
+      "x-quantity": "length"
+    },
+    "rx": {
+      "type": "number",
+      "title": "%bc.rx%",
+      "x-order": 4,
+      "description": "%bc.rx.description%",
+      "x-quantity": "angle",
+      "x-advanced": true
+    },
+    "ry": {
+      "type": "number",
+      "title": "%bc.ry%",
+      "x-order": 5,
+      "description": "%bc.ry.description%",
+      "x-quantity": "angle",
+      "x-advanced": true
+    },
+    "rz": {
+      "type": "number",
+      "title": "%bc.rz%",
+      "x-order": 6,
+      "description": "%bc.rz.description%",
+      "x-quantity": "angle",
+      "x-advanced": true
+    }
+  }
+}

@@ -32,6 +32,7 @@ from typing import Any
 import _stresslab as _native
 from _stresslab import (
     ArgSpec,
+    ArrayData,
     ClosedError,
     CommandContext,
     CommandError,
@@ -90,6 +91,7 @@ Document.commands = property(  # type: ignore[attr-defined]
 
 __all__ = [
     "ArgSpec",
+    "ArrayData",
     "ClosedError",
     "CommandContext",
     "CommandError",

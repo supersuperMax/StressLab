@@ -1,0 +1,143 @@
+# The types of a structural model and of its results (task 3.1 of docs/plan.md,
+# docs/adr/0023-structural-model-and-results-ir.md, docs/extensions/fem.model.structural.md).
+# The module has no code: it gives the types their names in the model tree and their forms.
+# Importers, solvers and the viewer read and write objects of these types; while the module is
+# disabled they stay in the model as opaque objects.
+
+[extension]
+id = "fem.model.structural"
+name = "%name%"
+description = "%description%"
+author = "StressLab"
+version = "1.0.0"
+engine = "^0.1"
+
+# Objects of the model and their places in the tree (docs/extensions/fem.model.structural.md):
+# materials and sections at the root, loads, boundary conditions and output requests under the
+# static step they act in (a boundary condition at the root acts in every step). References between
+# objects (a section to its material and element set) are dependencies of the model.
+
+[[contributes.treeNodeTypes]]
+type = "material"
+title = "%node.material%"
+
+[[contributes.treeNodeTypes]]
+type = "solid_section"
+title = "%node.solid_section%"
+
+[[contributes.treeNodeTypes]]
+type = "shell_section"
+title = "%node.shell_section%"
+
+[[contributes.treeNodeTypes]]
+type = "beam_section"
+title = "%node.beam_section%"
+
+[[contributes.treeNodeTypes]]
+type = "static_step"
+title = "%node.static_step%"
+
+[[contributes.treeNodeTypes]]
+type = "boundary_condition"
+title = "%node.boundary_condition%"
+
+[[contributes.treeNodeTypes]]
+type = "concentrated_load"
+title = "%node.concentrated_load%"
+
+[[contributes.treeNodeTypes]]
+type = "pressure"
+title = "%node.pressure%"
+
+[[contributes.treeNodeTypes]]
+type = "gravity"
+title = "%node.gravity%"
+
+[[contributes.treeNodeTypes]]
+type = "output_request"
+title = "%node.output_request%"
+
+[[contributes.treeNodeTypes]]
+type = "result_step"
+title = "%node.result_step%"
+
+[[contributes.treeNodeTypes]]
+type = "result_frame"
+title = "%node.result_frame%"
+
+[[contributes.treeNodeTypes]]
+type = "result_field"
+title = "%node.result_field%"
+
+[[contributes.propertySchemas]]
+type = "material"
+version = 1
+schema = "schemas/material.json"
+
+[[contributes.propertySchemas]]
+type = "solid_section"
+version = 1
+schema = "schemas/solid_section.json"
+
+[[contributes.propertySchemas]]
+type = "shell_section"
+version = 1
+schema = "schemas/shell_section.json"
+
+[[contributes.propertySchemas]]
+type = "beam_section"
+version = 1
+schema = "schemas/beam_section.json"
+
+[[contributes.propertySchemas]]
+type = "static_step"
+version = 1
+schema = "schemas/static_step.json"
+
+[[contributes.propertySchemas]]
+type = "boundary_condition"
+version = 1
+schema = "schemas/boundary_condition.json"
+
+[[contributes.propertySchemas]]
+type = "concentrated_load"
+version = 1
+schema = "schemas/concentrated_load.json"
+
+[[contributes.propertySchemas]]
+type = "pressure"
+version = 1
+schema = "schemas/pressure.json"
+
+[[contributes.propertySchemas]]
+type = "gravity"
+version = 1
+schema = "schemas/gravity.json"
+
+[[contributes.propertySchemas]]
+type = "output_request"
+version = 1
+schema = "schemas/output_request.json"
+
+[[contributes.propertySchemas]]
+type = "result_step"
+version = 1
+schema = "schemas/result_step.json"
+
+[[contributes.propertySchemas]]
+type = "result_frame"
+version = 1
+schema = "schemas/result_frame.json"
+
+[[contributes.propertySchemas]]
+type = "result_field"
+version = 1
+schema = "schemas/result_field.json"
+
+[[contributes.localization]]
+language = "en"
+path = "l10n/en.json"
+
+[[contributes.localization]]
+language = "ru"
+path = "l10n/ru.json"

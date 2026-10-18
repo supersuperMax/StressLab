@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -322,6 +323,90 @@ TEST(Manifest, MissingFileIsAnIoError) {
     EXPECT_EXTENSION_ERROR(
         static_cast<void>(load_manifest(fixtures() / "no-such-module" / "x.toml", engine)),
         ExtensionErrc::io);
+}
+
+/// A module folder with a manifest and files of property schemas, in a folder whose name has
+/// Cyrillic letters and spaces.
+class SchemaFiles : public ::testing::Test {
+protected:
+    void SetUp() override {
+        std::filesystem::remove_all(root);
+        std::filesystem::create_directories(folder / "schemas");
+    }
+    void TearDown() override { std::filesystem::remove_all(root); }
+
+    void write(const std::filesystem::path& relative, std::string_view text) const {
+        std::ofstream(folder / relative, std::ios::binary) << text;
+    }
+
+    /// The manifest of a module with one property schema whose `schema` is `value`.
+    [[nodiscard]] std::filesystem::path module(std::string_view value) const {
+        write(std::string(manifest_file_name),
+              std::string(header_without_code) +
+                  "[[contributes.propertySchemas]]\ntype = \"material\"\nschema = " +
+                  std::string(value) + "\n");
+        return folder / std::string(manifest_file_name);
+    }
+
+    /// The diagnostics of the manifest of `module(value)`, which must not parse.
+    [[nodiscard]] std::vector<ManifestDiagnostic> problems(std::string_view value) const {
+        try {
+            static_cast<void>(load_manifest(module(value), engine));
+        } catch (const ManifestError& error) {
+            return error.diagnostics();
+        }
+        ADD_FAILURE() << "The manifest parsed with schema = " << value;
+        return {};
+    }
+
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / std::filesystem::path(u8"stresslab схемы модулей");
+    const std::filesystem::path folder = root / std::filesystem::path(u8"мой модуль");
+};
+
+TEST_F(SchemaFiles, SchemaIsReadFromAFileOfTheModule) {
+    write("schemas/material.json",
+          R"({"type": "object", "required": ["E"],
+              "properties": {"E": {"type": "number", "title": "%E%", "x-quantity": "pressure"}}})");
+    const Manifest manifest = load_manifest(module("\"schemas/material.json\""), engine);
+    ASSERT_EQ(manifest.contributes.property_schemas.size(), 1U);
+    const nlohmann::json& schema = manifest.contributes.property_schemas[0].schema;
+    EXPECT_EQ(schema.at("required"), nlohmann::json::array({"E"}));
+    EXPECT_EQ(schema.at("properties").at("E").at("x-quantity"), "pressure");
+}
+
+TEST_F(SchemaFiles, ProblemsOfTheFileAreReportedAtTheKey) {
+    write("schemas/broken.json", "{\"type\": \"object\",");
+    write("schemas/list.json", "[1, 2]");
+    write("schemas/stiff.json",
+          R"({"type": "object", "properties": {"E": {"type": "number", "x-quantity": "stiff"}}})");
+    struct Case {
+        const char* value;
+        std::string message;
+    };
+    const std::vector<Case> cases = {
+        {"\"schemas/none.json\"",
+         "cannot read the file 'schemas/none.json' of the property schema of type 'material'"},
+        {"\"schemas/broken.json\"",
+         "the file 'schemas/broken.json' of the property schema of type 'material' is not a JSON "
+         "object"},
+        {"\"schemas/list.json\"", "is not a JSON object"},
+        {"\"schemas/stiff.json\"",
+         "property schema of type 'material', property 'E': unknown quantity \"stiff\""},
+        {"\"../outside.json\"", "invalid file '../outside.json' of the property schema"},
+        {"\"C:/schemas/material.json\"", "invalid file 'C:/schemas/material.json'"},
+        {"5",
+         "'schema' in [[contributes.propertySchemas]] must be a table with a JSON Schema or "
+         "the path of a JSON file, not an integer"},
+    };
+    for (const Case& c : cases) {
+        SCOPED_TRACE(c.value);
+        const std::vector<ManifestDiagnostic> found = problems(c.value);
+        ASSERT_EQ(found.size(), 1U);
+        EXPECT_EQ(found[0].line, 8U);
+        EXPECT_EQ(found[0].column, 10U);
+        EXPECT_NE(found[0].message.find(c.message), std::string::npos) << found[0].message;
+    }
 }
 
 struct ErrorCase {

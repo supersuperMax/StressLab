@@ -88,7 +88,9 @@ struct ContextToolbarContribution {
     std::string group;
 };
 
-/// `propertySchemas`: the property form of an object type of the module (JSON Schema).
+/// `propertySchemas`: the property form of an object type of the module (JSON Schema). The manifest
+/// gives the schema as a table or as the path of a JSON file in the module folder
+/// (`schema = "schemas/material.json"`); either way it is read when the manifest is parsed.
 struct PropertySchemaContribution {
     std::string owner;
     std::string type;           ///< Object type in the Model IR.

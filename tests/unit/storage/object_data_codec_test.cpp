@@ -1,11 +1,13 @@
 #include "fem/storage/object_data_codec.h"
 
+#include "fem/core/model/array_data.h"
 #include "fem/storage/error.h"
 
 #include "storage_test_support.h"
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <vector>
 
@@ -249,6 +251,142 @@ TEST(StorageObjectData, RefusesDamagedPieces) {
     Bytes unknown = good;
     unknown[first_piece] ^= std::byte{1};
     EXPECT_EQ(decode_error(unknown, blobs), ProjectErrc::missing_blob);
+}
+
+// --- Named arrays of modules (task 3.1) ----------------------------------------------------------
+
+/// Named arrays of `rows` rows: int32 nodes, int64 labels and float64 values of width 6.
+std::shared_ptr<const model::ArrayData> named_arrays(std::size_t rows) {
+    std::vector<std::int32_t> node(rows);
+    std::vector<std::int64_t> label(rows);
+    std::vector<double> values(rows * 6);
+    for (std::size_t i = 0; i < rows; ++i) {
+        node[i] = static_cast<std::int32_t>(i * 3);
+        label[i] = static_cast<std::int64_t>(i) + (std::int64_t{1} << 40);
+        for (std::size_t c = 0; c < 6; ++c) {
+            values[i * 6 + c] = static_cast<double>(i) * 0.25 - static_cast<double>(c);
+        }
+    }
+    std::vector<model::NamedArray> arrays;
+    arrays.emplace_back("values", std::move(values), 6);
+    arrays.emplace_back("node", std::move(node));
+    arrays.emplace_back("label", std::move(label));
+    return std::make_shared<const model::ArrayData>(std::move(arrays));
+}
+
+TEST(StorageObjectData, SmallNamedArraysAreOneLittleEndianTable) {
+    std::vector<model::NamedArray> arrays;
+    arrays.emplace_back("n", std::vector<std::int32_t>{5});
+    MemoryBlobStore blobs;
+    const std::string ref = put_object_data(model::ArrayData(std::move(arrays)), blobs);
+    EXPECT_EQ(blobs.size(), 1U);
+    EXPECT_EQ(blobs.get(ref), bytes({'S', 'L', 'D', 'A', 'T', 'A', 0, 0,  // magic
+                                     2,   0,   0,   0,                    // codec version
+                                     6,   0,   0,   0,                    // named arrays
+                                     1,   0,   0,   0,   0,   0,   0, 0,  // one array
+                                     1,   0,   0,   0,   'n',             // its name
+                                     1,   0,   0,   0,                    // int32
+                                     1,   0,   0,   0,                    // width
+                                     1,   0,   0,   0,   0,   0,   0, 0,  // count
+                                     0,   0,   0,   0,                    // inline items
+                                     5,   0,   0,   0}));
+}
+
+TEST(StorageObjectData, NamedArraysDecodeToWhatWasEncoded) {
+    for (const std::size_t rows : {std::size_t{0}, std::size_t{3}, std::size_t{20000}}) {
+        const auto data = named_arrays(rows);
+        for (const ChunkLimits& limits : {ChunkLimits{}, small_pieces}) {
+            MemoryBlobStore blobs;
+            const std::string ref = put_object_data(*data, blobs, limits);
+            const auto back =
+                std::dynamic_pointer_cast<const model::ArrayData>(get_object_data(ref, blobs));
+            ASSERT_NE(back, nullptr);
+            EXPECT_EQ(describe_object_data(*back), describe_object_data(*data));
+            EXPECT_EQ(put_object_data(*back, blobs, limits), ref);
+            ASSERT_EQ(back->arrays().size(), 3U);
+            for (std::size_t a = 0; a < 3; ++a) {
+                const model::NamedArray& before = data->arrays()[a];
+                const model::NamedArray& after = back->arrays()[a];
+                EXPECT_EQ(after.name(), before.name());
+                EXPECT_EQ(after.type(), before.type());
+                EXPECT_EQ(after.width(), before.width());
+                EXPECT_EQ(after.items(), before.items());
+            }
+        }
+    }
+    // 20 000 rows of six doubles are cut into pieces.
+    MemoryBlobStore blobs;
+    const std::string ref = put_object_data(*named_arrays(20000), blobs);
+    EXPECT_GT(object_data_pieces(blobs.get(ref)).size(), 3U);
+
+    const model::ArrayData none({});
+    MemoryBlobStore empty;
+    const auto back = std::dynamic_pointer_cast<const model::ArrayData>(
+        get_object_data(put_object_data(none, empty), empty));
+    ASSERT_NE(back, nullptr);
+    EXPECT_TRUE(back->arrays().empty());
+}
+
+TEST(StorageObjectData, NamedArraysKeepEveryBitOfTheirItems) {
+    const double nan = std::bit_cast<double>(std::uint64_t{0x7ff8'0000'dead'beef});
+    std::vector<model::NamedArray> arrays;
+    arrays.emplace_back("values", std::vector<double>{nan, -0.0, 5e-324});
+    MemoryBlobStore blobs;
+    const auto back = std::dynamic_pointer_cast<const model::ArrayData>(
+        get_object_data(put_object_data(model::ArrayData(std::move(arrays)), blobs), blobs));
+    ASSERT_NE(back, nullptr);
+    const std::span<const double> values = back->find("values")->as<double>();
+    EXPECT_EQ(std::bit_cast<std::uint64_t>(values[0]), 0x7ff8'0000'dead'beefU);
+    EXPECT_EQ(std::bit_cast<std::uint64_t>(values[1]), 0x8000'0000'0000'0000U);
+    EXPECT_EQ(values[2], 5e-324);
+}
+
+TEST(StorageObjectData, NamedArraysAreDescribedWithTheirRows) {
+    EXPECT_EQ(describe_object_data(*named_arrays(4)),
+              (nlohmann::json{{"kind", "arrays"},
+                              {"size", 4},
+                              {"arrays",
+                               {{"label", {{"type", "int64"}, {"width", 1}}},
+                                {"node", {{"type", "int32"}, {"width", 1}}},
+                                {"values", {{"type", "float64"}, {"width", 6}}}}}}));
+}
+
+TEST(StorageObjectData, RefusesDamagedNamedArrays) {
+    // Two arrays "a" and "b" of one int32 each. The first array starts at 24: its name length
+    // (4), name (1), type (4), width (4), count (8), storage (4), item (4); 29 bytes in all.
+    std::vector<model::NamedArray> arrays;
+    arrays.emplace_back("a", std::vector<std::int32_t>{1});
+    arrays.emplace_back("b", std::vector<std::int32_t>{2});
+    MemoryBlobStore blobs;
+    const Bytes good = blobs.get(put_object_data(model::ArrayData(std::move(arrays)), blobs));
+    constexpr std::size_t first = 24;
+    constexpr std::size_t second = first + 29;
+    ASSERT_EQ(good.size(), second + 29);
+
+    for (std::size_t size = 0; size < good.size(); ++size) {
+        ASSERT_EQ(decode_error(
+                      Bytes(good.begin(), good.begin() + static_cast<std::ptrdiff_t>(size)), blobs),
+                  ProjectErrc::corrupt_blob)
+            << size;
+    }
+    Bytes unknown_type = good;
+    unknown_type[first + 5] = std::byte{4};
+    EXPECT_EQ(decode_error(unknown_type, blobs), ProjectErrc::corrupt_blob);
+    Bytes no_width = good;
+    no_width[first + 9] = std::byte{0};
+    EXPECT_EQ(decode_error(no_width, blobs), ProjectErrc::corrupt_blob);
+    Bytes same_names = good;
+    same_names[second + 4] = std::byte{'a'};
+    EXPECT_EQ(decode_error(same_names, blobs), ProjectErrc::corrupt_blob);
+    Bytes out_of_order = good;
+    out_of_order[first + 4] = std::byte{'c'};
+    EXPECT_EQ(decode_error(out_of_order, blobs), ProjectErrc::corrupt_blob);
+    Bytes bad_name = good;
+    bad_name[first + 4] = std::byte{' '};
+    EXPECT_EQ(decode_error(bad_name, blobs), ProjectErrc::corrupt_blob);
+    Bytes other_rows = good;
+    other_rows[second + 9] = std::byte{2};  // One item in rows of two.
+    EXPECT_EQ(decode_error(other_rows, blobs), ProjectErrc::corrupt_blob);
 }
 
 // --- Bytes of files (task 2.5) -------------------------------------------------------------------

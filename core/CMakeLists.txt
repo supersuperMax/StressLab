@@ -60,6 +60,7 @@ target_sources(
             src/l10n/localization.cpp
             src/log/log.cpp
             src/log/rotating_file_sink.cpp
+            src/model/array_data.cpp
             src/model/change_set.cpp
             src/model/document.cpp
             src/model/document_editor.cpp

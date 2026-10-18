@@ -112,6 +112,11 @@ constexpr std::array angle_units{
     DisplayUnit{"rad", 1.0},
     DisplayUnit{"deg", pi / 180.0},
 };
+constexpr std::array strain_units{
+    DisplayUnit{"ratio", 1.0},
+    DisplayUnit{"percent", 1e-2},
+    DisplayUnit{"microstrain", 1e-6},
+};
 constexpr std::array thermal_expansion_units{
     DisplayUnit{"1/K", 1.0},
     DisplayUnit{"1/degC", 1.0},
@@ -135,6 +140,7 @@ constexpr std::array catalog{
     Quantity{"acceleration", {1, 0, -2, 0}, false, acceleration_units},
     Quantity{"frequency", {0, 0, -1, 0}, false, frequency_units},
     Quantity{"angle", dimensions::dimensionless, false, angle_units},
+    Quantity{"strain", dimensions::dimensionless, false, strain_units},
     Quantity{"thermalExpansion", {0, 0, 0, -1}, false, thermal_expansion_units},
 };
 

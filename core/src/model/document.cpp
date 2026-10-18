@@ -1,5 +1,6 @@
 #include "fem/core/model/document.h"
 
+#include "fem/core/model/array_data.h"
 #include "fem/core/model/error.h"
 
 #include "change.h"
@@ -655,9 +656,10 @@ void Document::check_name(const Object* self, ObjectId parent, const std::string
 void Document::check_data(const std::string& owner, const std::string& type, ObjectId parent,
                           const std::shared_ptr<const ObjectData>& data) const {
     if (owner != core_owner) {
-        if (data) {
+        // The core cannot check data it does not understand: modules keep theirs as named arrays.
+        if (data && dynamic_cast<const ArrayData*>(data.get()) == nullptr) {
             throw ModelError(ModelErrc::invalid_data,
-                             "only object types of the core carry bulk data so far");
+                             "objects of modules carry bulk data only as ArrayData");
         }
         return;
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fem/core/model/array_data.h"
 #include "fem/core/model/document.h"
 #include "fem/core/model/mesh.h"
 #include "fem/storage/blob_store.h"
@@ -236,6 +237,50 @@ public:
             }
         }
         return std::make_shared<const model::Surface>(std::move(sides));
+    }
+
+    /// Named arrays of an object of a module: up to four arrays of any type and width, now and
+    /// then long enough to be cut into pieces, with items of any bits (NaN too).
+    std::shared_ptr<const model::ArrayData> array_data() {
+        static const std::vector<std::string> names = {"node",   "element", "point",
+                                                       "values", "a_1",     "Z"};
+        const std::size_t rows = chance(0.1) ? 3000 : static_cast<std::size_t>(integer(0, 30));
+        std::vector<model::NamedArray> arrays;
+        std::vector<std::string> left = names;
+        for (int a = integer(0, 4); a > 0; --a) {
+            const auto pick =
+                static_cast<std::size_t>(integer(0, static_cast<int>(left.size()) - 1));
+            const std::string name = left[pick];
+            left.erase(left.begin() + static_cast<std::ptrdiff_t>(pick));
+            const auto width = static_cast<std::size_t>(integer(1, 6));
+            const std::size_t size = rows * width;
+            switch (integer(0, 2)) {
+                case 0: {
+                    std::vector<std::int32_t> items(size);
+                    for (auto& item : items) {
+                        item = static_cast<std::int32_t>(engine_());
+                    }
+                    arrays.emplace_back(name, std::move(items), width);
+                    break;
+                }
+                case 1: {
+                    std::vector<std::int64_t> items(size);
+                    for (auto& item : items) {
+                        item = static_cast<std::int64_t>(engine_());
+                    }
+                    arrays.emplace_back(name, std::move(items), width);
+                    break;
+                }
+                default: {
+                    std::vector<double> items(size);
+                    for (auto& item : items) {
+                        item = chance(0.5) ? number() : std::bit_cast<double>(engine_());
+                    }
+                    arrays.emplace_back(name, std::move(items), width);
+                }
+            }
+        }
+        return std::make_shared<const model::ArrayData>(std::move(arrays));
     }
 
 private:

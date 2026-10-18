@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "integration": {
+      "type": "string",
+      "title": "%section.integration%",
+      "enum": [
+        "full",
+        "reduced"
+      ],
+      "x-enumTitles": [
+        "%section.integration.full%",
+        "%section.integration.reduced%"
+      ],
+      "x-order": 10,
+      "default": "full",
+      "description": "%section.integration.description%",
+      "x-advanced": true
+    }
+  }
+}

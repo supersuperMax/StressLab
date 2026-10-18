@@ -1,5 +1,6 @@
 #include "fem/storage/object_data_codec.h"
 
+#include "fem/core/model/array_data.h"
 #include "fem/core/model/element_type.h"
 #include "fem/core/model/error.h"
 #include "fem/core/model/mesh.h"
@@ -8,10 +9,12 @@
 #include <array>
 #include <bit>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace fem::storage {
 
@@ -20,7 +23,34 @@ namespace {
 constexpr std::array<char, 8> magic = {'S', 'L', 'D', 'A', 'T', 'A', '\0', '\0'};
 
 /// `bytes` (task 2.5): one array of bytes, a file of a pinned result, not the data of an object.
-enum class Kind : std::uint32_t { mesh = 1, node_set = 2, element_set = 3, surface = 4, bytes = 5 };
+/// `arrays` (task 3.1): the named arrays of an object of a module (`model::ArrayData`).
+enum class Kind : std::uint32_t {
+    mesh = 1,
+    node_set = 2,
+    element_set = 3,
+    surface = 4,
+    bytes = 5,
+    arrays = 6,
+};
+
+/// The type of the items of an array of `Kind::arrays` as the table writes it.
+enum class ItemType : std::uint32_t { int32 = 1, int64 = 2, float64 = 3 };
+
+ItemType item_type(model::ScalarType type) noexcept {
+    switch (type) {
+        case model::ScalarType::int32:
+            return ItemType::int32;
+        case model::ScalarType::int64:
+            return ItemType::int64;
+        case model::ScalarType::float64:
+            break;
+    }
+    return ItemType::float64;
+}
+
+std::size_t item_size(ItemType type) noexcept {
+    return type == ItemType::int32 ? 4 : 8;
+}
 
 /// How much of a stream `put_byte_data` reads at a time: many pieces, few calls.
 constexpr std::size_t stream_buffer_bytes = 4 * 1024 * 1024;
@@ -232,6 +262,7 @@ public:
     }
 
     void count(std::size_t value) { out_.scalar(static_cast<std::uint64_t>(value)); }
+    void scalar(std::uint32_t value) { out_.scalar(value); }
     void text(std::string_view value) { out_.text(value); }
 
     /// Stores the table and returns its reference.
@@ -263,6 +294,13 @@ struct Table {
     Kind kind{};
     std::vector<ArrayEntry> arrays;
     std::vector<model::ElementType> block_types;  ///< For a mesh: the type of each element block.
+    /// For named arrays: the name, type and width of each array, in the order of `arrays`.
+    struct Named {
+        std::string name;
+        ItemType type{};
+        std::size_t width = 1;
+    };
+    std::vector<Named> named;
 };
 
 ArrayEntry read_array(Reader& in, std::size_t item_size) {
@@ -336,6 +374,23 @@ Table read_table(std::span<const std::byte> bytes) {
         case Kind::bytes:
             table.arrays.push_back(read_array(in, 1));
             break;
+        case Kind::arrays: {
+            // An array takes at least its name length, type, width and an empty array.
+            const std::size_t arrays = in.count(4 + 4 + 4 + 8 + 4);
+            for (std::size_t a = 0; a < arrays; ++a) {
+                Table::Named named;
+                named.name = in.text();
+                named.type = static_cast<ItemType>(in.scalar<std::uint32_t>());
+                if (named.type != ItemType::int32 && named.type != ItemType::int64 &&
+                    named.type != ItemType::float64) {
+                    throw_corrupt("unknown type of the items of the array '" + named.name + "'");
+                }
+                named.width = in.scalar<std::uint32_t>();
+                table.arrays.push_back(read_array(in, item_size(named.type)));
+                table.named.push_back(std::move(named));
+            }
+            break;
+        }
         default:
             throw_corrupt("unknown kind of data " +
                           std::to_string(static_cast<std::uint32_t>(table.kind)));
@@ -397,6 +452,35 @@ std::shared_ptr<const model::ObjectData> make_data(const Table& table, const Blo
             }
             return std::make_shared<const model::Surface>(std::move(sides));
         }
+        case Kind::arrays: {
+            std::vector<model::NamedArray> arrays;
+            arrays.reserve(table.named.size());
+            for (std::size_t a = 0; a < table.named.size(); ++a) {
+                const Table::Named& named = table.named[a];
+                const ArrayEntry& entry = table.arrays[a];
+                model::NamedArray::Items items;
+                switch (named.type) {
+                    case ItemType::int32:
+                        items = resolve<std::int32_t>(entry, blobs);
+                        break;
+                    case ItemType::int64:
+                        items = resolve<std::int64_t>(entry, blobs);
+                        break;
+                    case ItemType::float64:
+                        items = resolve<double>(entry, blobs);
+                        break;
+                }
+                arrays.emplace_back(named.name, std::move(items), named.width);
+            }
+            // The order of the table is that of the data: by name, each name once.
+            auto data = std::make_shared<const model::ArrayData>(std::move(arrays));
+            for (std::size_t a = 0; a < table.named.size(); ++a) {
+                if (data->arrays()[a].name() != table.named[a].name) {
+                    throw_corrupt("the arrays are not in the order of their names");
+                }
+            }
+            return data;
+        }
         case Kind::bytes:
             throw_corrupt("the block holds the bytes of a file, not the data of an object");
     }
@@ -440,6 +524,21 @@ std::string put_object_data(const model::ObjectData& data, BlobStore& blobs,
         }
         TableWriter out(Kind::surface, blobs, limits);
         out.array(std::span<const model::Index>(flat));
+        return out.finish();
+    }
+    if (const auto* named = dynamic_cast<const model::ArrayData*>(&data)) {
+        TableWriter out(Kind::arrays, blobs, limits);
+        out.count(named->arrays().size());
+        for (const model::NamedArray& array : named->arrays()) {
+            out.text(array.name());
+            out.scalar(static_cast<std::uint32_t>(item_type(array.type())));
+            if (array.width() > std::numeric_limits<std::uint32_t>::max()) {
+                throw ProjectError(ProjectErrc::invalid_data,
+                                   "the rows of the array '" + array.name() + "' are too wide");
+            }
+            out.scalar(static_cast<std::uint32_t>(array.width()));
+            std::visit([&](const auto& items) { out.array(std::span(items)); }, array.items());
+        }
         return out.finish();
     }
     throw ProjectError(ProjectErrc::invalid_data, "this kind of object data cannot be saved");
@@ -553,6 +652,14 @@ nlohmann::json describe_object_data(const model::ObjectData& data) {
     if (const auto* mesh = dynamic_cast<const model::Mesh*>(&data)) {
         return {
             {"kind", "mesh"}, {"nodes", mesh->node_count()}, {"elements", mesh->element_count()}};
+    }
+    if (const auto* named = dynamic_cast<const model::ArrayData*>(&data)) {
+        nlohmann::json arrays = nlohmann::json::object();
+        for (const model::NamedArray& array : named->arrays()) {
+            arrays[array.name()] = {{"type", model::to_string(array.type())},
+                                    {"width", array.width()}};
+        }
+        return {{"kind", "arrays"}, {"size", named->rows()}, {"arrays", std::move(arrays)}};
     }
     std::string_view kind;
     if (dynamic_cast<const model::NodeSet*>(&data) != nullptr) {
