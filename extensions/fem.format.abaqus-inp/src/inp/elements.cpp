@@ -101,6 +101,36 @@ std::optional<ElementKind> element_kind(std::string_view abaqus_upper) noexcept 
     return std::nullopt;
 }
 
+std::optional<int> shape_nodes(std::string_view shape) noexcept {
+    struct Shape {
+        std::string_view name;
+        int nodes;
+    };
+    static constexpr std::array<Shape, 15> shapes{{
+        {"vertex", 1},
+        {"line2", 2},
+        {"line3", 3},
+        {"tri3", 3},
+        {"tri6", 6},
+        {"quad4", 4},
+        {"quad8", 8},
+        {"tet4", 4},
+        {"tet10", 10},
+        {"pyramid5", 5},
+        {"pyramid13", 13},
+        {"wedge6", 6},
+        {"wedge15", 15},
+        {"hex8", 8},
+        {"hex20", 20},
+    }};
+    for (const Shape& entry : shapes) {
+        if (entry.name == shape) {
+            return entry.nodes;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<std::int32_t> neutral_side(std::string_view shape, int face) noexcept {
     const std::span<const Face> faces = faces_of(shape);
     if (face < 1 || static_cast<std::size_t>(face) > faces.size()) {

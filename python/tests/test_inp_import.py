@@ -150,3 +150,40 @@ def _defined(byte: int, codec: str) -> bool:
     except UnicodeDecodeError:
         return False
     return True
+
+
+SUMMARY = """\
+import stresslab
+
+document = stresslab.active_document()
+stresslab.cmd("inp.import", path={source!r})
+objects = [o for o in document.objects() if o.type != "abaqus_keyword"]
+kinds = sorted(f"{{o.type}} {{o.name}}" for o in objects)
+kept = sorted(o.properties["text"] for o in document.find_by_type("abaqus_keyword"))
+print("summary:", kinds, kept)
+"""
+
+
+def test_a_script_saves_the_model_and_the_file_opens_to_the_same_model(folder: Path) -> None:
+    # Task 3.3: what the export loses is known before, and the saved file reads back the same.
+    saved = folder / "сохранено" / "flat.inp"
+    saved.parent.mkdir()
+    script = folder / "экспорт.py"
+    script.write_text(
+        SUMMARY.format(source="модели/flat.inp")
+        + f"for loss in stresslab.cmd('inp.describe_losses', path={str(saved)!r}):\n"
+        "    print('loss:', loss['message'], loss['text'])\n"
+        f"print('keywords:', stresslab.cmd('inp.export', path={str(saved)!r}))\n",
+        encoding="utf-8",
+    )
+    first = run(folder, script)
+    # A file without parts saved under its name loses only the units, which .inp does not have.
+    losses = [line for line in first.stdout.splitlines() if line.startswith("loss:")]
+    assert len(losses) == 1 and "%loss.units%" in losses[0], losses
+    assert int(first.stdout.split("keywords:")[1].split()[0]) > 20, first.stdout
+
+    check = folder / "проверка экспорта.py"
+    check.write_text(SUMMARY.format(source=str(saved)), encoding="utf-8")
+    second = run(folder, check)
+    summary = [line for line in first.stdout.splitlines() if line.startswith("summary:")]
+    assert summary and summary[0] in second.stdout.splitlines(), (first.stdout, second.stdout)

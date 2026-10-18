@@ -12,6 +12,7 @@
 #include "fem/core/l10n/localization.h"
 #include "fem/core/model/mesh.h"
 #include "fem/core/model/object_id.h"
+#include "fem/extension_abi.h"
 
 #include "extension_test_support.h"
 #include <gtest/gtest.h>
@@ -69,6 +70,36 @@ const fs::path& module_folder() {
         return run;
     }();
     return folder;
+}
+
+/// A command result as JSON, to compare it with what the module read.
+nlohmann::json json_of(const Value& value) {
+    switch (value.kind()) {
+        case Value::Kind::boolean:
+            return value.as_boolean();
+        case Value::Kind::integer:
+            return value.as_integer();
+        case Value::Kind::number:
+            return value.as_number();
+        case Value::Kind::string:
+            return value.as_string();
+        case Value::Kind::list: {
+            nlohmann::json list = nlohmann::json::array();
+            for (const Value& item : value.as_list()) {
+                list.push_back(json_of(item));
+            }
+            return list;
+        }
+        case Value::Kind::dict: {
+            nlohmann::json dict = nlohmann::json::object();
+            for (const auto& [key, item] : value.as_dict()) {
+                dict[key] = json_of(item);
+            }
+            return dict;
+        }
+        default:
+            return nullptr;
+    }
 }
 
 class NativeModuleTest : public ::testing::Test {
@@ -177,6 +208,44 @@ TEST_F(NativeModuleTest, CommandCreatesObjectsWithBulkDataAndReportsProblems) {
     ASSERT_TRUE(ws.bus.undo());
     EXPECT_FALSE(ws.document.contains(mesh));
     EXPECT_FALSE(ws.document.contains(corners));
+}
+
+TEST_F(NativeModuleTest, CommandReadsTheModelAndItsBulkData) {
+    ws.manager.enable("test.native");
+    const ObjectId mesh(
+        static_cast<std::uint64_t>(ws.bus.execute("hello.data").value.as_integer()));
+    const ObjectId side = ws.document.find_child(mesh, "surface", "side");
+
+    const auto read = [&](ObjectId object) {
+        return json_of(ws.bus
+                           .execute("hello.read",
+                                    {{"object", Value(static_cast<std::int64_t>(object.value()))}})
+                           .value);
+    };
+    const nlohmann::json of_mesh = read(mesh);
+    EXPECT_EQ(of_mesh.at("kind"), FEM_DATA_MESH);
+    EXPECT_EQ(of_mesh.at("nodes"), nlohmann::json::array({10, 20, 30, 40}));
+    EXPECT_EQ(of_mesh.at("type"), "tet4");
+
+    // Tree order: the mesh "tet" is followed by its children, then comes "tet-2".
+    const nlohmann::json& model = of_mesh.at("model");
+    EXPECT_EQ(model.at("units").at("length"), "m");
+    std::vector<std::string> names;
+    for (const nlohmann::json& object : model.at("objects")) {
+        names.push_back(object.at("name").get<std::string>());
+    }
+    EXPECT_EQ(names, (std::vector<std::string>{"tet", "corners", "side", "tet-2"}));
+    const nlohmann::json& first = model.at("objects")[0];
+    EXPECT_EQ(first.at("id"), mesh.value());
+    EXPECT_EQ(first.at("parent"), 0);
+    EXPECT_EQ(first.at("data"), "mesh");
+    EXPECT_EQ(first.at("opaque"), false);
+    EXPECT_EQ(model.at("objects")[1].at("parent"), mesh.value());
+    EXPECT_EQ(model.at("objects")[2].at("data"), "surface");
+
+    const nlohmann::json of_side = read(side);
+    EXPECT_EQ(of_side.at("kind"), FEM_DATA_SURFACE);
+    EXPECT_EQ(of_side.at("sides"), nlohmann::json::array({0, 2}));
 }
 
 TEST_F(NativeModuleTest, LibraryStaysLoadedWhileTheModuleIsDisabled) {

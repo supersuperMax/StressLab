@@ -4,6 +4,7 @@
 #include <charconv>
 #include <clocale>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <system_error>
@@ -119,6 +120,37 @@ std::optional<std::int64_t> parse_integer(std::string_view text) noexcept {
         return std::nullopt;
     }
     return static_cast<std::int64_t>(*number);
+}
+
+std::string format_number(double value) {
+    std::array<char, 64> buffer{};
+    std::size_t size = 0;
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+    const std::to_chars_result result =
+        std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    size = static_cast<std::size_t>(result.ptr - buffer.data());
+#else
+    // The shortest of 15, 16 and 17 digits that reads back as the same number; the separator of
+    // the C locale is replaced by a point.
+    const char* separator = std::localeconv()->decimal_point;
+    for (int digits = 15; digits <= 17; ++digits) {
+        const int written = std::snprintf(buffer.data(), buffer.size(), "%.*g", digits, value);
+        size = written > 0 ? static_cast<std::size_t>(written) : 0;
+        for (std::size_t i = 0; i < size; ++i) {
+            if (separator != nullptr && buffer[i] == separator[0]) {
+                buffer[i] = '.';
+            }
+        }
+        if (parse_number(std::string_view(buffer.data(), size)) == value) {
+            break;
+        }
+    }
+#endif
+    std::string text(buffer.data(), size);
+    if (text.find_first_of(".eE") == std::string::npos) {
+        text += '.';  // "1." reads as a real number in every Abaqus field.
+    }
+    return text;
 }
 
 }  // namespace fem::inp

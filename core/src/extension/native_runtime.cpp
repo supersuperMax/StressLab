@@ -4,8 +4,10 @@
 #include "fem/core/context/value.h"
 #include "fem/core/extension/error.h"
 #include "fem/core/extension/manager.h"
+#include "fem/core/model/document.h"
 #include "fem/core/model/mesh.h"
 #include "fem/core/model/object.h"
+#include "fem/core/model/units.h"
 #include "fem/extension_abi.h"
 
 #include "files.h"
@@ -40,6 +42,13 @@ struct FemCommandCall {
     std::string error;
     std::string last_error;
     std::deque<std::string> results;  // Results of `execute`, valid until the call returns.
+    // What `read_model` and `object_data` gave out, valid until the call returns.
+    std::string model;
+    std::deque<std::shared_ptr<const fem::model::ObjectData>> data;
+    std::deque<FemMeshData> meshes;
+    std::deque<std::vector<FemElementBlock>> blocks;
+    std::deque<std::string> type_names;
+    std::deque<std::vector<std::int32_t>> sides;
 };
 
 namespace fem::extension::detail {
@@ -375,6 +384,137 @@ FemStatus call_report_problem(FemCommandCall* call, const char* problem) noexcep
     return FEM_ERROR;
 }
 
+const char* data_name(const model::ObjectData* data) {
+    if (data == nullptr) {
+        return "none";
+    }
+    if (dynamic_cast<const model::Mesh*>(data) != nullptr) {
+        return "mesh";
+    }
+    if (dynamic_cast<const model::NodeSet*>(data) != nullptr) {
+        return "node_set";
+    }
+    if (dynamic_cast<const model::ElementSet*>(data) != nullptr) {
+        return "element_set";
+    }
+    if (dynamic_cast<const model::Surface*>(data) != nullptr) {
+        return "surface";
+    }
+    return "array";
+}
+
+void add_subtree(const model::Document& document, model::ObjectId id, nlohmann::json& objects) {
+    const model::Object& object = document.get(id);
+    nlohmann::json dependencies = nlohmann::json::array();
+    for (const model::ObjectId target : object.dependencies()) {
+        dependencies.push_back(target.value());
+    }
+    objects.push_back({{"id", id.value()},
+                       {"type", object.type()},
+                       {"owner", object.owner()},
+                       {"schema_version", object.schema_version()},
+                       {"name", object.name()},
+                       {"parent", object.parent().is_valid() ? object.parent().value() : 0},
+                       {"dependencies", std::move(dependencies)},
+                       {"properties", object.properties()},
+                       {"data", data_name(object.data().get())},
+                       {"opaque", document.is_opaque(object)}});
+    for (const model::ObjectId child : object.children()) {
+        add_subtree(document, child, objects);
+    }
+}
+
+const char* call_read_model(FemCommandCall* call) noexcept {
+    try {
+        const model::Document& document = call->context->document();
+        const model::UnitSystem& units = document.units();
+        nlohmann::json objects = nlohmann::json::array();
+        for (const model::ObjectId root : document.roots()) {
+            add_subtree(document, root, objects);
+        }
+        const nlohmann::json json = {{"units",
+                                      {{"length", model::symbol(units.length)},
+                                       {"mass", model::symbol(units.mass)},
+                                       {"time", model::symbol(units.time)},
+                                       {"temperature", model::symbol(units.temperature)}}},
+                                     {"objects", std::move(objects)}};
+        call->model = json.dump();
+        call->last_error.clear();
+        return call->model.c_str();
+    } catch (const std::exception& e) {
+        call->last_error = e.what();
+    } catch (...) {
+        call->last_error = "unknown error";
+    }
+    return nullptr;
+}
+
+FemStatus call_object_data(FemCommandCall* call, int64_t id, FemObjectData* out) noexcept {
+    try {
+        if (out == nullptr || out->struct_size < sizeof(FemObjectData)) {
+            bad_call("object_data needs a FemObjectData");
+        }
+        if (id <= 0) {
+            bad_call("object_data needs an object id");
+        }
+        const model::Object* object =
+            call->context->document().find(model::ObjectId(static_cast<std::uint64_t>(id)));
+        if (object == nullptr) {
+            bad_call("no object " + std::to_string(id));
+        }
+        out->kind = FEM_DATA_NONE;
+        out->mesh = nullptr;
+        out->indices = nullptr;
+        out->count = 0;
+        const std::shared_ptr<const model::ObjectData>& data = object->data();
+        if (const auto* mesh = dynamic_cast<const model::Mesh*>(data.get())) {
+            std::vector<FemElementBlock>& blocks = call->blocks.emplace_back();
+            for (const model::ElementBlock& block : mesh->blocks()) {
+                const std::string& type =
+                    call->type_names.emplace_back(model::to_string(block.type()));
+                blocks.push_back({static_cast<std::uint32_t>(sizeof(FemElementBlock)), type.c_str(),
+                                  static_cast<int64_t>(block.size()), block.ids().data(),
+                                  block.connectivity().data()});
+            }
+            out->mesh = &call->meshes.emplace_back(
+                FemMeshData{static_cast<std::uint32_t>(sizeof(FemMeshData)),
+                            static_cast<int64_t>(mesh->node_count()), mesh->node_ids().data(),
+                            mesh->x().data(), mesh->y().data(), mesh->z().data(),
+                            static_cast<int64_t>(blocks.size()), blocks.data()});
+            out->kind = FEM_DATA_MESH;
+        } else if (const auto* nodes = dynamic_cast<const model::NodeSet*>(data.get())) {
+            out->kind = FEM_DATA_NODE_SET;
+            out->indices = nodes->nodes().data();
+            out->count = static_cast<int64_t>(nodes->size());
+        } else if (const auto* elements = dynamic_cast<const model::ElementSet*>(data.get())) {
+            out->kind = FEM_DATA_ELEMENT_SET;
+            out->indices = elements->elements().data();
+            out->count = static_cast<int64_t>(elements->size());
+        } else if (const auto* surface = dynamic_cast<const model::Surface*>(data.get())) {
+            // Pairs are copied: the C side reads int32_t pairs, not ElementSide.
+            std::vector<std::int32_t>& pairs = call->sides.emplace_back();
+            pairs.reserve(surface->size() * 2);
+            for (const model::ElementSide& side : surface->sides()) {
+                pairs.push_back(side.element);
+                pairs.push_back(side.side);
+            }
+            out->kind = FEM_DATA_SURFACE;
+            out->indices = pairs.data();
+            out->count = static_cast<int64_t>(surface->size());
+        }
+        if (out->kind != FEM_DATA_NONE) {
+            call->data.push_back(data);  // The arrays stay valid even if a command replaces it.
+        }
+        call->last_error.clear();
+        return FEM_OK;
+    } catch (const std::exception& e) {
+        call->last_error = e.what();
+    } catch (...) {
+        call->last_error = "unknown error";
+    }
+    return FEM_ERROR;
+}
+
 const FemCommandApi command_api = {
     static_cast<std::uint32_t>(sizeof(FemCommandApi)),
     call_command_id,
@@ -385,6 +525,8 @@ const FemCommandApi command_api = {
     call_set_error,
     call_create_object,
     call_report_problem,
+    call_read_model,
+    call_object_data,
 };
 
 }  // namespace

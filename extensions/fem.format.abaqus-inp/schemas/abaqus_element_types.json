@@ -11,6 +11,44 @@
       "description": "%types.blocks.description%",
       "readOnly": true,
       "x-order": 1
+    },
+    "part": {
+      "type": "string",
+      "title": "%types.part%",
+      "readOnly": true,
+      "x-order": 2
+    },
+    "instance": {
+      "type": "string",
+      "title": "%types.instance%",
+      "readOnly": true,
+      "x-order": 3
+    },
+    "assembly": {
+      "type": "boolean",
+      "title": "%types.assembly%",
+      "description": "%types.assembly.description%",
+      "readOnly": true,
+      "x-order": 4
+    },
+    "partSets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "%types.partSets%",
+      "description": "%types.partSets.description%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 5
+    },
+    "keptMembers": {
+      "type": "object",
+      "title": "%types.keptMembers%",
+      "description": "%types.keptMembers.description%",
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 6
     }
   },
   "required": [

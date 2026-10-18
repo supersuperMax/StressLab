@@ -71,6 +71,15 @@
       "readOnly": true,
       "x-advanced": true,
       "x-order": 10
+    },
+    "position": {
+      "type": "integer",
+      "title": "%keyword.position%",
+      "description": "%keyword.position.description%",
+      "minimum": 0,
+      "readOnly": true,
+      "x-advanced": true,
+      "x-order": 11
     }
   },
   "required": [

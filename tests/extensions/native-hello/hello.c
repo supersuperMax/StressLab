@@ -7,6 +7,8 @@
  *   arguments of the call, and returns the id of the object.
  * - hello.fail creates an object, then fails: the platform must revert the object.
  * - hello.data creates a mesh, a node set and a surface with bulk data and reports a problem.
+ * - hello.read reads the model back (task 3.3): it returns {"model": <read_model>, "nodes": the
+ *   node labels of the object `object`, "sides": its surface pairs, "kind": the data kind}.
  * - Activation reports how many times the library was activated and deactivated in the context
  *   keys hello.activations and hello.deactivations: the counters live in the library, so they show
  *   whether it stayed loaded between activations.
@@ -150,6 +152,68 @@ static FemStatus data(FemCommandCall* call, void* user_data) {
     return FEM_OK;
 }
 
+/* hello.read: read_model and object_data of the object given as `object`. */
+static FemStatus read(FemCommandCall* call, void* user_data) {
+    const FemCommandApi* api = g_host->commands;
+    const char* arguments = api->arguments(call);
+    const char* model;
+    const char* at;
+    FemObjectData data = {(uint32_t)sizeof(FemObjectData), FEM_DATA_NONE, NULL, NULL, 0};
+    long long id;
+    char* result;
+    size_t length;
+    size_t used;
+    int64_t i;
+
+    (void)user_data;
+    model = api->read_model(call);
+    at = strstr(arguments, "\"object\":");
+    if (model == NULL || at == NULL) {
+        api->set_error(call, "read_model failed or no object given");
+        return FEM_ERROR;
+    }
+    id = strtoll(at + 9, NULL, 10);
+    if (api->object_data(call, id, &data) != FEM_OK) {
+        return FEM_ERROR;
+    }
+    if (api->object_data(call, -1, &data) != FEM_ERROR || api->last_error(call)[0] == '\0') {
+        api->set_error(call, "object_data accepted an invalid id");
+        return FEM_ERROR;
+    }
+    if (api->object_data(call, id, &data) != FEM_OK) {
+        return FEM_ERROR;
+    }
+    length = strlen(model) + 256 + (size_t)(data.mesh != NULL ? data.mesh->node_count : 0) * 24 +
+             (size_t)data.count * 24;
+    result = (char*)malloc(length);
+    if (result == NULL) {
+        api->set_error(call, "out of memory");
+        return FEM_ERROR;
+    }
+    used =
+        (size_t)snprintf(result, length, "{\"kind\":%u,\"model\":%s,\"nodes\":[", data.kind, model);
+    if (data.kind == FEM_DATA_MESH) {
+        for (i = 0; i < data.mesh->node_count; ++i) {
+            used += (size_t)snprintf(result + used, length - used, "%s%lld", i > 0 ? "," : "",
+                                     (long long)data.mesh->node_ids[i]);
+        }
+        used += (size_t)snprintf(result + used, length - used, "],\"type\":\"%s\",\"sides\":[",
+                                 data.mesh->blocks[0].type);
+    } else {
+        used += (size_t)snprintf(result + used, length - used, "],\"type\":\"\",\"sides\":[");
+    }
+    if (data.kind == FEM_DATA_SURFACE) {
+        for (i = 0; i < data.count * 2; ++i) {
+            used += (size_t)snprintf(result + used, length - used, "%s%d", i > 0 ? "," : "",
+                                     data.indices[i]);
+        }
+    }
+    snprintf(result + used, length - used, "]}");
+    api->set_result(call, result);
+    free(result);
+    return FEM_OK;
+}
+
 static FemStatus activate(const FemHostApi* host, void** state) {
     if (host->abi_version != FEM_EXTENSION_ABI_VERSION || host->struct_size < sizeof(FemHostApi) ||
         host->commands->struct_size < sizeof(FemCommandApi)) {
@@ -164,7 +228,8 @@ static FemStatus activate(const FemHostApi* host, void** state) {
     *state = &g_activations;
     if (host->register_command(host->host, "hello.greet", greet, NULL) != FEM_OK ||
         host->register_command(host->host, "hello.fail", fail, NULL) != FEM_OK ||
-        host->register_command(host->host, "hello.data", data, NULL) != FEM_OK) {
+        host->register_command(host->host, "hello.data", data, NULL) != FEM_OK ||
+        host->register_command(host->host, "hello.read", read, NULL) != FEM_OK) {
         host->set_error(host->host, "cannot register the commands of the manifest");
         return FEM_ERROR;
     }

@@ -21,6 +21,11 @@ title = "Fail"
 id = "hello.data"
 title = "Data"
 
+[[contributes.commands]]
+id = "hello.read"
+title = "Read"
+args = [{ name = "object", type = "object" }]
+
 [[contributes.contextKeys]]
 name = "hello.activations"
 type = "number"

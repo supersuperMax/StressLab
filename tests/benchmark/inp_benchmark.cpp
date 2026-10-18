@@ -1,12 +1,14 @@
-// Benchmark of the import of Abaqus input files (task 3.2): a file of C3D10 elements is written,
-// read by the reader of fem.format.abaqus-inp, and imported into a document by the module through
-// the C ABI, as "File → Import" does. Prints the time and the speed of each phase; fails if the
-// model does not have every node and element.
+// Benchmark of the import and export of Abaqus input files (tasks 3.2 and 3.3): a file of C3D10
+// elements is written, read by the reader of fem.format.abaqus-inp, imported into a document by
+// the module through the C ABI, as "File → Import" does, and exported again by the module. Prints
+// the time and the speed of each phase; fails if the model does not have every node and element
+// or the export does not read back to as many elements.
 //
 // Usage: fem_inp_benchmark [elements]   (default 100 000; the PR of task 3.2 quotes 1 000 000 in a
 // Release build)
 
 #include "fem/core/command/command_bus.h"
+#include "fem/core/command/value.h"
 #include "fem/core/context/context_keys.h"
 #include "fem/core/extension/manager.h"
 #include "fem/core/extension/open_file.h"
@@ -110,5 +112,27 @@ int main(int argc, char** argv) {
         return 1;
     }
     std::printf("objects in the model: %zu\n", document.size());
+
+    const fs::path saved = folder / "saved.inp";
+    start = Clock::now();
+    (void)bus.execute("inp.export", {{"path", fem::command::Value(saved)}});
+    const double exporting = seconds_since(start);
+    std::printf("export the model (module through the C ABI): %.2f s, %.0f elements/s, %.1f MB\n",
+                exporting, static_cast<double>(elements) / exporting,
+                static_cast<double>(fs::file_size(saved)) / 1e6);
+    const fem::inp::Import again = fem::inp::import_file(saved, fem::inp::Encoding::utf8);
+    fs::remove(saved);
+    std::size_t read_back = 0;
+    for (const fem::inp::Item& item : again.items) {
+        if (const auto* data = std::get_if<fem::inp::MeshData>(&item.data)) {
+            for (const fem::inp::MeshBlock& block : data->blocks) {
+                read_back += block.ids.size();
+            }
+        }
+    }
+    if (read_back != static_cast<std::size_t>(elements)) {
+        std::fprintf(stderr, "the export reads back to %zu elements\n", read_back);
+        return 1;
+    }
     return 0;
 }

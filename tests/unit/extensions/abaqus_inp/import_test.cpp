@@ -78,7 +78,8 @@ TEST(InpImport, FlatModelGivesEveryKindOfObject) {
     EXPECT_EQ(input.owner, "fem.format.abaqus-inp");
     EXPECT_EQ(input.properties,
               (json{{"file", "flat.inp"},
-                    {"heading", "Two cubes, clamped at x = 0\nSecond line of the heading"}}));
+                    {"heading", "Two cubes, clamped at x = 0\nSecond line of the heading"},
+                    {"steps", {"Load"}}}));
 
     // The material, with what the model does not hold as its child.
     const ItemRef steel = find(r, "material", "Steel");
@@ -210,6 +211,31 @@ TEST(InpImport, ItemsComeAfterTheirParentsAndDependencies) {
             }
         }
     }
+}
+
+TEST(InpImport, PlacesInTheFileAreKeptForTheExport) {
+    const Import result = import_fixture("assembly.inp");
+    const Item& input = result.items[result.input];
+    EXPECT_EQ(input.properties.at("assembly"), "Assembly");
+    EXPECT_EQ(input.properties.at("steps"), json::array({"Step-1"}));
+
+    const auto types_of = [&](std::string_view mesh) -> const json& {
+        return result.items[find(result, "abaqus_element_types", "", find(result, "mesh", mesh))]
+            .properties;
+    };
+    // An instance knows its part and which of its sets are the part's; the rest are the assembly's.
+    const json& beam = types_of("Beam-1");
+    EXPECT_EQ(beam.at("part"), "Beam");
+    EXPECT_EQ(beam.at("instance"), "Beam-1");
+    EXPECT_EQ(beam.at("partSets"), json::array({"Set-1", "Set-1"}));  // Nodes and elements.
+    EXPECT_FALSE(beam.contains("assembly"));
+    EXPECT_EQ(types_of("Assembly").at("assembly"), true);
+    EXPECT_FALSE(types_of("Assembly").contains("part"));
+
+    // A keyword kept in a step knows how many objects of the step come before it.
+    const Item& restart = result.items[keyword_item(result, "*RESTART")];
+    EXPECT_EQ(restart.properties.at("position"), 3);  // The load, the pressure, the gravity.
+    EXPECT_FALSE(result.items[keyword_item(result, "*PREPRINT")].properties.contains("position"));
 }
 
 TEST(InpImport, InstancesAreMeshesInTheirPlaces) {
